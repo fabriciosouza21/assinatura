@@ -55,7 +55,7 @@ services:
 
   assinatura:
     build:
-      context: .
+      context: services/assinatura
       dockerfile: Dockerfile
     container_name: assinatura-app
     # Sobrepoẽ defaults do application.yaml para os hosts internos do Docker.
