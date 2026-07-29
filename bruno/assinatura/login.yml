@@ -14,14 +14,16 @@ http:
     data: |-
       {
         "username": "admin",
-        "password": "admin123"
+        "password": "{{password}}"
       }
 
 runtime:
   scripts:
     - type: after-response
-      code: |-
-        bru.setVar("token", res.body.token);
+      code: bru.setVar("token", res.body.token);
 
 settings:
   encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -10,4 +10,5 @@ variables:
     value: mock-webhook-secret
   - secret: true
     name: password
-    description: ""
+    value: admin123
+    description: "Seed de dev (V1__init.sql). Intencional, para facilitar testes."
