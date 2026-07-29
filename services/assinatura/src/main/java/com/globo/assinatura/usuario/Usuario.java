@@ -32,6 +32,22 @@ public class Usuario {
   public Usuario() {}
 
   /**
+   * Cria um usuario novo a partir do nome e email informados.
+   *
+   * <p>O uuid publico e atribuido pela propria entidade na construcao.
+   *
+   * @param nome nome do usuario
+   * @param email email do usuario
+   * @return instancia de {@link Usuario} com o uuid ja atribuido
+   */
+  public static Usuario from(String nome, String email) {
+    Usuario usuario = new Usuario();
+    usuario.setNome(nome);
+    usuario.setEmail(email);
+    return usuario;
+  }
+
+  /**
    * Retorna o identificador tecnico gerado pelo banco de dados.
    *
    * @return identificador tecnico, ou {@code null} antes da persistencia

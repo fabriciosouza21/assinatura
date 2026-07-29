@@ -35,9 +35,7 @@ public class UsuarioService {
       throw new EmailJaCadastradoException(email);
     }
 
-    Usuario usuario = new Usuario();
-    usuario.setNome(nome);
-    usuario.setEmail(email);
+    Usuario usuario = Usuario.from(nome, email);
     usuarioRepository.save(usuario);
 
     return usuario.getUuid();

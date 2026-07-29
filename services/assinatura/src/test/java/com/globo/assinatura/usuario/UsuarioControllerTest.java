@@ -63,4 +63,14 @@ class UsuarioControllerTest {
                 .content("{\"nome\":\"\",\"email\":\"valido@example.com\"}"))
         .andExpect(status().isBadRequest());
   }
+
+  @Test
+  void cadastraUsuarioComEmailInvalidoRetornaBadRequest() throws Exception {
+    mockMvc
+        .perform(
+            post("/usuarios")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"nome\":\"Fulano\",\"email\":\"nao-e-um-email\"}"))
+        .andExpect(status().isBadRequest());
+  }
 }
