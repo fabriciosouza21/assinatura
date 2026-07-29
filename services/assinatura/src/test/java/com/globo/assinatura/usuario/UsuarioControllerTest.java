@@ -84,7 +84,7 @@ class UsuarioControllerTest {
   @DisplayName("Deve rejeitar cadastro com email ja cadastrado retornando 409")
   void cadastraUsuarioComEmailExistenteRetornaConflict() throws Exception {
     when(usuarioService.cadastrar("Fulano", "existente@example.com"))
-        .thenThrow(new EmailJaCadastradoException("existente@example.com"));
+        .thenThrow(new EmailJaCadastradoException());
 
     mockMvc
         .perform(

@@ -22,16 +22,18 @@ public class Usuario {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
-  private String uuid = UUID.randomUUID().toString();
+  private String uuid;
 
   private String nome;
 
   private String email;
 
   /**
-   * Construtor sem argumentos exigido pelo provedor JPA; o uuid e atribuido pelo inicializador.
+   * Construtor sem argumentos exigido pelo provedor JPA.
    *
-   * <p>Acesso protegido para desencorajar uso fora do provedor de persistencia.
+   * <p>Acesso protegido para desencorajar uso fora do provedor de persistencia. O uuid permanece
+   * {@code null} ate ser atribuido pela coluna carregada do banco, evitando gerar um UUID
+   * descartavel em cada hidratacao.
    */
   protected Usuario() {}
 
@@ -51,6 +53,7 @@ public class Usuario {
     if (email == null || email.isBlank()) {
       throw new IllegalArgumentException("email nao pode ser vazio");
     }
+    this.uuid = UUID.randomUUID().toString();
     this.nome = nome;
     this.email = email;
   }

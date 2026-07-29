@@ -1,6 +1,7 @@
 package com.globo.assinatura.usuario;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Orquestra os casos de uso do dominio de usuario.
@@ -30,9 +31,10 @@ public class UsuarioService {
    * @return uuid publico atribuido ao usuario persistido
    * @throws EmailJaCadastradoException se o email informado ja estiver cadastrado
    */
+  @Transactional
   public String cadastrar(String nome, String email) {
     if (usuarioRepository.existsByEmail(email)) {
-      throw new EmailJaCadastradoException(email);
+      throw new EmailJaCadastradoException();
     }
 
     Usuario usuario = new Usuario(nome, email);
