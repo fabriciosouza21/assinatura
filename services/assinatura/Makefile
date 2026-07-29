@@ -1,4 +1,4 @@
-.PHONY: help checkstyle spotless lint format test verify clean java-version
+.PHONY: help checkstyle spotless lint format test test-integration verify clean java-version
 
 MAVEN := ./mvnw
 
@@ -26,11 +26,15 @@ format: ## Corrige formatacao automaticamente (spotless:apply)
 	@echo "==> spotless:apply"
 	@$(MAVEN) spotless:apply
 
-test: ## Roda os testes
-	@echo "==> test"
-	@$(MAVEN) test
+test: ## Roda os testes unitarios (exclui os marcados com @Tag("integration"))
+	@echo "==> test (unitarios)"
+	@$(MAVEN) test -DexcludedGroups=integration
 
-verify: ## Pipeline completo: checkstyle + spotless + testes + package
+test-integration: ## Roda os testes de integracao (@Tag("integration")) - exige Postgres do docker-compose
+	@echo "==> test-integration"
+	@$(MAVEN) test -Dgroups=integration
+
+verify: ## Pipeline completo: checkstyle + spotless + testes + package - exige Postgres do docker-compose
 	@echo "==> verify"
 	@$(MAVEN) verify
 
