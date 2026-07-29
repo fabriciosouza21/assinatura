@@ -107,6 +107,20 @@ Portas publicadas no host (evitam conflito com outros projetos):
 
 Separe as operações de escrita em **Commands** e as operações de leitura em **Queries**. Commands alteram o estado e aplicam regras de negócio; Queries apenas consultam e retornam dados. Utilize a mesma aplicação e o mesmo banco de dados, sem Event Sourcing, bancos separados ou consistência eventual.
 
+### Testes
+
+Use JUnit 5 com `@DisplayName` descrevendo o comportamento esperado. Prefira AssertJ, incluindo uma mensagem contextual com `.as(...)`.
+
+```java
+@Test
+@DisplayName("Deve atualizar o usuário")
+void deveAtualizarUsuario() {
+    assertThat(persistido.getNome())
+        .as("Nome do usuário persistido")
+        .isEqualTo("Fulano");
+}
+```
+
 ## Documentação
 
 - Diagramas de sequência em `docs/*.puml`.
