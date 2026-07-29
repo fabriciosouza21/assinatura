@@ -21,9 +21,9 @@ Serviços disponíveis após o `up`:
 
 | Serviço           | Host (no compose)            | Host (máquina)         | Como validar                                          |
 |-------------------|------------------------------|------------------------|-------------------------------------------------------|
-| assinatura (app)  | `assinatura:8080`            | http://localhost:8080  | `curl http://localhost:8080/actuator/health` → `UP`  |
+| assinatura (app)  | `assinatura:8080`            | http://localhost:18080 | `curl http://localhost:18080/actuator/health` → `UP`  |
 | mock-pagamento    | `mock-pagamento:8081`        | http://localhost:8081  | `curl http://localhost:8081/healthz` → `UP`          |
-| postgres          | `postgres:5432`              | localhost:5432         | `pg_isready`                                          |
+| postgres          | `postgres:5432`              | localhost:5433         | `pg_isready`                                          |
 | redis             | `redis:6379`                 | localhost:6379         | `redis-cli ping`                                      |
 | kafka             | `kafka:9092`                 | localhost:9092         | healthcheck do compose                                |
 
@@ -35,14 +35,14 @@ via `depends_on` + healthchecks.
 Health da aplicação (após subir, ~10-15s de boot):
 
 ```bash
-curl http://localhost:8080/actuator/health
+curl http://localhost:18080/actuator/health
 # {"status":"UP"}
 ```
 
 Login (credenciais inválidas respondem 4xx, o que confirma a rota ativa):
 
 ```bash
-curl -X POST http://localhost:8080/auth/login \
+curl -X POST http://localhost:18080/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@example.com","password":"x"}'
 ```
