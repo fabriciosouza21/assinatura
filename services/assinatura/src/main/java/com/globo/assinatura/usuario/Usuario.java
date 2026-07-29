@@ -28,23 +28,28 @@ public class Usuario {
 
   private String email;
 
-  /** Construtor sem argumentos exigido pelo provedor JPA; o uuid e atribuido pelo inicializador. */
-  public Usuario() {}
+  /**
+   * Construtor sem argumentos exigido pelo provedor JPA; o uuid e atribuido pelo inicializador.
+   *
+   * <p>Acesso protegido para desencorajar uso fora do provedor de persistencia.
+   */
+  protected Usuario() {}
 
   /**
-   * Cria um usuario novo a partir do nome e email informados.
+   * Cria um usuário com o nome e o e-mail informados.
    *
-   * <p>O uuid publico e atribuido pela propria entidade na construcao.
+   * <p>O UUID público é gerado pela própria entidade durante a construção.
    *
-   * @param nome nome do usuario
-   * @param email email do usuario
-   * @return instancia de {@link Usuario} com o uuid ja atribuido
+   * @param nome nome do usuário; não pode ser nulo nem vazio
+   * @param email e-mail do usuário
+   * @throws IllegalArgumentException se o nome for nulo ou vazio
    */
-  public static Usuario from(String nome, String email) {
-    Usuario usuario = new Usuario();
-    usuario.setNome(nome);
-    usuario.setEmail(email);
-    return usuario;
+  public Usuario(String nome, String email) {
+    if (nome == null || nome.isBlank()) {
+      throw new IllegalArgumentException("nome nao pode ser vazio");
+    }
+    this.nome = nome;
+    this.email = email;
   }
 
   /**
