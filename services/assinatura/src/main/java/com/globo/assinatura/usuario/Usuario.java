@@ -41,12 +41,15 @@ public class Usuario {
    * <p>O UUID público é gerado pela própria entidade durante a construção.
    *
    * @param nome nome do usuário; não pode ser nulo nem vazio
-   * @param email e-mail do usuário
-   * @throws IllegalArgumentException se o nome for nulo ou vazio
+   * @param email e-mail do usuário; não pode ser nulo nem vazio
+   * @throws IllegalArgumentException se o nome ou o e-mail for nulo ou vazio
    */
   public Usuario(String nome, String email) {
     if (nome == null || nome.isBlank()) {
       throw new IllegalArgumentException("nome nao pode ser vazio");
+    }
+    if (email == null || email.isBlank()) {
+      throw new IllegalArgumentException("email nao pode ser vazio");
     }
     this.nome = nome;
     this.email = email;

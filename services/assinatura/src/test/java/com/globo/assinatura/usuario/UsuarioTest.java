@@ -20,4 +20,12 @@ class UsuarioTest {
         .as("Construtor deve rejeitar nome vazio")
         .isInstanceOf(IllegalArgumentException.class);
   }
+
+  @Test
+  @DisplayName("Deve rejeitar email vazio ao construir o usuario")
+  void construtorRejeitaEmailVazio() {
+    assertThatThrownBy(() -> new Usuario("Fulano", ""))
+        .as("Construtor deve rejeitar email vazio")
+        .isInstanceOf(IllegalArgumentException.class);
+  }
 }
