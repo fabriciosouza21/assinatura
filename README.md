@@ -1,87 +1,89 @@
-# assinatura
+# Sistema de Assinaturas
 
-Serviço de assinatura (Spring Boot 4.1 / Java 26) com mock de meio de pagamento
-em Go. Ambiente local completo sobe com um único comando.
+Desafio técnico — sistema de gestão de assinaturas para um serviço de streaming.
+Usuários assinam planos mensais e a cobrança ocorre automaticamente.
 
-## Requisitos
+## Contexto
 
-- Docker + Docker Compose
+Dois microserviços Spring Boot (Java 26) que conversam via Kafka, mais um mock do
+gateway de pagamento para desenvolvimento local.
 
-Não é preciso ter Java, Maven ou Go instalados localmente. As imagens são
-multi-stage e contêm tudo o que precisam.
+```
+assinatura  ──AssinaturaSolicitada──▶  kafka  ──▶  pagamento  ──▶  gateway (mock)
+     ▲                                                              │
+     └──────PagamentoStatusAtualizado───── kafka ◀─── webhook ◀─────┘
+```
 
-## Subindo o ambiente
+- **`services/assinatura`** — cadastra usuários e assinaturas, publica
+  `AssinaturaSolicitada` via outbox, consome `PagamentoStatusAtualizado` para
+  ativar/suspender.
+- **`services/pagamento`** — consome `AssinaturaSolicitada`, fala com o gateway,
+  recebe webhooks e publica `PagamentoStatusAtualizado`.
+- **`docker/mock-pagamento`** — mock do gateway de pagamento (Go, `net/http`).
+  Não é um microserviço, apenas suporte de dev.
+
+## O que está pronto
+
+- **Infraestrutura completa** sobe com um comando via `docker compose up`.
+- **Assinatura Service**: autenticação JWT, cadastro de usuário, persistência com
+  Postgres + Flyway, healthcheck via Actuator.
+- **Pagamento Service**: scaffold (entry point + security + config).
+- **Mock do gateway**: cria pagamento (idempotente), consulta status, simula
+  aprovação/recusa, dispara webhook assíncrono com assinatura HMAC.
+- **Integração**: smoke test valida a comunicação inter-serviços por nome de host
+  na network do compose.
+
+## O que falta (escopo do desafio ainda não entregue)
+
+- Endpoint de criação de assinatura com a regra "um usuário, uma assinatura ativa".
+- Agendador de renovação automática no vencimento + suspensão após 3 falhas.
+- Endpoint de cancelamento.
+- Consumo de Kafka e handler de webhook no Pagamento Service.
+- Outbox real no Assinatura Service.
+- Testes automatizados (além do smoke test e do `contextLoads`).
+
+A íntegra do escopo e do andamento está em `docs/roadmap/`.
+
+## Como rodar
+
+Requisito: Docker + Docker Compose.
 
 ```bash
-cp .env.example .env      # opcional: ajuste valores conforme o ambiente
 docker compose up -d --build
 ```
 
-Serviços disponíveis após o `up`:
+Serviços expostos no host:
 
-| Serviço           | Host (no compose)            | Host (máquina)         | Como validar                                          |
-|-------------------|------------------------------|------------------------|-------------------------------------------------------|
-| assinatura (app)  | `assinatura:8080`            | http://localhost:18080 | `curl http://localhost:18080/actuator/health` → `UP`  |
-| pagamento (app)   | `pagamento:8080`             | http://localhost:18082 | `curl http://localhost:18082/actuator/health` → `UP`  |
-| mock-pagamento    | `mock-pagamento:8081`        | http://localhost:8081  | `curl http://localhost:8081/healthz` → `UP`          |
-| postgres          | `postgres:5432`              | localhost:5433         | `pg_isready`                                          |
-| redis             | `redis:6379`                 | localhost:6379         | `redis-cli ping`                                      |
-| kafka             | `kafka:9092`                 | localhost:9092         | healthcheck do compose                                |
+| Serviço        | URL                          | Validação                                     |
+|----------------|------------------------------|-----------------------------------------------|
+| assinatura     | http://localhost:18080       | `curl http://localhost:18080/actuator/health` |
+| pagamento      | http://localhost:18082       | `curl http://localhost:18082/actuator/health` |
+| mock gateway   | http://localhost:8081        | `curl http://localhost:8081/healthz`          |
+| postgres       | localhost:5433               | `pg_isready`                                  |
+| redis          | localhost:6379               | `redis-cli ping`                              |
+| kafka          | localhost:9092               | healthcheck do compose                        |
 
-A app aguarda a infra (postgres, redis, kafka) ficar saudável antes de iniciar,
-via `depends_on` + healthchecks.
+> As portas 18080/18082/5433 evitam conflito com outros projetos no host.
 
-## Validação rápida
+## Stack
 
-Health da aplicação (após subir, ~10-15s de boot):
+- **Backend**: Spring Boot 4.1, Java 26, Spring Security (JWT), Spring Data JPA,
+  Flyway, Spring Kafka, Spring Session Redis, WebClient.
+- **Persistência**: PostgreSQL 17.
+- **Cache/Mensageria**: Redis 7, Apache Kafka (KRaft).
+- **Mock**: Go (apenas `net/http`, estado em memória).
+- **Qualidade**: Checkstyle + Spotless (Google Java Style), pre-commit hook.
 
-```bash
-curl http://localhost:18080/actuator/health
-# {"status":"UP"}
-```
+## Desenvolvimento
 
-Login (credenciais inválidas respondem 4xx, o que confirma a rota ativa):
-
-```bash
-curl -X POST http://localhost:18080/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com","password":"x"}'
-```
-
-Smoke test de integração entre assinatura e mock (resolução por nome de host na
-network do compose):
+Cada microserviço é independente e tem seu próprio `Makefile`:
 
 ```bash
-./docker/mock-pagamento/test/integration-smoke.sh
+cd services/assinatura   # ou services/pagamento
+make lint      # checkstyle + spotless (não corrige)
+make format    # corrige formatação automaticamente
+make test      # roda os testes
+make verify    # pipeline completo
 ```
 
-## Estrutura do repositório
-
-```
-.
-├── docker-compose.yml          # orquestra todos os serviços
-├── .env.example                # template de configuração
-├── services/
-│   ├── assinatura/             # Assinatura Service (Spring Boot, Java 26)
-│   └── pagamento/              # Pagamento Service (Spring Boot, Java 26)
-├── docs/                       # diagramas e roadmap
-└── docker/
-    └── mock-pagamento/         # Mock do gateway de pagamento (Go) — NÃO é um microserviço
-```
-
-Os dois microserviços Spring Boot (assinatura e pagamento) conversam via Kafka.
-O mock em `docker/` apenas simula o gateway de pagamento externo para
-desenvolvimento local.
-
-## Variáveis de ambiente
-
-Todas as configurações são externalizadas. Veja `.env.example` para a lista
-completa (datasource, redis, kafka, JWT, mock). O `docker-compose.yml` lê `.env`
-se existir; sem ele, usa defaults adequados ao ambiente local.
-
-## Parando o ambiente
-
-```bash
-docker compose down            # remove containers, mantém volumes
-docker compose down -v         # remove também os volumes (apaga dados do postgres/redis)
-```
+Variáveis de ambiente em `.env.example`. Convenções em `AGENTS.md`.
