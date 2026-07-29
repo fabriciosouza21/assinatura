@@ -28,6 +28,14 @@ Primeiro milestone: ambiente local completo sobe com `docker compose up`.
 - `README.md` com instruções de setup e validação.
 
 ### Alterado
+- Repositório reorganizado para monorepo de microserviços: `services/assinatura`
+  e `services/pagamento`. O mock do gateway fica isolado em `docker/mock-pagamento/`.
 - Versão do serviço `assinatura` de `0.0.1-SNAPSHOT` para `0.1.0`.
+
+### Scaffold
+- `services/pagamento/`: novo microserviço Spring Boot (Pagamento Service) fiel
+  ao diagrama `docs/cadastro-usuario-assinatura.puml`. Scaffold mínimo
+  (Application, SecurityConfig com health, application.yaml, Dockerfile, lint).
+  Lógica de negócio (consumo de Kafka, gateway, webhook) fica para etapa futura.
 - `KAFKA_ADVERTISED_LISTENERS` do compose ajustado para `kafka:9092` (host
   interno da network do compose).

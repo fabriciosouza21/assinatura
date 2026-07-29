@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Hook pre-commit: roda checkstyle + spotless no servico assinatura antes de
-# permitir o commit. So roda quando ha arquivos Java alterados.
+# Hook pre-commit: roda checkstyle + spotless nos serviços Spring Boot (services/*)
+# que tiverem arquivos .java alterados.
 # Bypass: SKIP_PRE_COMMIT=1 git commit ...
 
 set -euo pipefail
@@ -12,31 +12,39 @@ fi
 
 cd "$(git rev-parse --show-toplevel)"
 
-# So roda o lint se houver arquivos Java no stage.
-if ! git diff --cached --name-only --diff-filter=ACM | grep -qE '\.java$'; then
-  echo "[pre-commit] nenhum arquivo .java no stage, pulando lint"
+# Coleta os serviços (subpastas de services/) que têm arquivos .java no stage.
+mapfile -t servicos < <(
+  git diff --cached --name-only --diff-filter=ACM \
+    | grep -E '^services/[^/]+/.+\.java$' \
+    | sed -E 's|^services/([^/]+)/.*|\1|' \
+    | sort -u
+)
+
+if [ "${#servicos[@]}" -eq 0 ]; then
+  echo "[pre-commit] nenhum arquivo .java de serviço no stage, pulando lint"
   exit 0
 fi
 
-if [ ! -f Makefile ]; then
-  echo "[pre-commit] Makefile nao encontrado, pulando verificacoes"
-  exit 0
-fi
+for svc in "${servicos[@]}"; do
+  dir="services/${svc}"
+  if [ ! -f "${dir}/Makefile" ]; then
+    echo "[pre-commit] ${dir} sem Makefile, pulando"
+    continue
+  fi
+  echo "[pre-commit] executando make lint em ${dir} (checkstyle + spotless)"
+  if ! make -C "${dir}" lint; then
+    cat <<EOF
 
-echo "[pre-commit] executando make lint (checkstyle + spotless)"
-
-if ! make lint; then
-  cat <<'EOF'
-
-[pre-commit] FALHOU. Corrija as violacoes acima antes de commitar.
+[pre-commit] FALHOU em ${dir}. Corrija as violacoes acima antes de commitar.
 
   Dicas:
-    - Formatacao:    make format   (corrige automaticamente)
+    - Formatacao:    make -C ${dir} format   (corrige automaticamente)
     - Checkstyle:    ajuste o codigo conforme as regras apontadas
     - Emergencias:   SKIP_PRE_COMMIT=1 git commit ...
 
 EOF
-  exit 1
-fi
+    exit 1
+  fi
+done
 
 echo "[pre-commit] OK"

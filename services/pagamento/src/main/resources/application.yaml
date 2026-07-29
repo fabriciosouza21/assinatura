@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: pagamento
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: pagamento
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+app:
+  gateway:
+    base-url: ${APP_GATEWAY_BASE_URL:http://mock-pagamento:8081}
+    webhook-secret: ${APP_GATEWAY_WEBHOOK_SECRET:mock-webhook-secret}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

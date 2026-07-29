@@ -55,7 +55,7 @@ services:
 
   assinatura:
     build:
-      context: .
+      context: services/assinatura
       dockerfile: Dockerfile
     container_name: assinatura-app
     # Sobrepoẽ defaults do application.yaml para os hosts internos do Docker.
@@ -80,6 +80,30 @@ services:
       redis:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  pagamento:
+    build:
+      context: services/pagamento
+      dockerfile: Dockerfile
+    container_name: assinatura-pagamento
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      APP_GATEWAY_BASE_URL: http://mock-pagamento:8081
+      APP_GATEWAY_WEBHOOK_SECRET: ${MOCK_WEBHOOK_SECRET:-mock-webhook-secret}
+    ports:
+      - "18082:8080"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mock-pagamento:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/actuator/health"]

@@ -2,14 +2,16 @@
 
 ## Repositório
 
-O projeto principal (`assinatura`, Spring Boot 4.1 / Java 26) vive na raiz do
-repositório. O mock de meio de pagamento fica isolado em `docker/mock-pagamento/`
-para deixar explícito que **não** faz parte do projeto principal, é apenas suporte
-de desenvolvimento.
+Monorepo com dois microserviços Spring Boot (4.1 / Java 26) que conversam via
+Kafka, e um mock de gateway isolado em `docker/`.
 
-- Raiz (`src/`, `pom.xml`, `mvnw`, `Makefile`) — serviço de assinatura.
-- `docker/mock-pagamento/` — mock de pagamento em Go (`net/http`), isolado.
-- `docker-compose.yml` orquestra os dois via contexts distintos.
+- `services/assinatura/` — Assinatura Service: cadastra usuários e assinaturas,
+  publica `AssinaturaSolicitada` via outbox, consome `PagamentoStatusAtualizado`.
+- `services/pagamento/` — Pagamento Service: consome `AssinaturaSolicitada`, fala
+  com o gateway de pagamento, recebe webhooks e publica `PagamentoStatusAtualizado`.
+- `docker/mock-pagamento/` — mock do gateway de pagamento em Go (`net/http`).
+  **Não** é um microserviço, apenas suporte de desenvolvimento.
+- `docker-compose.yml` na raiz orquestra os três via contexts distintos.
 
 ## Commits
 
@@ -26,9 +28,9 @@ chore: bump versao para 0.1.0
 
 ## Versionamento
 
-Seguir Semantic Versioning. A versão do `assinatura` vive em
-`pom.xml` (`<version>`). Tags no formato `X.Y.Z` mantidas em
-sincronia com esse valor.
+Seguir Semantic Versioning. A versão de cada microserviço vive no seu `pom.xml`
+(`services/assinatura/pom.xml`, `services/pagamento/pom.xml`). Tags no formato
+`X.Y.Z` mantidas em sincronia com esses valores.
 
 ## Branches
 
@@ -45,9 +47,10 @@ Nomes de branch em kebab-case, sem acentos. Verbo no infinitivo descrevendo a en
 
 ## Estilo de código — Java
 
-Seguir [Google Java Style](https://google.github.io/styleguide/javaguide.html).
+Aplica-se a `services/assinatura` e `services/pagamento`. Ambos seguem
+[Google Java Style](https://google.github.io/styleguide/javaguide.html).
 
-- Checkstyle 11.0.1 com `config/checkstyle/checkstyle.xml`
+- Checkstyle 11.0.1 com `config/checkstyle/checkstyle.xml` dentro de cada serviço
   (cópia do `google_checks.xml` oficial).
 - Indentação 2 espaços, sem tabs, line length 100.
 - Spotless com `google-java-format` (1.30.0, estilo GOOGLE) corrige formatação
@@ -57,7 +60,7 @@ Seguir [Google Java Style](https://google.github.io/styleguide/javaguide.html).
   `@return`, `@throws`. Usar `{@code ...}` para literais de código. Javadoc que
   começa direto com `@return`/`@param` é rejeitado pelo `SummaryJavadoc`.
 
-Comandos (a partir da raiz):
+Comandos (a partir de dentro de `services/assinatura` ou `services/pagamento`):
 
 ```bash
 make lint     # verifica checkstyle + spotless (não corrige)
@@ -66,8 +69,9 @@ make test     # roda os testes
 make verify   # pipeline completo: lint + testes + package
 ```
 
-O hook `pre-commit` (em `.githooks/`) roda `make lint` automaticamente quando há
-arquivos `.java` no stage. Bypass: `SKIP_PRE_COMMIT=1 git commit ...`.
+O hook `pre-commit` (em `.githooks/`) roda `make lint` automaticamente em cada
+serviço de `services/` que tiver arquivos `.java` no stage. Bypass:
+`SKIP_PRE_COMMIT=1 git commit ...`.
 
 ## Estilo de código — Go (`docker/mock-pagamento`)
 
@@ -93,10 +97,15 @@ Todas as configurações são externalizadas por variáveis de ambiente. Veja
 Portas publicadas no host (evitam conflito com outros projetos):
 
 - `assinatura` app: `18080`
+- `pagamento` app: `18082`
 - `mock-pagamento`: `8081`
 - `postgres`: `5433`
 - `redis`: `6379`
 - `kafka`: `9092`
+
+### CQRS Lite
+
+Separe as operações de escrita em **Commands** e as operações de leitura em **Queries**. Commands alteram o estado e aplicam regras de negócio; Queries apenas consultam e retornam dados. Utilize a mesma aplicação e o mesmo banco de dados, sem Event Sourcing, bancos separados ou consistência eventual.
 
 ## Documentação
 

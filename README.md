@@ -22,6 +22,7 @@ Serviços disponíveis após o `up`:
 | Serviço           | Host (no compose)            | Host (máquina)         | Como validar                                          |
 |-------------------|------------------------------|------------------------|-------------------------------------------------------|
 | assinatura (app)  | `assinatura:8080`            | http://localhost:18080 | `curl http://localhost:18080/actuator/health` → `UP`  |
+| pagamento (app)   | `pagamento:8080`             | http://localhost:18082 | `curl http://localhost:18082/actuator/health` → `UP`  |
 | mock-pagamento    | `mock-pagamento:8081`        | http://localhost:8081  | `curl http://localhost:8081/healthz` → `UP`          |
 | postgres          | `postgres:5432`              | localhost:5433         | `pg_isready`                                          |
 | redis             | `redis:6379`                 | localhost:6379         | `redis-cli ping`                                      |
@@ -60,12 +61,17 @@ network do compose):
 .
 ├── docker-compose.yml          # orquestra todos os serviços
 ├── .env.example                # template de configuração
-├── src/                        # assinatura — projeto principal (Spring Boot, Java 26)
-├── pom.xml                     # build do projeto principal
+├── services/
+│   ├── assinatura/             # Assinatura Service (Spring Boot, Java 26)
+│   └── pagamento/              # Pagamento Service (Spring Boot, Java 26)
 ├── docs/                       # diagramas e roadmap
 └── docker/
-    └── mock-pagamento/         # Mock de pagamento (Go, net/http) — NÃO faz parte do projeto principal
+    └── mock-pagamento/         # Mock do gateway de pagamento (Go) — NÃO é um microserviço
 ```
+
+Os dois microserviços Spring Boot (assinatura e pagamento) conversam via Kafka.
+O mock em `docker/` apenas simula o gateway de pagamento externo para
+desenvolvimento local.
 
 ## Variáveis de ambiente
 
