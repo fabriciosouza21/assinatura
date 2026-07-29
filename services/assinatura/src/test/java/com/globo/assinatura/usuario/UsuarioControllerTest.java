@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
@@ -42,6 +43,7 @@ class UsuarioControllerTest {
   @MockitoBean private UsuarioService usuarioService;
 
   @Test
+  @DisplayName("Deve cadastrar usuario valido e retornar 201 com o uuid")
   void cadastraUsuarioRetornaCreatedComId() throws Exception {
     when(usuarioService.cadastrar("Fulano", "novo@example.com")).thenReturn("uuid-do-usuario");
 
@@ -55,6 +57,7 @@ class UsuarioControllerTest {
   }
 
   @Test
+  @DisplayName("Deve rejeitar cadastro com nome vazio retornando 400")
   void cadastraUsuarioComNomeVazioRetornaBadRequest() throws Exception {
     mockMvc
         .perform(
@@ -65,6 +68,7 @@ class UsuarioControllerTest {
   }
 
   @Test
+  @DisplayName("Deve rejeitar cadastro com email invalido retornando 400")
   void cadastraUsuarioComEmailInvalidoRetornaBadRequest() throws Exception {
     mockMvc
         .perform(
