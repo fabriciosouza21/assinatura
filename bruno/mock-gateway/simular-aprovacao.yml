@@ -1,0 +1,20 @@
+info:
+  name: Simular aprovação
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{mockGatewayUrl}}/v1/mock/payments/{{paymentId}}/status"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "status": "APPROVED"
+      }
+
+settings:
+  encodeUrl: true
