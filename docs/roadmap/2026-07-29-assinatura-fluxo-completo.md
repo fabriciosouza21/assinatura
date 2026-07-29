@@ -86,8 +86,8 @@
 
 | # | Entregavel | Depende de | Status |
 |---|-----------|-----------|--------|
-| 0 | Criar `develop` a partir de `feat/setup-docker-mock-pagamento` | — | [ ] |
-| 1 | Cadastro de usuário (`POST /usuarios` com `uuid`) | 0 | [ ] |
+| 0 | Criar `develop` a partir de `feat/setup-docker-mock-pagamento` | — | [x] |
+| 1 | Cadastro de usuário (`POST /usuarios` com `uuid`) | 0 | [x] |
 | 2 | Solicitação + consulta de assinatura sem fila (`POST`/`GET`, `409`) | 1 | [ ] |
 | 3 | Outbox + publicação de `AssinaturaSolicitada` no Kafka | 2 | [ ] |
 | 4 | Consumer de `PagamentoStatusAtualizado` (ativa/recusa) | 2 | [ ] |
