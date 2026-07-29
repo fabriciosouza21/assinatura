@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Hook pre-commit: roda checkstyle + spotless no servico assinatura antes de
+# permitir o commit. So roda quando ha arquivos Java alterados.
+# Bypass: SKIP_PRE_COMMIT=1 git commit ...
+
+set -euo pipefail
+
+if [ "${SKIP_PRE_COMMIT:-0}" = "1" ]; then
+  echo "[pre-commit] bypassado por SKIP_PRE_COMMIT=1"
+  exit 0
+fi
+
+cd "$(git rev-parse --show-toplevel)"
+
+# So roda o lint se houver arquivos Java no stage.
+if ! git diff --cached --name-only --diff-filter=ACM | grep -qE '\.java$'; then
+  echo "[pre-commit] nenhum arquivo .java no stage, pulando lint"
+  exit 0
+fi
+
+if [ ! -f services/assinatura/Makefile ]; then
+  echo "[pre-commit] Makefile do assinatura nao encontrado, pulando verificacoes"
+  exit 0
+fi
+
+echo "[pre-commit] executando make lint em services/assinatura (checkstyle + spotless)"
+
+if ! make -C services/assinatura lint; then
+  cat <<'EOF'
+
+[pre-commit] FALHOU. Corrija as violacoes acima antes de commitar.
+
+  Dicas:
+    - Formatacao:    make -C services/assinatura format   (corrige automaticamente)
+    - Checkstyle:    ajuste o codigo conforme as regras apontadas
+    - Emergencias:   SKIP_PRE_COMMIT=1 git commit ...
+
+EOF
+  exit 1
+fi
+
+echo "[pre-commit] OK"

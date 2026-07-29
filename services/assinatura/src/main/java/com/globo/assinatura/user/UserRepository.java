@@ -1,10 +1,16 @@
 package com.globo.assinatura.user;
 
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import java.util.Optional;
-
+/** Repositório de acesso aos dados de usuários. */
 public interface UserRepository extends JpaRepository<User, Long> {
 
-    Optional<User> findByUsername(String username);
+  /**
+   * Busca um usuário pelo nome de login.
+   *
+   * @param username nome de login do usuário
+   * @return o usuário encontrado, ou {@code Optional.empty()} se não existir
+   */
+  Optional<User> findByUsername(String username);
 }

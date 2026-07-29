@@ -1,4 +1,4 @@
 package com.globo.assinatura.auth;
 
-public record LoginRequest(String username, String password) {
-}
+/** Credenciais enviadas no login. */
+public record LoginRequest(String username, String password) {}

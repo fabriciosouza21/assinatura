@@ -5,72 +5,84 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-
 import java.time.Instant;
 
+/** Usuário autenticável do serviço de assinatura. */
 @Entity
 @Table(name = "users")
 public class User {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  private Long id;
 
-    private String username;
+  private String username;
 
-    private String password;
+  private String password;
 
-    private String role;
+  private String role;
 
-    private Instant createdAt;
+  private Instant createdAt;
 
-    private Instant updatedAt;
+  private Instant updatedAt;
 
-    public Long getId() {
-        return id;
-    }
+  /** Retorna o identificador do usuário. */
+  public Long getId() {
+    return id;
+  }
 
-    public String getUsername() {
-        return username;
-    }
+  /** Retorna o nome de login do usuário. */
+  public String getUsername() {
+    return username;
+  }
 
-    public String getPassword() {
-        return password;
-    }
+  /** Retorna a senha hasheada do usuário. */
+  public String getPassword() {
+    return password;
+  }
 
-    public String getRole() {
-        return role;
-    }
+  /** Retorna o papel do usuário, como {@code "ROLE_USER"}. */
+  public String getRole() {
+    return role;
+  }
 
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
+  /** Retorna o instante de criação do registro. */
+  public Instant getCreatedAt() {
+    return createdAt;
+  }
 
-    public Instant getUpdatedAt() {
-        return updatedAt;
-    }
+  /** Retorna o instante da última atualização do registro. */
+  public Instant getUpdatedAt() {
+    return updatedAt;
+  }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+  /** Define o identificador do usuário. */
+  public void setId(Long id) {
+    this.id = id;
+  }
 
-    public void setUsername(String username) {
-        this.username = username;
-    }
+  /** Define o nome de login do usuário. */
+  public void setUsername(String username) {
+    this.username = username;
+  }
 
-    public void setPassword(String password) {
-        this.password = password;
-    }
+  /** Define a senha do usuário, em texto plano, a ser persistida. */
+  public void setPassword(String password) {
+    this.password = password;
+  }
 
-    public void setRole(String role) {
-        this.role = role;
-    }
+  /** Define o papel do usuário. */
+  public void setRole(String role) {
+    this.role = role;
+  }
 
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
+  /** Define o instante de criação do registro. */
+  public void setCreatedAt(Instant createdAt) {
+    this.createdAt = createdAt;
+  }
 
-    public void setUpdatedAt(Instant updatedAt) {
-        this.updatedAt = updatedAt;
-    }
+  /** Define o instante da última atualização do registro. */
+  public void setUpdatedAt(Instant updatedAt) {
+    this.updatedAt = updatedAt;
+  }
 }
