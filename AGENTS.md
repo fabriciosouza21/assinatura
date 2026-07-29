@@ -65,8 +65,18 @@ Comandos (a partir de dentro de `services/assinatura` ou `services/pagamento`):
 ```bash
 make lint     # verifica checkstyle + spotless (não corrige)
 make format   # corrige formatação automaticamente
-make test     # roda os testes
-make verify   # pipeline completo: lint + testes + package
+make test     # roda os testes unitários (exclui @Tag("integration"))
+make verify   # lint + testes unitários + package (sem integração)
+```
+
+Testes de integração (`@Tag("integration")`) rodam isolados, sobem o
+Postgres do `docker-compose.yml` automaticamente e devem ser executados só ao
+final (não no `make verify`):
+
+```bash
+make test-integration       # sobe o Postgres (porta 5433) e roda a integração
+make test-integration-up    # apenas sobe o Postgres e aguarda a porta 5433
+make test-integration-down  # derruba o Postgres
 ```
 
 O hook `pre-commit` (em `.githooks/`) roda `make lint` automaticamente em cada
