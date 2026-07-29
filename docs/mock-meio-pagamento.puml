@@ -1,0 +1,141 @@
+@startuml
+title Mock simplificado do meio de pagamento
+
+autonumber
+hide footbox
+skinparam responseMessageBelowArrow true
+
+actor "Teste automatizado" as TEST
+control "Pagamento Service" as PS
+boundary "Mock Payment API" as MOCK
+database "Mock DB" as DB
+queue "Kafka" as KAFKA
+control "Assinatura Service" as AS
+
+== Criar pagamento ==
+
+PS -> MOCK: POST /v1/payments\nIdempotency-Key: assinatura_uuid
+
+note over PS, MOCK
+  Requisição:
+  {
+    "externalReference": "assinatura_uuid",
+    "amount": 4990,
+    "currency": "BRL",
+    "paymentMethod": "PIX",
+    "notificationUrl":
+      "https://api.exemplo.com/webhooks/payments"
+  }
+end note
+
+MOCK -> DB: Buscar pela Idempotency-Key
+
+alt Pagamento já existe
+    DB --> MOCK: pagamento existente
+    MOCK --> PS: 200 OK\nMesma cobrança
+else Novo pagamento
+    DB --> MOCK: vazio
+    MOCK -> DB: INSERT pagamento\nstatus = PENDING
+    MOCK --> PS: 201 Created
+end
+
+note over PS, MOCK
+  Resposta:
+  {
+    "id": "pay_uuid",
+    "externalReference": "assinatura_uuid",
+    "amount": 4990,
+    "currency": "BRL",
+    "paymentMethod": "PIX",
+    "status": "PENDING",
+    "pixCode": "000201010212...",
+    "expiresAt": "2026-07-29T13:30:00Z"
+  }
+end note
+
+== Simular aprovação ou recusa ==
+
+TEST -> MOCK: POST /v1/mock/payments/pay_uuid/status
+
+note over TEST, MOCK
+  Requisição:
+  {
+    "status": "APPROVED"
+  }
+
+  Também pode receber REJECTED,
+  CANCELLED ou EXPIRED.
+end note
+
+MOCK -> DB: UPDATE pagamento\nstatus = APPROVED
+MOCK --> TEST: 202 Accepted
+
+note over TEST, MOCK
+  Resposta:
+  {
+    "paymentId": "pay_uuid",
+    "previousStatus": "PENDING",
+    "status": "APPROVED",
+    "webhookScheduled": true
+  }
+end note
+
+== Enviar webhook ==
+
+MOCK -> PS: POST /webhooks/payments\nX-Mock-Event-Id: evt_uuid\nX-Mock-Signature: sha256=hmac
+
+note over MOCK, PS
+  Requisição:
+  {
+    "id": "evt_uuid",
+    "type": "payment.updated",
+    "data": {
+      "paymentId": "pay_uuid",
+      "externalReference": "assinatura_uuid"
+    }
+  }
+end note
+
+PS -> PS: Validar assinatura\ne deduplicar eventId
+PS --> MOCK: 200 OK
+
+note over MOCK, PS
+  Resposta:
+  {
+    "received": true,
+    "eventId": "evt_uuid"
+  }
+end note
+
+== Consultar status oficial ==
+
+PS -> MOCK: GET /v1/payments/pay_uuid
+MOCK -> DB: SELECT pagamento
+DB --> MOCK: pagamento APPROVED
+MOCK --> PS: 200 OK
+
+note over PS, MOCK
+  Resposta:
+  {
+    "id": "pay_uuid",
+    "externalReference": "assinatura_uuid",
+    "amount": 4990,
+    "currency": "BRL",
+    "paymentMethod": "PIX",
+    "status": "APPROVED",
+    "approvedAt": "2026-07-29T13:05:00Z"
+  }
+end note
+
+== Publicar resultado ==
+
+PS -> KAFKA: PagamentoStatusAtualizado\n{\n  "assinaturaId": "assinatura_uuid",\n  "status": "APPROVED"\n}
+KAFKA -> AS: PagamentoStatusAtualizado
+AS -> AS: Ativar assinatura
+
+note over MOCK, DB
+  UNIQUE(idempotency_key) evita cobranças duplicadas.
+  O endpoint /v1/mock/... existe apenas em testes.
+end note
+
+@enduml

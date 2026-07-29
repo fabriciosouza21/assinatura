@@ -1,0 +1,99 @@
+@startuml
+title Cadastro de usuário e assinatura
+
+autonumber
+hide footbox
+skinparam responseMessageBelowArrow true
+
+actor Cliente
+boundary "API REST" as API
+control "Usuário Service" as US
+control "Assinatura Service" as AS
+database "Banco de Dados" as DB
+queue "Kafka" as KAFKA
+control "Pagamento Service" as PS
+participant "Gateway de Pagamento" as GATEWAY
+
+== Cadastrar usuário ==
+
+Cliente -> API: POST /usuarios\n{nome, email}
+API -> US: criar usuário
+US -> DB: INSERT usuario
+DB --> US: usuarioId
+US --> API: usuário criado
+API --> Cliente: 201 Created\n{id: "usuario_uuid"}
+
+== Solicitar assinatura ==
+
+Cliente -> API: POST /usuarios/usuario_uuid/assinaturas\nIdempotency-Key: assinatura_uuid\n{plano: "PREMIUM"}
+API -> AS: solicitar assinatura
+AS -> DB: BEGIN\nBloquear usuário e verificar\nassinatura aberta
+
+alt Já existe assinatura aberta
+    DB --> AS: assinatura existente
+    AS -> DB: ROLLBACK
+    AS --> API: conflito
+    API --> Cliente: 409 Conflict
+else Não existe
+    DB --> AS: nenhuma assinatura
+    AS -> DB: INSERT assinatura\nstatus = AGUARDANDO_PAGAMENTO
+    AS -> DB: INSERT outbox\nAssinaturaSolicitada
+    AS -> DB: COMMIT
+    AS --> API: assinatura criada
+    API --> Cliente: 202 Accepted\n{id: "assinatura_uuid",\nstatus: "AGUARDANDO_PAGAMENTO"}
+end
+
+AS -> KAFKA: Outbox publica\nAssinaturaSolicitada
+
+note over AS, KAFKA
+  A publicação é feita por um Outbox Publisher.
+  Ele foi omitido para manter o diagrama simples.
+end note
+
+== Criar pagamento ==
+
+KAFKA -> PS: AssinaturaSolicitada
+PS -> GATEWAY: POST /payments\nIdempotency-Key: assinatura_uuid
+GATEWAY --> PS: 201 Created\n{paymentId, status: "PENDING"}
+
+== Receber resultado ==
+
+GATEWAY -> PS: POST /webhooks/payments\n{eventId, paymentId}
+PS -> PS: Validar assinatura\ne deduplicar eventId
+PS -> GATEWAY: GET /payments/{paymentId}
+GATEWAY --> PS: {paymentId,\nstatus: "APPROVED"}
+PS -> KAFKA: PagamentoStatusAtualizado\n{assinaturaId, status}
+
+== Atualizar assinatura ==
+
+KAFKA -> AS: PagamentoStatusAtualizado
+AS -> DB: BEGIN\nBloquear assinatura
+
+alt status = APPROVED
+    AS -> DB: UPDATE assinatura\nstatus = ATIVA\ndataInicio = hoje\ndataExpiracao = hoje + período
+    AS -> DB: COMMIT
+else status = REJECTED
+    AS -> DB: UPDATE assinatura\nstatus = PAGAMENTO_RECUSADO
+    AS -> DB: COMMIT
+else status = PENDING
+    AS -> DB: COMMIT sem alteração
+end
+
+== Consultar assinatura ==
+
+Cliente -> API: GET /assinaturas/assinatura_uuid
+API -> AS: buscar assinatura
+AS -> DB: SELECT assinatura
+DB --> AS: assinatura
+AS --> API: assinatura
+API --> Cliente: 200 OK\n{\n  "id": "assinatura_uuid",\n  "usuarioId": "usuario_uuid",\n  "plano": "PREMIUM",\n  "dataInicio": "2025-03-10",\n  "dataExpiracao": "2025-04-10",\n  "status": "ATIVA"\n}
+
+note over DB
+  Garantia de integridade (PostgreSQL):
+
+  CREATE UNIQUE INDEX uq_assinatura_aberta_usuario
+  ON assinatura (usuario_id)
+  WHERE status IN ('AGUARDANDO_PAGAMENTO', 'ATIVA');
+end note
+
+@enduml
