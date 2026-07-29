@@ -88,6 +88,23 @@ services:
       retries: 10
       start_period: 40s
 
+  mock-pagamento:
+    build:
+      context: services/mock-pagamento
+      dockerfile: Dockerfile
+    container_name: assinatura-mock-pagamento
+    environment:
+      MOCK_PORT: "8081"
+      MOCK_WEBHOOK_SECRET: ${MOCK_WEBHOOK_SECRET:-mock-webhook-secret}
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8081/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
 volumes:
   postgres-data:
   redis-data:
