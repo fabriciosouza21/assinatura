@@ -2,6 +2,7 @@ package com.globo.assinatura.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -33,7 +34,7 @@ public class SecurityConfig {
   /**
    * Constrói a cadeia de filtros de segurança.
    *
-   * <p>Libera {@code /usuarios} (auto-cadastro publico), {@code /auth/login} e {@code
+   * <p>Libera {@code POST /usuarios} (auto-cadastro publico), {@code /auth/login} e {@code
    * /actuator/health}; todas as demais rotas exigem autenticação.
    *
    * @param http o builder de segurança do Spring
@@ -46,7 +47,9 @@ public class SecurityConfig {
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             auth ->
-                auth.requestMatchers("/usuarios", "/auth/login", "/actuator/health")
+                auth.requestMatchers(HttpMethod.POST, "/usuarios")
+                    .permitAll()
+                    .requestMatchers("/auth/login", "/actuator/health")
                     .permitAll()
                     .anyRequest()
                     .authenticated())
