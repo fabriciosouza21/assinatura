@@ -18,20 +18,20 @@ if ! git diff --cached --name-only --diff-filter=ACM | grep -qE '\.java$'; then
   exit 0
 fi
 
-if [ ! -f services/assinatura/Makefile ]; then
-  echo "[pre-commit] Makefile do assinatura nao encontrado, pulando verificacoes"
+if [ ! -f Makefile ]; then
+  echo "[pre-commit] Makefile nao encontrado, pulando verificacoes"
   exit 0
 fi
 
-echo "[pre-commit] executando make lint em services/assinatura (checkstyle + spotless)"
+echo "[pre-commit] executando make lint (checkstyle + spotless)"
 
-if ! make -C services/assinatura lint; then
+if ! make lint; then
   cat <<'EOF'
 
 [pre-commit] FALHOU. Corrija as violacoes acima antes de commitar.
 
   Dicas:
-    - Formatacao:    make -C services/assinatura format   (corrige automaticamente)
+    - Formatacao:    make format   (corrige automaticamente)
     - Checkstyle:    ajuste o codigo conforme as regras apontadas
     - Emergencias:   SKIP_PRE_COMMIT=1 git commit ...
 

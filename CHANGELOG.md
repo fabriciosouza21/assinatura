@@ -14,7 +14,8 @@ Primeiro milestone: ambiente local completo sobe com `docker compose up`.
 - Externalização de configuração: datasource, redis, kafka e JWT via variáveis
   de ambiente, com perfil `application-dev` e `.env.example`.
 - `spring-boot-starter-actuator` e exposição pública do `/actuator/health`.
-- Reorganização em monorepo: `services/assinatura` e `services/mock-pagamento`.
+- Reorganização do repositório: projeto principal (`assinatura`) na raiz, mock
+  de pagamento isolado em `docker/mock-pagamento/`.
 - Mock de pagamento em Go (`net/http`, estado em memória):
   - `POST /v1/payments` (idempotente por `Idempotency-Key`).
   - `GET /v1/payments/{id}` (consulta de status).

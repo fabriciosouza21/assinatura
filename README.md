@@ -51,19 +51,20 @@ Smoke test de integração entre assinatura e mock (resolução por nome de host
 network do compose):
 
 ```bash
-./services/mock-pagamento/test/integration-smoke.sh
+./docker/mock-pagamento/test/integration-smoke.sh
 ```
 
-## Estrutura do monorepo
+## Estrutura do repositório
 
 ```
 .
 ├── docker-compose.yml          # orquestra todos os serviços
 ├── .env.example                # template de configuração
+├── src/                        # assinatura — projeto principal (Spring Boot, Java 26)
+├── pom.xml                     # build do projeto principal
 ├── docs/                       # diagramas e roadmap
-└── services/
-    ├── assinatura/             # Spring Boot (Java 26)
-    └── mock-pagamento/         # Mock de pagamento (Go, net/http)
+└── docker/
+    └── mock-pagamento/         # Mock de pagamento (Go, net/http) — NÃO faz parte do projeto principal
 ```
 
 ## Variáveis de ambiente

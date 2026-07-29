@@ -3,7 +3,7 @@
 # compose por nome de host. Um container efemero resolve "mock-pagamento" e
 # chama POST /v1/payments, esperando 201 com status PENDING.
 #
-# Uso: ./services/mock-pagamento/test/integration-smoke.sh
+# Uso: ./docker/mock-pagamento/test/integration-smoke.sh
 set -euo pipefail
 
 NETWORK="${NETWORK:-assinatura_default}"

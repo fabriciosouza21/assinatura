@@ -1,13 +1,15 @@
 # Convenções
 
-## Monorepo
+## Repositório
 
-O repositório abriga múltiplos serviços lado a lado:
+O projeto principal (`assinatura`, Spring Boot 4.1 / Java 26) vive na raiz do
+repositório. O mock de meio de pagamento fica isolado em `docker/mock-pagamento/`
+para deixar explícito que **não** faz parte do projeto principal, é apenas suporte
+de desenvolvimento.
 
-- `services/assinatura/` — serviço Spring Boot 4.1 (Java 26) de assinatura.
-- `services/mock-pagamento/` — mock de meio de pagamento em Go (`net/http`).
-
-Cada serviço tem seu próprio build. A raiz orquestra tudo via `docker-compose.yml`.
+- Raiz (`src/`, `pom.xml`, `mvnw`, `Makefile`) — serviço de assinatura.
+- `docker/mock-pagamento/` — mock de pagamento em Go (`net/http`), isolado.
+- `docker-compose.yml` orquestra os dois via contexts distintos.
 
 ## Commits
 
@@ -25,7 +27,7 @@ chore: bump versao para 0.1.0
 ## Versionamento
 
 Seguir Semantic Versioning. A versão do `assinatura` vive em
-`services/assinatura/pom.xml` (`<version>`). Tags no formato `X.Y.Z` mantidas em
+`pom.xml` (`<version>`). Tags no formato `X.Y.Z` mantidas em
 sincronia com esse valor.
 
 ## Branches
@@ -41,11 +43,11 @@ Seguir GitFlow.
 
 Nomes de branch em kebab-case, sem acentos. Verbo no infinitivo descrevendo a entrega.
 
-## Estilo de código — Java (`services/assinatura`)
+## Estilo de código — Java
 
 Seguir [Google Java Style](https://google.github.io/styleguide/javaguide.html).
 
-- Checkstyle 11.0.1 com `services/assinatura/config/checkstyle/checkstyle.xml`
+- Checkstyle 11.0.1 com `config/checkstyle/checkstyle.xml`
   (cópia do `google_checks.xml` oficial).
 - Indentação 2 espaços, sem tabs, line length 100.
 - Spotless com `google-java-format` (1.30.0, estilo GOOGLE) corrige formatação
@@ -55,7 +57,7 @@ Seguir [Google Java Style](https://google.github.io/styleguide/javaguide.html).
   `@return`, `@throws`. Usar `{@code ...}` para literais de código. Javadoc que
   começa direto com `@return`/`@param` é rejeitado pelo `SummaryJavadoc`.
 
-Comandos (a partir de `services/assinatura`):
+Comandos (a partir da raiz):
 
 ```bash
 make lint     # verifica checkstyle + spotless (não corrige)
@@ -67,13 +69,15 @@ make verify   # pipeline completo: lint + testes + package
 O hook `pre-commit` (em `.githooks/`) roda `make lint` automaticamente quando há
 arquivos `.java` no stage. Bypass: `SKIP_PRE_COMMIT=1 git commit ...`.
 
-## Estilo de código — Go (`services/mock-pagamento`)
+## Estilo de código — Go (`docker/mock-pagamento`)
+
+Mock isolado de meio de pagamento. **Não faz parte do projeto principal.**
 
 - Apenas biblioteca padrão (`net/http`), sem framework.
 - `gofmt` para formatação. Estado em memória (map + mutex), sem persistência.
 - Contrato do mock em `docs/mock-meio-pagamento.puml`.
 
-Comandos (a partir de `services/mock-pagamento`):
+Comandos (a partir de `docker/mock-pagamento`):
 
 ```bash
 go vet ./...   # análise estática

@@ -55,7 +55,7 @@ services:
 
   assinatura:
     build:
-      context: services/assinatura
+      context: .
       dockerfile: Dockerfile
     container_name: assinatura-app
     # Sobrepoẽ defaults do application.yaml para os hosts internos do Docker.
@@ -90,7 +90,7 @@ services:
 
   mock-pagamento:
     build:
-      context: services/mock-pagamento
+      context: docker/mock-pagamento
       dockerfile: Dockerfile
     container_name: assinatura-mock-pagamento
     environment:
