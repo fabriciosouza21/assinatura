@@ -13,6 +13,7 @@ import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSec
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -36,6 +37,7 @@ import org.springframework.test.web.servlet.MockMvc;
             type = FilterType.REGEX,
             pattern = "com\\.globo\\.assinatura\\.security\\..*"))
 @ImportAutoConfiguration(exclude = {ServletWebSecurityAutoConfiguration.class})
+@Import(EmailJaCadastradoExceptionHandler.class)
 class UsuarioControllerTest {
 
   @Autowired private MockMvc mockMvc;
@@ -76,5 +78,19 @@ class UsuarioControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"nome\":\"Fulano\",\"email\":\"nao-e-um-email\"}"))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  @DisplayName("Deve rejeitar cadastro com email ja cadastrado retornando 409")
+  void cadastraUsuarioComEmailExistenteRetornaConflict() throws Exception {
+    when(usuarioService.cadastrar("Fulano", "existente@example.com"))
+        .thenThrow(new EmailJaCadastradoException("existente@example.com"));
+
+    mockMvc
+        .perform(
+            post("/usuarios")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"nome\":\"Fulano\",\"email\":\"existente@example.com\"}"))
+        .andExpect(status().isConflict());
   }
 }
