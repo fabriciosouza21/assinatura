@@ -34,3 +34,6 @@ build/
 
 ### Env ###
 .env
+
+### Handoff entre agentes ###
+.handoff/
