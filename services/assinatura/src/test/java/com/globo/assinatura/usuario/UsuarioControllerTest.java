@@ -93,4 +93,15 @@ class UsuarioControllerTest {
                 .content("{\"nome\":\"Fulano\",\"email\":\"existente@example.com\"}"))
         .andExpect(status().isConflict());
   }
+
+  @Test
+  @DisplayName("Deve rejeitar cadastro com email ausente retornando 400")
+  void cadastraUsuarioComEmailAusenteRetornaBadRequest() throws Exception {
+    mockMvc
+        .perform(
+            post("/usuarios")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"nome\":\"Fulano\"}"))
+        .andExpect(status().isBadRequest());
+  }
 }

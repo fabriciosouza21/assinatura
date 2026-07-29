@@ -7,6 +7,6 @@ import jakarta.validation.constraints.NotBlank;
  * Dados enviados no cadastro de um usuario novo.
  *
  * @param nome nome do usuario; nao pode ser vazio
- * @param email email do usuario; deve estar em formato valido
+ * @param email email do usuario; nao pode ser vazio e deve estar em formato valido
  */
-public record UsuarioRequest(@NotBlank String nome, @Email String email) {}
+public record UsuarioRequest(@NotBlank String nome, @NotBlank @Email String email) {}
