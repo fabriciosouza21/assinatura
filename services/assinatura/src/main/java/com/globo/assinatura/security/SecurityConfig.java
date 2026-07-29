@@ -33,8 +33,8 @@ public class SecurityConfig {
   /**
    * Constrói a cadeia de filtros de segurança.
    *
-   * <p>Libera {@code /auth/login} e {@code /actuator/health}; todas as demais rotas exigem
-   * autenticação.
+   * <p>Libera {@code /usuarios} (auto-cadastro publico), {@code /auth/login} e {@code
+   * /actuator/health}; todas as demais rotas exigem autenticação.
    *
    * @param http o builder de segurança do Spring
    * @return a cadeia de filtros configurada
@@ -46,7 +46,7 @@ public class SecurityConfig {
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             auth ->
-                auth.requestMatchers("/auth/login", "/actuator/health")
+                auth.requestMatchers("/usuarios", "/auth/login", "/actuator/health")
                     .permitAll()
                     .anyRequest()
                     .authenticated())
