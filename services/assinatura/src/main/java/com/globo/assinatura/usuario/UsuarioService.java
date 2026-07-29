@@ -28,8 +28,13 @@ public class UsuarioService {
    * @param nome nome do usuario
    * @param email email do usuario
    * @return uuid publico atribuido ao usuario persistido
+   * @throws EmailJaCadastradoException se o email informado ja estiver cadastrado
    */
   public String cadastrar(String nome, String email) {
+    if (usuarioRepository.existsByEmail(email)) {
+      throw new EmailJaCadastradoException(email);
+    }
+
     Usuario usuario = new Usuario();
     usuario.setNome(nome);
     usuario.setEmail(email);

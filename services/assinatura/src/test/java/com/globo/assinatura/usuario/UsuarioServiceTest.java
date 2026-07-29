@@ -1,7 +1,9 @@
 package com.globo.assinatura.usuario;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -25,9 +27,19 @@ class UsuarioServiceTest {
     ArgumentCaptor<Usuario> capturado = ArgumentCaptor.forClass(Usuario.class);
     verify(usuarioRepository).save(capturado.capture());
     Usuario persistido = capturado.getValue();
+
     assertEquals("Fulano", persistido.getNome());
     assertEquals("novo@example.com", persistido.getEmail());
     assertEquals(persistido.getUuid(), resultado);
     UUID.fromString(resultado);
+  }
+
+  @Test
+  void cadastraClienteComEmailExistenteLancaConflito() {
+    when(usuarioRepository.existsByEmail("existente@example.com")).thenReturn(true);
+
+    assertThrows(
+        EmailJaCadastradoException.class,
+        () -> usuarioService.cadastrar("Fulano", "existente@example.com"));
   }
 }
