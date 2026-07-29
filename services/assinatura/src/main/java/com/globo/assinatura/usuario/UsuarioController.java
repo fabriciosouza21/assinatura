@@ -1,5 +1,6 @@
 package com.globo.assinatura.usuario;
 
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,7 +31,7 @@ public class UsuarioController {
    * @return o identificador publico atribuido ao usuario, com status 201 Created
    */
   @PostMapping
-  public ResponseEntity<UsuarioResponse> cadastrar(@RequestBody UsuarioRequest request) {
+  public ResponseEntity<UsuarioResponse> cadastrar(@Valid @RequestBody UsuarioRequest request) {
     String uuid = usuarioService.cadastrar(request.nome(), request.email());
     return ResponseEntity.status(HttpStatus.CREATED).body(new UsuarioResponse(uuid));
   }

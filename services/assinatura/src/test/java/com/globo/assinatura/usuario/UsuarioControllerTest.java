@@ -53,4 +53,14 @@ class UsuarioControllerTest {
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.id").value("uuid-do-usuario"));
   }
+
+  @Test
+  void cadastraUsuarioComNomeVazioRetornaBadRequest() throws Exception {
+    mockMvc
+        .perform(
+            post("/usuarios")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"nome\":\"\",\"email\":\"valido@example.com\"}"))
+        .andExpect(status().isBadRequest());
+  }
 }
