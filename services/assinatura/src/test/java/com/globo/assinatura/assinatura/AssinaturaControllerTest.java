@@ -1,0 +1,51 @@
+package com.globo.assinatura.assinatura;
+
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+/**
+ * Testes slice do {@link AssinaturaController}, isolando o comportamento do controller da cadeia de
+ * filtros do Spring Security.
+ */
+@WebMvcTest(
+    controllers = AssinaturaController.class,
+    excludeFilters =
+        @ComponentScan.Filter(
+            type = FilterType.REGEX,
+            pattern = "com\\.globo\\.assinatura\\.security\\..*"))
+@ImportAutoConfiguration(exclude = {ServletWebSecurityAutoConfiguration.class})
+class AssinaturaControllerTest {
+
+  @Autowired private MockMvc mockMvc;
+
+  @MockitoBean private AssinaturaService service;
+
+  @Test
+  @DisplayName("Deve solicitar assinatura valida e retornar 202 com id e status")
+  void deveSolicitarAssinaturaValidaRetornandoAccepted() throws Exception {
+    Assinatura assinatura = new Assinatura(1L, Plano.PREMIUM);
+    when(service.solicitar("550e8400-e29b-41d4-a716-446655440000", Plano.PREMIUM))
+        .thenReturn(assinatura);
+    String corpo = "{\"usuarioId\":\"550e8400-e29b-41d4-a716-446655440000\",\"plano\":\"PREMIUM\"}";
+
+    mockMvc
+        .perform(post("/assinaturas").contentType(MediaType.APPLICATION_JSON).content(corpo))
+        .andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.id").value(assinatura.getUuid()))
+        .andExpect(jsonPath("$.status").value("AGUARDANDO_PAGAMENTO"));
+  }
+}
