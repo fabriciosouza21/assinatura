@@ -59,7 +59,8 @@ public class AssinaturaService {
    */
   @Transactional(readOnly = true)
   public AssinaturaResponse consultar(String uuid) {
-    Assinatura assinatura = assinaturaRepository.findByUuid(uuid).orElseThrow();
+    Assinatura assinatura =
+        assinaturaRepository.findByUuid(uuid).orElseThrow(AssinaturaNaoEncontradaException::new);
     Usuario usuario = usuarioRepository.findById(assinatura.getUsuarioId()).orElseThrow();
     return new AssinaturaResponse(
         assinatura.getUuid(),

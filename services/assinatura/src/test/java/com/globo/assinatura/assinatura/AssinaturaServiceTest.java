@@ -88,4 +88,14 @@ class AssinaturaServiceTest {
     assertThat(resposta.dataInicio()).as("Data inicio nula enquanto aguarda").isNull();
     assertThat(resposta.dataExpiracao()).as("Data expiracao nula enquanto aguarda").isNull();
   }
+
+  @Test
+  @DisplayName("Deve lancar nao encontrado ao consultar assinatura inexistente")
+  void deveLancarNaoEncontradoAoConsultarAssinaturaInexistente() {
+    when(assinaturaRepository.findByUuid("uuid-inexistente")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.consultar("uuid-inexistente"))
+        .as("Assinatura inexistente deve gerar nao encontrado")
+        .isInstanceOf(AssinaturaNaoEncontradaException.class);
+  }
 }
