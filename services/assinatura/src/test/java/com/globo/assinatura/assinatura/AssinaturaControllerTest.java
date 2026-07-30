@@ -136,4 +136,18 @@ class AssinaturaControllerTest {
         .andExpect(jsonPath("$.title").value("Requisicao invalida"))
         .andExpect(jsonPath("$.errors[0].campo").value("usuarioId"));
   }
+
+  @Test
+  @DisplayName("Deve retornar 400 com problem ao enviar plano invalido")
+  void deveRetornarBadRequestAoEnviarPlanoInvalido() throws Exception {
+    String corpo =
+        "{\"usuarioId\":\"550e8400-e29b-41d4-a716-446655440000\",\"plano\":\"INVALIDO\"}";
+
+    mockMvc
+        .perform(post("/assinaturas").contentType(MediaType.APPLICATION_JSON).content(corpo))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.title").value("Requisicao invalida"))
+        .andExpect(jsonPath("$.errors[0].campo").value("plano"));
+  }
 }

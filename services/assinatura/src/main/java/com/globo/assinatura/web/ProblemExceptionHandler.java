@@ -11,7 +11,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * Tratador global de erros de requisicao, no formato RFC 7807/9457.
  *
  * <p>Converte falhas de validacao de campos em uma resposta {@code 400 Bad Request} com corpo
- * {@link Problem}, listando cada campo invalido para o cliente corrigir a requisicao.
+ * {@link Problem}, listando cada campo invalido para o cliente corrigir a requisicao. Um valor
+ * invalido em um campo enum tambem e tratado aqui: o enum desserializa para {@code null} e a
+ * validacao de obrigatoriedade o flagga.
  */
 @RestControllerAdvice
 public class ProblemExceptionHandler {
