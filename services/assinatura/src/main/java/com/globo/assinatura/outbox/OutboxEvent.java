@@ -1,36 +1,63 @@
 package com.globo.assinatura.outbox;
 
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * Evento persistido na outbox aguardando publicacao no Kafka.
  *
  * <p>Nasce em {@link OutboxStatus#PENDENTE} e transita para {@link OutboxStatus#PUBLICADO} quando o
- * Kafka confirma o envio. O {@code payload} carrega o evento serializado em JSON.
+ * Kafka confirma o envio, ou para {@link OutboxStatus#FALHA} apos esgotar as tentativas (DLQ
+ * persistida). O {@code payload} carrega o evento serializado em JSON.
  */
+@Entity
+@Table(name = "outbox")
 public class OutboxEvent {
 
-  private final UUID eventId;
-  private final String aggregateType;
-  private final UUID aggregateId;
-  private final String eventType;
-  private final String payload;
+  @Id private UUID eventId;
+
+  private String aggregateType;
+  private UUID aggregateId;
+  private String eventType;
+
+  @JdbcTypeCode(SqlTypes.JSON)
+  private String payload;
+
+  @Enumerated(EnumType.STRING)
   private OutboxStatus status;
-  private Instant publicadoEm;
-  private int tentativas;
-  private String ultimoErro;
+
+  private short tentativas;
   private Instant proximaTentativaEm;
+  private Instant criadoEm;
+  private Instant publicadoEm;
   private Instant falhouEm;
+  private String ultimoErro;
+
+  /** Construtor sem argumentos exigido pelo provedor JPA. */
+  protected OutboxEvent() {}
 
   private OutboxEvent(
-      UUID eventId, String aggregateType, UUID aggregateId, String eventType, String payload) {
+      UUID eventId,
+      String aggregateType,
+      UUID aggregateId,
+      String eventType,
+      String payload,
+      Instant criadoEm) {
     this.eventId = eventId;
     this.aggregateType = aggregateType;
     this.aggregateId = aggregateId;
     this.eventType = eventType;
     this.payload = payload;
     this.status = OutboxStatus.PENDENTE;
+    this.criadoEm = criadoEm;
+    this.proximaTentativaEm = criadoEm;
   }
 
   /**
@@ -45,7 +72,7 @@ public class OutboxEvent {
    */
   public static OutboxEvent criar(
       UUID eventId, String aggregateType, UUID aggregateId, String eventType, String payload) {
-    return new OutboxEvent(eventId, aggregateType, aggregateId, eventType, payload);
+    return new OutboxEvent(eventId, aggregateType, aggregateId, eventType, payload, Instant.now());
   }
 
   /**
@@ -74,6 +101,15 @@ public class OutboxEvent {
   }
 
   /**
+   * Retorna o numero de tentativas de publicacao realizadas.
+   *
+   * @return contador de tentativas
+   */
+  public int getTentativas() {
+    return tentativas;
+  }
+
+  /**
    * Marca o evento como falha definitiva apos esgotar as tentativas.
    *
    * <p>O evento permanece persistido como DLQ para reprocessamento manual, sem retry automatico.
@@ -87,15 +123,47 @@ public class OutboxEvent {
     this.falhouEm = falhouEm;
   }
 
+  public UUID getEventId() {
+    return eventId;
+  }
+
+  public String getAggregateType() {
+    return aggregateType;
+  }
+
+  public UUID getAggregateId() {
+    return aggregateId;
+  }
+
+  public String getEventType() {
+    return eventType;
+  }
+
+  public String getPayload() {
+    return payload;
+  }
+
   public OutboxStatus getStatus() {
     return status;
+  }
+
+  public Instant getProximaTentativaEm() {
+    return proximaTentativaEm;
+  }
+
+  public Instant getCriadoEm() {
+    return criadoEm;
   }
 
   public Instant getPublicadoEm() {
     return publicadoEm;
   }
 
-  public int getTentativas() {
-    return tentativas;
+  public Instant getFalhouEm() {
+    return falhouEm;
+  }
+
+  public String getUltimoErro() {
+    return ultimoErro;
   }
 }
