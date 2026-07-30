@@ -45,19 +45,4 @@ public class GatewayPagamentoClient {
             .block();
     return new CobrancaCriada(response.id(), response.status());
   }
-
-  private record CreatePaymentRequest(
-      String externalReference,
-      BigDecimal amount,
-      String currency,
-      String paymentMethod,
-      String notificationUrl) {}
-
-  private record CreatePaymentResponse(
-      String id,
-      String externalReference,
-      BigDecimal amount,
-      String currency,
-      String paymentMethod,
-      String status) {}
 }

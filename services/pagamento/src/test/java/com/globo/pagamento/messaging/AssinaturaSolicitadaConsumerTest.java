@@ -6,8 +6,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.globo.pagamento.cobranca.CriarCobrancaService;
+import com.globo.pagamento.cobranca.Plano;
 import com.globo.pagamento.messaging.event.AssinaturaSolicitada;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -28,50 +30,57 @@ import tools.jackson.databind.json.JsonMapper;
 @ExtendWith(MockitoExtension.class)
 class AssinaturaSolicitadaConsumerTest {
 
+  private final JsonMapper jsonMapper = JsonMapper.builder().findAndAddModules().build();
+
   @Mock private CriarCobrancaService criarCobrancaService;
   @Captor private ArgumentCaptor<AssinaturaSolicitada> eventoCaptor;
   private AssinaturaSolicitadaConsumer consumer;
 
   @BeforeEach
   void setUp() {
-    consumer =
-        new AssinaturaSolicitadaConsumer(
-            JsonMapper.builder().findAndAddModules().build(), criarCobrancaService);
+    consumer = new AssinaturaSolicitadaConsumer(jsonMapper, criarCobrancaService);
   }
 
   @Test
   @DisplayName("Deve delegar ao service quando o evento e valido")
   void deveDelegarAoServiceQuandoEventoValido() {
-    String payload =
-        "{\"eventId\":\"00000000-0000-0000-0000-000000000001\","
-            + "\"ocorridoEm\":\"2026-07-30T12:00:00Z\","
-            + "\"assinaturaId\":\"00000000-0000-0000-0000-000000000011\","
-            + "\"usuarioId\":\"00000000-0000-0000-0000-000000000021\","
-            + "\"plano\":\"BASICO\",\"valor\":19.90}";
+    AssinaturaSolicitada evento =
+        new AssinaturaSolicitada(
+            UUID.fromString("00000000-0000-0000-0000-000000000001"),
+            Instant.parse("2026-07-30T12:00:00Z"),
+            UUID.fromString("00000000-0000-0000-0000-000000000011"),
+            UUID.fromString("00000000-0000-0000-0000-000000000021"),
+            Plano.BASICO,
+            new BigDecimal("19.90"));
+    String payload = jsonMapper.writeValueAsString(evento);
 
     consumer.consumir(payload);
 
     verify(criarCobrancaService).processar(eventoCaptor.capture());
-    AssinaturaSolicitada evento = eventoCaptor.getValue();
-    assertThat(evento.assinaturaId())
+    AssinaturaSolicitada processado = eventoCaptor.getValue();
+    assertThat(processado.assinaturaId())
         .as("assinaturaId desserializado")
-        .isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000011"));
-    assertThat(evento.valor())
+        .isEqualTo(evento.assinaturaId());
+    assertThat(processado.valor())
         .as("valor em reais desserializado")
-        .isEqualByComparingTo(new BigDecimal("19.90"));
-    assertThat(evento.plano().name()).as("plano desserializado").isEqualTo("BASICO");
+        .isEqualByComparingTo(evento.valor());
+    assertThat(processado.plano()).as("plano desserializado").isEqualTo(Plano.BASICO);
   }
 
   @Test
   @DisplayName("Deve lancar evento invalido quando campo obrigatorio esta ausente")
   void deveLancarEventoInvalidoQuandoCampoObrigatorioAusente() {
-    String payloadSemAssinatura =
-        "{\"eventId\":\"00000000-0000-0000-0000-000000000001\","
-            + "\"ocorridoEm\":\"2026-07-30T12:00:00Z\","
-            + "\"usuarioId\":\"00000000-0000-0000-0000-000000000021\","
-            + "\"plano\":\"BASICO\",\"valor\":19.90}";
+    AssinaturaSolicitada semAssinaturaId =
+        new AssinaturaSolicitada(
+            UUID.fromString("00000000-0000-0000-0000-000000000001"),
+            Instant.parse("2026-07-30T12:00:00Z"),
+            null,
+            UUID.fromString("00000000-0000-0000-0000-000000000021"),
+            Plano.BASICO,
+            new BigDecimal("19.90"));
+    String payload = jsonMapper.writeValueAsString(semAssinaturaId);
 
-    assertThatThrownBy(() -> consumer.consumir(payloadSemAssinatura))
+    assertThatThrownBy(() -> consumer.consumir(payload))
         .as("Evento sem assinaturaId rejeitado")
         .isInstanceOf(EventoInvalidoException.class)
         .hasMessageContaining("assinaturaId");

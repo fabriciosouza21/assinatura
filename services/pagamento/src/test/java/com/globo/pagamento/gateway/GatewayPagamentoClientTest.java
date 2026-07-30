@@ -2,8 +2,6 @@ package com.globo.pagamento.gateway;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -13,6 +11,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Teste do {@link GatewayPagamentoClient} contra o gateway mock via MockWebServer.
@@ -23,6 +23,7 @@ import org.springframework.web.reactive.function.client.WebClient;
  */
 class GatewayPagamentoClientTest {
 
+  private final JsonMapper jsonMapper = JsonMapper.builder().findAndAddModules().build();
   private MockWebServer server;
   private GatewayPagamentoClient client;
 
@@ -46,9 +47,14 @@ class GatewayPagamentoClientTest {
         new MockResponse()
             .setHeader("Content-Type", "application/json")
             .setBody(
-                "{\"id\":\"pay_123\",\"externalReference\":\"assinatura-uuid\","
-                    + "\"amount\":19.90,\"currency\":\"BRL\",\"paymentMethod\":\"PIX\","
-                    + "\"status\":\"PENDING\"}")
+                jsonMapper.writeValueAsString(
+                    new CreatePaymentResponse(
+                        "pay_123",
+                        "assinatura-uuid",
+                        new BigDecimal("19.90"),
+                        "BRL",
+                        "PIX",
+                        "PENDING")))
             .setResponseCode(201));
 
     CobrancaCriada cobranca = client.criarCobranca("assinatura-uuid", new BigDecimal("19.90"));
@@ -62,7 +68,7 @@ class GatewayPagamentoClientTest {
         .as("Header de idempotencia com o assinaturaId")
         .isEqualTo("assinatura-uuid");
 
-    JsonNode body = new ObjectMapper().readTree(requisicao.getBody().readUtf8());
+    JsonNode body = jsonMapper.readTree(requisicao.getBody().readUtf8());
     assertThat(body.get("amount").decimalValue())
         .as("Amount em reais, sem conversao para centavos")
         .isEqualByComparingTo("19.90");
