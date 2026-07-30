@@ -22,6 +22,8 @@ public class User {
 
   private String role;
 
+  private Long usuarioId;
+
   private Instant createdAt;
 
   private Instant updatedAt;
@@ -44,6 +46,11 @@ public class User {
   /** Retorna o papel do usuário, como {@code "ROLE_USER"}. */
   public String getRole() {
     return role;
+  }
+
+  /** Retorna o id do {@code Usuario} de domínio ligado, ou {@code null} para o admin. */
+  public Long getUsuarioId() {
+    return usuarioId;
   }
 
   /** Retorna o instante de criação do registro. */
@@ -74,6 +81,11 @@ public class User {
   /** Define o papel do usuário. */
   public void setRole(String role) {
     this.role = role;
+  }
+
+  /** Define o id do {@code Usuario} de domínio ligado. */
+  public void setUsuarioId(Long usuarioId) {
+    this.usuarioId = usuarioId;
   }
 
   /** Define o instante de criação do registro. */

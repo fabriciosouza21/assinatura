@@ -45,7 +45,8 @@ class CadastraUsuarioAnonimoTest {
   @DisplayName("Deve permitir cadastro anonimo em /usuarios")
   void devePermitirCadastroAnonimo() throws Exception {
     String emailUnico = "anonimo-" + UUID.randomUUID() + "@example.com";
-    String corpo = "{\"nome\":\"Fulano\",\"email\":\"" + emailUnico + "\"}";
+    String corpo =
+        "{\"nome\":\"Fulano\",\"email\":\"" + emailUnico + "\",\"senha\":\"SenhaForte1\"}";
 
     HttpRequest request =
         HttpRequest.newBuilder()

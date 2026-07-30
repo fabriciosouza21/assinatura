@@ -47,13 +47,12 @@ class UsuarioControllerTest {
   @Test
   @DisplayName("Deve cadastrar usuario valido e retornar 201 com o uuid")
   void cadastraUsuarioRetornaCreatedComId() throws Exception {
-    when(usuarioService.cadastrar("Fulano", "novo@example.com")).thenReturn("uuid-do-usuario");
+    when(usuarioService.cadastrar("Fulano", "novo@example.com", "SenhaForte1"))
+        .thenReturn("uuid-do-usuario");
+    String corpo = "{\"nome\":\"Fulano\",\"email\":\"novo@example.com\",\"senha\":\"SenhaForte1\"}";
 
     mockMvc
-        .perform(
-            post("/usuarios")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"nome\":\"Fulano\",\"email\":\"novo@example.com\"}"))
+        .perform(post("/usuarios").contentType(MediaType.APPLICATION_JSON).content(corpo))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.id").value("uuid-do-usuario"));
   }
@@ -65,32 +64,31 @@ class UsuarioControllerTest {
         .perform(
             post("/usuarios")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"nome\":\"\",\"email\":\"valido@example.com\"}"))
+                .content(
+                    "{\"nome\":\"\",\"email\":\"valido@example.com\",\"senha\":\"SenhaForte1\"}"))
         .andExpect(status().isBadRequest());
   }
 
   @Test
   @DisplayName("Deve rejeitar cadastro com email invalido retornando 400")
   void cadastraUsuarioComEmailInvalidoRetornaBadRequest() throws Exception {
+    String corpo = "{\"nome\":\"Fulano\",\"email\":\"nao-e-um-email\",\"senha\":\"SenhaForte1\"}";
+
     mockMvc
-        .perform(
-            post("/usuarios")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"nome\":\"Fulano\",\"email\":\"nao-e-um-email\"}"))
+        .perform(post("/usuarios").contentType(MediaType.APPLICATION_JSON).content(corpo))
         .andExpect(status().isBadRequest());
   }
 
   @Test
   @DisplayName("Deve rejeitar cadastro com email ja cadastrado retornando 409")
   void cadastraUsuarioComEmailExistenteRetornaConflict() throws Exception {
-    when(usuarioService.cadastrar("Fulano", "existente@example.com"))
+    when(usuarioService.cadastrar("Fulano", "existente@example.com", "SenhaForte1"))
         .thenThrow(new EmailJaCadastradoException());
+    String corpo =
+        "{\"nome\":\"Fulano\",\"email\":\"existente@example.com\",\"senha\":\"SenhaForte1\"}";
 
     mockMvc
-        .perform(
-            post("/usuarios")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"nome\":\"Fulano\",\"email\":\"existente@example.com\"}"))
+        .perform(post("/usuarios").contentType(MediaType.APPLICATION_JSON).content(corpo))
         .andExpect(status().isConflict());
   }
 
@@ -101,7 +99,19 @@ class UsuarioControllerTest {
         .perform(
             post("/usuarios")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"nome\":\"Fulano\"}"))
+                .content("{\"nome\":\"Fulano\",\"senha\":\"SenhaForte1\"}"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  @DisplayName("Deve rejeitar cadastro com senha curta retornando 400")
+  void cadastraUsuarioComSenhaCurtaRetornaBadRequest() throws Exception {
+    mockMvc
+        .perform(
+            post("/usuarios")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"nome\":\"Fulano\",\"email\":\"valido@example.com\",\"senha\":\"123\"}"))
         .andExpect(status().isBadRequest());
   }
 }
