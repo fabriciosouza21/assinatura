@@ -5,5 +5,7 @@ public enum OutboxStatus {
   /** Aguardando publicacao no Kafka. */
   PENDENTE,
   /** Publicado e confirmado pelo Kafka. */
-  PUBLICADO
+  PUBLICADO,
+  /** Tentativas esgotadas; DLQ persistida para reprocessamento manual. */
+  FALHA
 }

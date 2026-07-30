@@ -24,4 +24,42 @@ class OutboxEventTest {
         .as("Status transita para PUBLICADO apos confirmacao do Kafka")
         .isEqualTo(OutboxStatus.PUBLICADO);
   }
+
+  @Test
+  @DisplayName("Deve registrar o instante de publicacao ao marcar como publicado")
+  void deveRegistrarInstanteDePublicacao() {
+    OutboxEvent evento =
+        OutboxEvent.criar(EVENT_ID, "Assinatura", AGGREGATE_ID, "AssinaturaSolicitada", "{}");
+    Instant publicadoEm = Instant.parse("2026-07-30T10:00:00Z");
+
+    evento.marcarPublicado(publicadoEm);
+
+    assertThat(evento.getPublicadoEm())
+        .as("Instante da confirmacao registrado em publicadoEm")
+        .isEqualTo(publicadoEm);
+  }
+
+  @Test
+  @DisplayName("Deve registrar falha incrementando tentativas e mantendo pendente")
+  void deveRegistrarFalhaIncrementandoTentativas() {
+    OutboxEvent evento =
+        OutboxEvent.criar(EVENT_ID, "Assinatura", AGGREGATE_ID, "AssinaturaSolicitada", "{}");
+
+    evento.registrarFalha("timeout", Instant.parse("2026-07-30T10:00:05Z"));
+
+    assertThat(evento.getTentativas()).as("Tentativas incrementadas").isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("Deve marcar como falha ao esgotar tentativas")
+  void deveMarcarComoFalhaAoEsgotarTentativas() {
+    OutboxEvent evento =
+        OutboxEvent.criar(EVENT_ID, "Assinatura", AGGREGATE_ID, "AssinaturaSolicitada", "{}");
+
+    evento.marcarFalha("timeout", Instant.parse("2026-07-30T10:01:00Z"));
+
+    assertThat(evento.getStatus())
+        .as("Status transita para FALHA apos esgotar tentativas")
+        .isEqualTo(OutboxStatus.FALHA);
+  }
 }

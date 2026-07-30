@@ -17,6 +17,11 @@ public class OutboxEvent {
   private final String eventType;
   private final String payload;
   private OutboxStatus status;
+  private Instant publicadoEm;
+  private int tentativas;
+  private String ultimoErro;
+  private Instant proximaTentativaEm;
+  private Instant falhouEm;
 
   private OutboxEvent(
       UUID eventId, String aggregateType, UUID aggregateId, String eventType, String payload) {
@@ -50,9 +55,47 @@ public class OutboxEvent {
    */
   public void marcarPublicado(Instant publicadoEm) {
     this.status = OutboxStatus.PUBLICADO;
+    this.publicadoEm = publicadoEm;
+  }
+
+  /**
+   * Registra uma falha de publicacao mantendo o evento pendente para a proxima tentativa.
+   *
+   * <p>Incrementa o contador de tentativas, registra a mensagem de erro e agenda a proxima
+   * tentativa.
+   *
+   * @param erro mensagem do erro ocorrido
+   * @param proximaTentativa instante agendado para a proxima tentativa
+   */
+  public void registrarFalha(String erro, Instant proximaTentativa) {
+    this.tentativas++;
+    this.ultimoErro = erro;
+    this.proximaTentativaEm = proximaTentativa;
+  }
+
+  /**
+   * Marca o evento como falha definitiva apos esgotar as tentativas.
+   *
+   * <p>O evento permanece persistido como DLQ para reprocessamento manual, sem retry automatico.
+   *
+   * @param erro mensagem do erro que esgotou as tentativas
+   * @param falhouEm instante em que as tentativas se esgotaram
+   */
+  public void marcarFalha(String erro, Instant falhouEm) {
+    this.status = OutboxStatus.FALHA;
+    this.ultimoErro = erro;
+    this.falhouEm = falhouEm;
   }
 
   public OutboxStatus getStatus() {
     return status;
+  }
+
+  public Instant getPublicadoEm() {
+    return publicadoEm;
+  }
+
+  public int getTentativas() {
+    return tentativas;
   }
 }
