@@ -38,7 +38,8 @@ public class AssinaturaService {
    */
   @Transactional
   public Assinatura solicitar(String usuarioUuid, Plano plano) {
-    Usuario usuario = usuarioRepository.findByUuid(usuarioUuid).orElseThrow();
+    Usuario usuario =
+        usuarioRepository.findByUuid(usuarioUuid).orElseThrow(UsuarioNaoEncontradoException::new);
     Assinatura assinatura = new Assinatura(usuario.getId(), plano);
     return assinaturaRepository.save(assinatura);
   }

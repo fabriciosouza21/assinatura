@@ -1,6 +1,7 @@
 package com.globo.assinatura.assinatura;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -44,5 +45,15 @@ class AssinaturaServiceTest {
         .as("Status inicial")
         .isEqualTo(StatusAssinatura.AGUARDANDO_PAGAMENTO);
     assertThat(resultado).as("Retorna a assinatura criada").isSameAs(persistida);
+  }
+
+  @Test
+  @DisplayName("Deve lancar excecao ao solicitar para usuario inexistente")
+  void deveLancarExcecaoAoSolicitarParaUsuarioInexistente() {
+    when(usuarioRepository.findByUuid("uuid-inexistente")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.solicitar("uuid-inexistente", Plano.BASICO))
+        .as("Usuario inexistente deve gerar nao encontrado")
+        .isInstanceOf(UsuarioNaoEncontradoException.class);
   }
 }
