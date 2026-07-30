@@ -1,0 +1,122 @@
+@startuml
+title Outbox — diagrama de classes
+
+hide circle
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+package "Domínio de assinatura" {
+  class Assinatura <<Entity>> {
+    - id: Long
+    - uuid: UUID
+    - usuarioId: UUID
+    - plano: Plano
+    - valor: BigDecimal
+    - status: StatusAssinatura
+    - dataInicio: LocalDate
+    - dataExpiracao: LocalDate
+  }
+
+  class AssinaturaSolicitadaEvent <<Domain Event>> {
+    + eventId: UUID
+    + ocorridoEm: Instant
+    + assinaturaId: UUID
+    + usuarioId: UUID
+    + plano: Plano
+    + valor: BigDecimal
+  }
+
+  interface AssinaturaRepository {
+    + salvar(assinatura: Assinatura): Assinatura
+  }
+
+  class SolicitarAssinaturaService <<Application Service>> {
+    + solicitar(comando): UUID
+  }
+}
+
+package "Outbox" {
+  class OutboxEvent <<Entity>> {
+    - eventId: UUID
+    - aggregateType: String
+    - aggregateId: UUID
+    - eventType: String
+    - payload: JSON
+    - status: OutboxStatus
+    - tentativas: int
+    - proximaTentativaEm: Instant
+    - criadoEm: Instant
+    - publicadoEm: Instant
+    - falhouEm: Instant
+    - ultimoErro: String
+    + marcarPublicado()
+    + registrarFalha(erro, proximaTentativa)
+    + marcarComoFalha(erro)
+    + liberarParaReprocessamento()
+    + descartar()
+  }
+
+  enum OutboxStatus {
+    PENDENTE
+    PUBLICADO
+    FALHA
+    DESCARTADO
+  }
+
+  interface OutboxRepository {
+    + salvar(evento: OutboxEvent)
+    + buscarPublicaveis(limite: int): List<OutboxEvent>
+    + buscarPorEventId(eventId: UUID): OutboxEvent
+  }
+
+  class OutboxPublisher <<Scheduled Service>> {
+    + publicarPendentes()
+  }
+
+  interface EventPublisher {
+    + publicar(evento: OutboxEvent)
+  }
+
+  class KafkaEventPublisher {
+    - kafkaTemplate: KafkaTemplate
+    + publicar(evento: OutboxEvent)
+  }
+
+  class RetryPolicy {
+    - maximoTentativas: int = 3
+    - backoffInicial: Duration
+    - jitter: double
+    + calcularProximoAtraso(tentativa: int): Duration
+  }
+
+  class OutboxRecoveryService {
+    + consultarFalha(eventId: UUID): OutboxEvent
+    + reprocessar(eventId: UUID)
+    + descartar(eventId: UUID)
+  }
+}
+
+SolicitarAssinaturaService --> AssinaturaRepository
+SolicitarAssinaturaService --> OutboxRepository
+SolicitarAssinaturaService ..> AssinaturaSolicitadaEvent : cria
+AssinaturaSolicitadaEvent ..> OutboxEvent : serializado como
+OutboxEvent --> OutboxStatus
+
+OutboxPublisher --> OutboxRepository
+OutboxPublisher --> EventPublisher
+OutboxPublisher --> RetryPolicy
+KafkaEventPublisher ..|> EventPublisher
+OutboxRecoveryService --> OutboxRepository
+
+note right of SolicitarAssinaturaService
+  Assinatura e OutboxEvent são
+  persistidos na mesma transação.
+end note
+
+note bottom of RetryPolicy
+  Backoff exponencial com jitter.
+  A terceira falha encerra
+  o retry automático.
+end note
+
+@enduml

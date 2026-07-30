@@ -1,0 +1,79 @@
+@startuml
+title DLQ da outbox — falha de publicação e reprocessamento
+
+autonumber
+hide footbox
+skinparam responseMessageBelowArrow true
+
+control "Outbox Publisher" as OP
+database "Banco de Dados" as DB
+queue "Kafka" as KAFKA
+control "Monitoramento" as MON
+actor "Operação" as OPS
+control "Recuperação Outbox" as REC
+
+== Tentativa de publicação ==
+
+OP -> DB: SELECT próximo evento PENDENTE\nWHERE proxima_tentativa_em <= now()\nFOR UPDATE SKIP LOCKED
+DB --> OP: AssinaturaSolicitada
+OP -> KAFKA: Publicar evento\nkey = assinaturaId
+
+alt Kafka confirmou a publicação
+  KAFKA --> OP: ACK
+  OP -> DB: UPDATE outbox\nstatus = PUBLICADO\npublished_at = now()
+else Erro ou timeout
+  KAFKA --> OP: falha
+  OP -> DB: UPDATE outbox\ntentativas = tentativas + 1\nultimo_erro = mensagem
+
+  alt tentativas < 3
+    OP -> DB: UPDATE outbox\nstatus = PENDENTE\nproxima_tentativa_em = now()\n+ backoff exponencial + jitter
+  else tentativas = 3
+    OP -> DB: UPDATE outbox\nstatus = FALHA\nfailed_at = now()
+  end
+end
+
+note over OP, DB
+  O publisher busca somente eventos PENDENTES.
+  Um evento com status FALHA deixa de ser
+  reprocessado automaticamente.
+end note
+
+== DLQ persistida ==
+
+MON -> DB: Consultar eventos\nstatus = FALHA
+DB --> MON: eventos que esgotaram as tentativas
+MON --> OPS: Gerar alerta\n{eventId, tipo, ultimoErro}
+
+OPS -> REC: Consultar evento com falha
+REC -> DB: SELECT outbox WHERE event_id = eventId
+DB --> REC: payload, tentativas e último erro
+REC --> OPS: detalhes para diagnóstico
+
+alt Causa corrigida
+  OPS -> REC: Reprocessar eventId
+  REC -> DB: UPDATE outbox\nstatus = PENDENTE\ntentativas = 0\nproxima_tentativa_em = now()\nultimo_erro = null\nfailed_at = null
+  REC --> OPS: evento liberado para reprocessamento
+else Falha permanente
+  OPS -> REC: Encerrar eventId
+  REC -> DB: UPDATE outbox\nstatus = DESCARTADO
+  REC --> OPS: evento encerrado
+end
+
+note over DB, KAFKA
+  A linha com status FALHA funciona como a DLQ durável.
+  Não se depende de publicar a falha em uma DLQ do Kafka,
+  pois o Kafka pode ser justamente o recurso indisponível.
+end note
+
+note over OPS, REC
+  O reprocessamento mantém o mesmo eventId.
+  O consumidor continua responsável pela deduplicação.
+end note
+
+note over KAFKA
+  A DLQ do consumidor é um fluxo diferente:
+  aplica-se quando o evento foi publicado com sucesso,
+  mas algum consumidor não conseguiu processá-lo.
+end note
+
+@enduml

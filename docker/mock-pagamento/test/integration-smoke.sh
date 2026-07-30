@@ -32,7 +32,7 @@ body=$(docker run --rm --network "${NETWORK}" curlimages/curl:8.7.1 \
   -X POST "http://${MOCK_HOST}:${MOCK_PORT}/v1/payments" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: int-smoke-$(date +%s)" \
-  -d '{"externalReference":"assinatura_uuid","amount":4990,"currency":"BRL","paymentMethod":"PIX","notificationUrl":"http://assinatura:8080/webhooks/payments"}')
+  -d '{"externalReference":"assinatura_uuid","amount":39.90,"currency":"BRL","paymentMethod":"PIX","notificationUrl":"http://assinatura:8080/webhooks/payments"}')
 
 status=$(echo "${body}" | tail -1)
 payload=$(echo "${body}" | head -n -1)

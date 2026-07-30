@@ -1,0 +1,93 @@
+@startuml
+title Contrato de eventos Kafka — Assinatura e Pagamento
+
+hide circle
+skinparam classAttributeIconSize 0
+skinparam linetype polyline
+skinparam nodesep 70
+skinparam ranksep 80
+
+class AssinaturaSolicitada <<event>> {
+  + eventId : UUID
+  + ocorridoEm : Instant
+  + assinaturaId : UUID
+  + usuarioId : UUID
+  + plano : Plano
+  + valor : BigDecimal
+}
+
+class PagamentoStatusAtualizado <<event>> {
+  + eventId : UUID
+  + ocorridoEm : Instant
+  + assinaturaId : UUID
+  + status : StatusPagamento
+  + paymentId : UUID
+}
+
+enum Plano {
+  BASICO
+  PREMIUM
+  FAMILIA
+}
+
+enum StatusPagamento {
+  APPROVED
+  REJECTED
+  PENDING
+}
+
+AssinaturaSolicitada ..> PagamentoStatusAtualizado : correlação\n(assinaturaId)
+AssinaturaSolicitada --> Plano
+PagamentoStatusAtualizado --> StatusPagamento
+
+note right of Plano
+  Valor mensal em reais (BigDecimal):
+   BASICO  = R$ 19,90
+   PREMIUM = R$ 39,90
+   FAMILIA = R$ 59,90
+end note
+
+note right of AssinaturaSolicitada
+  **Tópico:** assinatura-solicitada
+  **Kafka key:** assinaturaId
+
+  Produtor: Assinatura Service
+  Consumidor: Pagamento Service
+
+  Entrega: OUTBOX (transacional). O evento é
+  gravado na mesma transação do INSERT da
+  assinatura; publicado sse ela foi commitada.
+  At-least-once. Sem evento fantasma, sem perda.
+
+  Publisher: SELECT FOR UPDATE SKIP LOCKED,
+  3 tentativas + backoff + jitter,
+  status FALHA = DLQ persistida.
+
+  Consumidor deduplica por eventId.
+end note
+
+note right of PagamentoStatusAtualizado
+  **Tópico:** pagamento-status-atualizado
+  **Kafka key:** assinaturaId
+
+  Produtor: Pagamento Service (stateless)
+  Consumidor: Assinatura Service
+
+  Entrega: publicação DIRETA, publish-then-ACK.
+  Só retorna 200 ao mock após o Kafka confirmar;
+  falha -> não-200 -> mock reenvia o webhook.
+  Sem perda (retry do mock + dedup no consumer).
+
+  eventId = X-Mock-Event-Id do webhook
+  (dedup ponta-a-ponta).
+
+  Consumidor deduplica por eventId.
+end note
+
+note bottom of StatusPagamento
+  Domínio normalizado. O gateway também emite
+  CANCELLED e EXPIRED, que o Pagamento Service
+  mapeia para REJECTED antes de publicar.
+end note
+
+@enduml

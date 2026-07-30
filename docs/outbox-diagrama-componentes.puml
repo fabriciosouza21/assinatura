@@ -1,0 +1,44 @@
+@startuml
+title Outbox — componentes e responsabilidades
+
+left to right direction
+skinparam componentStyle rectangle
+skinparam linetype polyline
+skinparam nodesep 70
+skinparam ranksep 80
+
+actor Cliente
+actor Operação
+
+package "Assinatura Service" {
+  [API REST] as API
+  [Caso de uso\nSolicitar Assinatura] as USECASE
+  [Outbox Publisher] as PUBLISHER
+  [Recuperação Outbox] as RECOVERY
+  [Monitoramento] as MONITOR
+  database "PostgreSQL\nassinatura + outbox" as DB
+}
+
+queue "Kafka" as KAFKA
+component "Pagamento Service" as PAYMENT
+
+Cliente --> API : POST /assinaturas
+API --> USECASE
+USECASE --> DB : transação única
+
+PUBLISHER --> DB : polling SKIP LOCKED
+PUBLISHER --> KAFKA : AssinaturaSolicitada
+KAFKA --> PAYMENT : consumir evento
+
+DB --> MONITOR : observar status FALHA
+MONITOR --> Operação : alerta
+Operação --> RECOVERY
+RECOVERY --> DB : FALHA → PENDENTE\nou DESCARTADO
+
+legend bottom
+  |= Publisher |= Até 3 tentativas, backoff exponencial com jitter |
+  |= PostgreSQL |= Linha FALHA funciona como DLQ persistida |
+  |= DLQ consumidores |= Independente: trata falhas após publicação com sucesso |
+endlegend
+
+@enduml

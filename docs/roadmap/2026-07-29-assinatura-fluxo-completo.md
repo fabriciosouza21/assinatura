@@ -13,7 +13,7 @@
   Renovação automática, cancelamento e suspensão após falhas ficam de fora
   (roadmap futuro).
 - **Valor do plano**: enum simples no Assinatura Service mapeando plano → valor
-  (ex.: PREMIUM → 4990). O evento `AssinaturaSolicitada` carrega o valor.
+  (ex.: PREMIUM → 39.90). O evento `AssinaturaSolicitada` carrega o valor.
 - **Entregas incrementais**: cada MR é testável de forma isolada, sem depender
   do próximo para validar.
 
@@ -96,7 +96,7 @@
 |---|-----------|-----------|--------|
 | 0 | Criar `develop` a partir de `feat/setup-docker-mock-pagamento` | — | [x] |
 | 1 | Cadastro de usuário (`POST /usuarios` com `uuid`) | 0 | [x] |
-| 2 | Solicitação + consulta de assinatura sem fila (`POST`/`GET`, `409`) | 1 | [ ] |
+| 2 | Solicitação + consulta de assinatura sem fila (`POST`/`GET`, `409`) | 1 | [x] |
 | FF-1 | Login de cliente (fecha lacuna `User`↔`Usuario` do ADR 0001) | 1, 2 | [ ] |
 | 3 | Outbox + publicação de `AssinaturaSolicitada` no Kafka | 2 | [ ] |
 | 4 | Consumer de `PagamentoStatusAtualizado` (ativa/recusa) | 2 | [ ] |
