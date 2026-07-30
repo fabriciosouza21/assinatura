@@ -8,14 +8,17 @@ import com.globo.assinatura.messaging.event.PagamentoStatusAtualizado;
 import com.globo.assinatura.messaging.event.StatusPagamento;
 import com.globo.assinatura.pagamento.PagamentoEventoProcessado;
 import com.globo.assinatura.pagamento.PagamentoEventoProcessadoRepository;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -25,7 +28,15 @@ class ProcessarPagamentoTest {
   @Mock private AssinaturaRepository assinaturaRepository;
   @Mock private PagamentoEventoProcessadoRepository pagamentoEventoProcessadoRepository;
 
-  @InjectMocks private ProcessarPagamento command;
+  private Clock relogio;
+  private ProcessarPagamento command;
+
+  @BeforeEach
+  void setUp() {
+    relogio = Clock.systemDefaultZone();
+    command =
+        new ProcessarPagamento(assinaturaRepository, pagamentoEventoProcessadoRepository, relogio);
+  }
 
   @Test
   @DisplayName(
@@ -72,5 +83,29 @@ class ProcessarPagamentoTest {
     assertThat(captor.getValue().getEventId())
         .as("evento processado deve registrar o eventId recebido")
         .isEqualTo(evento.eventId());
+  }
+
+  @Test
+  @DisplayName("Deve definir a data de inicio como hoje ao aprovar o pagamento")
+  void deveDefinirDataInicioComoHojeAoAprovarPagamento() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    when(assinaturaRepository.findByUuidForUpdate(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            UUID.randomUUID(),
+            Instant.now(),
+            UUID.fromString(assinatura.getUuid()),
+            StatusPagamento.APPROVED,
+            UUID.randomUUID());
+    relogio = Clock.fixed(Instant.parse("2026-01-15T10:00:00Z"), ZoneOffset.UTC);
+    command =
+        new ProcessarPagamento(assinaturaRepository, pagamentoEventoProcessadoRepository, relogio);
+
+    command.executar(evento);
+
+    assertThat(assinatura.getDataInicio())
+        .as("data inicio deve ser a data fixa do relogio")
+        .isEqualTo(LocalDate.of(2026, 1, 15));
   }
 }

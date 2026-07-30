@@ -3,6 +3,7 @@ package com.globo.assinatura.assinatura;
 import com.globo.assinatura.messaging.event.PagamentoStatusAtualizado;
 import com.globo.assinatura.pagamento.PagamentoEventoProcessado;
 import com.globo.assinatura.pagamento.PagamentoEventoProcessadoRepository;
+import java.time.Clock;
 import java.time.LocalDate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,18 +20,22 @@ public class ProcessarPagamento {
 
   private final AssinaturaRepository assinaturaRepository;
   private final PagamentoEventoProcessadoRepository pagamentoEventoProcessadoRepository;
+  private final Clock clock;
 
   /**
-   * Constroi o command com os repositorios injetados.
+   * Constroi o command com os repositorios e o relogio injetados.
    *
    * @param assinaturaRepository repositorio de persistencia de assinaturas
    * @param pagamentoEventoProcessadoRepository repositorio de eventos de pagamento processados
+   * @param clock relogio para calculo das datas de vigencia
    */
   public ProcessarPagamento(
       AssinaturaRepository assinaturaRepository,
-      PagamentoEventoProcessadoRepository pagamentoEventoProcessadoRepository) {
+      PagamentoEventoProcessadoRepository pagamentoEventoProcessadoRepository,
+      Clock clock) {
     this.assinaturaRepository = assinaturaRepository;
     this.pagamentoEventoProcessadoRepository = pagamentoEventoProcessadoRepository;
+    this.clock = clock;
   }
 
   /**
@@ -41,7 +46,7 @@ public class ProcessarPagamento {
    */
   @Transactional
   public void executar(PagamentoStatusAtualizado evento) {
-    LocalDate hoje = LocalDate.now();
+    LocalDate hoje = LocalDate.now(clock);
     Assinatura assinatura =
         assinaturaRepository.findByUuidForUpdate(evento.assinaturaId().toString()).orElseThrow();
     assinatura.ativar(hoje, hoje);
