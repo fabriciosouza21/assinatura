@@ -1,5 +1,6 @@
 package com.globo.assinatura.usuario;
 
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
@@ -17,4 +18,12 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
    * @return {@code true} se o email ja estiver cadastrado; {@code false} caso contrario
    */
   boolean existsByEmail(String email);
+
+  /**
+   * Busca um usuario pelo uuid publico.
+   *
+   * @param uuid uuid publico do usuario
+   * @return o usuario encontrado, ou vazio se nao existir
+   */
+  Optional<Usuario> findByUuid(String uuid);
 }
