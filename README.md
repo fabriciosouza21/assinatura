@@ -74,6 +74,24 @@ Serviços expostos no host:
 - **Mock**: Go (apenas `net/http`, estado em memória).
 - **Qualidade**: Checkstyle + Spotless (Google Java Style), pre-commit hook.
 
+## Avisos de segurança
+
+Este repositório carrega valores padrão voltados **apenas para desenvolvimento
+local**. Em qualquer ambiente que não seja dev local, sobrescreva-os via
+variável de ambiente (`.env` lido pelo `docker-compose.yml`, ou export direto).
+
+- **JWT secret** (`services/assinatura/src/main/resources/application.yaml`):
+  o `app.jwt.secret` tem um default fixo em base64. Sobrescreva com
+  `APP_JWT_SECRET` em produção. O `docker-compose.yml` não o repete, fazendo a
+  app recorrer a esse default; defina a variável para usar um segredo real.
+- **Credenciais do Bruno** (`bruno/environments/local.yml`):
+  o usuário administrador seedado (`admin` / `admin123`) é o mesmo da migration
+  inicial e existe só para emitir o JWT de teste durante o desafio. Não é uma
+  credencial de produção.
+
+> Nenhum `.env` real é versionado. Veja `.env.example` para a lista completa de
+> variáveis externalizáveis.
+
 ## Desenvolvimento
 
 Cada microserviço é independente e tem seu próprio `Makefile`:
