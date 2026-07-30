@@ -87,4 +87,50 @@ class AssinaturaSolicitadaConsumerTest {
 
     verifyNoInteractions(criarCobrancaService);
   }
+
+  @Test
+  @DisplayName("Plano invalido deve produzir erro de plano, nao de evento mal formado")
+  void planoInvalidoDeveProduzirErroDePlano() {
+    String payload =
+        """
+        {
+          "eventId": "00000000-0000-0000-0000-000000000001",
+          "ocorridoEm": "2026-07-30T12:00:00Z",
+          "assinaturaId": "00000000-0000-0000-0000-000000000011",
+          "usuarioId": "00000000-0000-0000-0000-000000000021",
+          "plano": "GOLD",
+          "valor": 19.90
+        }
+        """;
+
+    assertThatThrownBy(() -> consumer.consumir(payload))
+        .as("Plano invalido sinalizado como campo ausente, nao como evento mal formado")
+        .isInstanceOf(EventoInvalidoException.class)
+        .hasMessage("plano ausente");
+
+    verifyNoInteractions(criarCobrancaService);
+  }
+
+  @Test
+  @DisplayName("Valor nao positivo deve ser rejeitado antes de chamar o gateway")
+  void valorNaoPositivoDeveSerRejeitado() {
+    String payload =
+        """
+        {
+          "eventId": "00000000-0000-0000-0000-000000000001",
+          "ocorridoEm": "2026-07-30T12:00:00Z",
+          "assinaturaId": "00000000-0000-0000-0000-000000000011",
+          "usuarioId": "00000000-0000-0000-0000-000000000021",
+          "plano": "BASICO",
+          "valor": -19.90
+        }
+        """;
+
+    assertThatThrownBy(() -> consumer.consumir(payload))
+        .as("Valor nao positivo rejeitado na validacao")
+        .isInstanceOf(EventoInvalidoException.class)
+        .hasMessageContaining("valor");
+
+    verifyNoInteractions(criarCobrancaService);
+  }
 }

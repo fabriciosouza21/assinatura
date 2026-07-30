@@ -65,5 +65,8 @@ public class AssinaturaSolicitadaConsumer {
     if (evento.valor() == null) {
       throw new EventoInvalidoException("valor ausente");
     }
+    if (evento.valor().signum() <= 0) {
+      throw new EventoInvalidoException("valor deve ser positivo");
+    }
   }
 }
