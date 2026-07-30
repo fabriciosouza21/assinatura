@@ -44,5 +44,7 @@ class CobrancaRepositoryTest {
     assertThat(encontrado).as("Cobranca encontrada pela correlacao").isPresent();
     assertThat(encontrado.get().getPaymentId()).as("PaymentId persistido").isEqualTo("pay_123");
     assertThat(encontrado.get().getStatus()).as("Status inicial").isEqualTo(StatusCobranca.PENDING);
+    assertThat(encontrado.get().getCriadoEm()).as("CriadoEm preenchido").isNotNull();
+    assertThat(encontrado.get().getAtualizadoEm()).as("AtualizadoEm preenchido").isNotNull();
   }
 }

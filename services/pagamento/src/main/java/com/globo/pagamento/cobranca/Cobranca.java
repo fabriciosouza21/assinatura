@@ -6,7 +6,9 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import java.time.Instant;
 
 /**
  * Correlacao entre uma assinatura e a cobranca criada no gateway de pagamento.
@@ -28,6 +30,10 @@ public class Cobranca {
 
   @Enumerated(EnumType.STRING)
   private StatusCobranca status;
+
+  private Instant criadoEm;
+
+  private Instant atualizadoEm;
 
   /** Construtor sem argumentos exigido pelo provedor JPA. */
   protected Cobranca() {}
@@ -79,5 +85,31 @@ public class Cobranca {
    */
   public StatusCobranca getStatus() {
     return status;
+  }
+
+  /**
+   * Retorna o instante de criacao do registro.
+   *
+   * @return instante de criacao, ou {@code null} antes da persistencia
+   */
+  public Instant getCriadoEm() {
+    return criadoEm;
+  }
+
+  /**
+   * Retorna o instante da ultima atualizacao do registro.
+   *
+   * @return instante da ultima atualizacao, ou {@code null} antes da persistencia
+   */
+  public Instant getAtualizadoEm() {
+    return atualizadoEm;
+  }
+
+  /** Preenche os instantes de criacao e atualizacao antes do primeiro persist. */
+  @PrePersist
+  void aoPersistir() {
+    Instant agora = Instant.now();
+    this.criadoEm = agora;
+    this.atualizadoEm = agora;
   }
 }
