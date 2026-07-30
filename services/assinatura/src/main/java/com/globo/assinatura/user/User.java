@@ -4,6 +4,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
 
@@ -96,5 +97,13 @@ public class User {
   /** Define o instante da última atualização do registro. */
   public void setUpdatedAt(Instant updatedAt) {
     this.updatedAt = updatedAt;
+  }
+
+  /** Preenche os instantes de criação e atualização antes do primeiro persist. */
+  @PrePersist
+  void aoPersistir() {
+    Instant agora = Instant.now();
+    this.createdAt = agora;
+    this.updatedAt = agora;
   }
 }
