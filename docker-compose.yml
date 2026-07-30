@@ -6,10 +6,14 @@ services:
       POSTGRES_DB: assinatura
       POSTGRES_USER: assinatura
       POSTGRES_PASSWORD: assinatura
+      # Bancos adicionais criados na primeira inicialização (volume vazio)
+      # pelo script montado em /docker-entrypoint-initdb.d.
+      POSTGRES_MULTIPLE_DATABASES: pagamento
     ports:
       - "5433:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/create-multiple-postgresql-databases.sh:/docker-entrypoint-initdb.d/create-multiple-postgresql-databases.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U assinatura -d assinatura"]
       interval: 10s
@@ -95,12 +99,17 @@ services:
     container_name: assinatura-pagamento
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pagamento
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-pagamento}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-pagamento}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       APP_GATEWAY_BASE_URL: http://mock-pagamento:8081
       APP_GATEWAY_WEBHOOK_SECRET: ${MOCK_WEBHOOK_SECRET:-mock-webhook-secret}
     ports:
       - "18082:8080"
     depends_on:
+      postgres:
+        condition: service_healthy
       kafka:
         condition: service_healthy
       mock-pagamento:
