@@ -1,10 +1,12 @@
 package com.globo.assinatura.assinatura;
 
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,20 +34,48 @@ class AssinaturaControllerTest {
 
   @Autowired private MockMvc mockMvc;
 
-  @MockitoBean private AssinaturaService service;
+  private final ObjectMapper objectMapper = new ObjectMapper();
+
+  @MockitoBean private SolicitarAssinatura solicitarAssinatura;
+
+  @MockitoBean private ConsultarAssinatura consultarAssinatura;
 
   @Test
   @DisplayName("Deve solicitar assinatura valida e retornar 202 com id e status")
   void deveSolicitarAssinaturaValidaRetornandoAccepted() throws Exception {
     Assinatura assinatura = new Assinatura(1L, Plano.PREMIUM);
-    when(service.solicitar("550e8400-e29b-41d4-a716-446655440000", Plano.PREMIUM))
+    when(solicitarAssinatura.executar("550e8400-e29b-41d4-a716-446655440000", Plano.PREMIUM))
         .thenReturn(assinatura);
-    String corpo = "{\"usuarioId\":\"550e8400-e29b-41d4-a716-446655440000\",\"plano\":\"PREMIUM\"}";
+    String corpo =
+        objectMapper.writeValueAsString(
+            new AssinaturaRequest("550e8400-e29b-41d4-a716-446655440000", Plano.PREMIUM));
 
     mockMvc
         .perform(post("/assinaturas").contentType(MediaType.APPLICATION_JSON).content(corpo))
         .andExpect(status().isAccepted())
         .andExpect(jsonPath("$.id").value(assinatura.getUuid()))
+        .andExpect(jsonPath("$.status").value("AGUARDANDO_PAGAMENTO"));
+  }
+
+  @Test
+  @DisplayName("Deve consultar assinatura por uuid e retornar 200")
+  void deveConsultarAssinaturaPorUuidRetornandoOk() throws Exception {
+    AssinaturaResponse resposta =
+        new AssinaturaResponse(
+            "assinatura-uuid",
+            "usuario-uuid",
+            Plano.PREMIUM,
+            null,
+            null,
+            StatusAssinatura.AGUARDANDO_PAGAMENTO);
+    when(consultarAssinatura.executar("assinatura-uuid")).thenReturn(resposta);
+
+    mockMvc
+        .perform(get("/assinaturas/assinatura-uuid"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value("assinatura-uuid"))
+        .andExpect(jsonPath("$.usuarioId").value("usuario-uuid"))
+        .andExpect(jsonPath("$.plano").value("PREMIUM"))
         .andExpect(jsonPath("$.status").value("AGUARDANDO_PAGAMENTO"));
   }
 }

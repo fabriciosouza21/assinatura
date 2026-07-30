@@ -19,13 +19,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-class AssinaturaServiceTest {
+class SolicitarAssinaturaTest {
 
   @Mock private UsuarioRepository usuarioRepository;
 
   @Mock private AssinaturaRepository assinaturaRepository;
 
-  @InjectMocks private AssinaturaService service;
+  @InjectMocks private SolicitarAssinatura command;
 
   @Test
   @DisplayName("Deve solicitar assinatura para usuario sem assinatura aberta")
@@ -35,7 +35,7 @@ class AssinaturaServiceTest {
     when(usuarioRepository.findByUuid("uuid-usuario")).thenReturn(Optional.of(usuario));
     when(assinaturaRepository.save(any(Assinatura.class))).thenAnswer(inv -> inv.getArgument(0));
 
-    Assinatura resultado = service.solicitar("uuid-usuario", Plano.PREMIUM);
+    Assinatura resultado = command.executar("uuid-usuario", Plano.PREMIUM);
 
     ArgumentCaptor<Assinatura> capturado = ArgumentCaptor.forClass(Assinatura.class);
     verify(assinaturaRepository).save(capturado.capture());
@@ -49,11 +49,11 @@ class AssinaturaServiceTest {
   }
 
   @Test
-  @DisplayName("Deve lancar excecao ao solicitar para usuario inexistente")
-  void deveLancarExcecaoAoSolicitarParaUsuarioInexistente() {
+  @DisplayName("Deve lancar nao encontrado ao solicitar para usuario inexistente")
+  void deveLancarNaoEncontradoAoSolicitarParaUsuarioInexistente() {
     when(usuarioRepository.findByUuid("uuid-inexistente")).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.solicitar("uuid-inexistente", Plano.BASICO))
+    assertThatThrownBy(() -> command.executar("uuid-inexistente", Plano.BASICO))
         .as("Usuario inexistente deve gerar nao encontrado")
         .isInstanceOf(UsuarioNaoEncontradoException.class);
   }
@@ -66,36 +66,8 @@ class AssinaturaServiceTest {
     when(usuarioRepository.findByUuid("uuid-usuario")).thenReturn(Optional.of(usuario));
     when(assinaturaRepository.existsByUsuarioIdAndStatusIn(eq(42L), any())).thenReturn(true);
 
-    assertThatThrownBy(() -> service.solicitar("uuid-usuario", Plano.BASICO))
+    assertThatThrownBy(() -> command.executar("uuid-usuario", Plano.BASICO))
         .as("Assinatura aberta deve gerar conflito")
         .isInstanceOf(AssinaturaAbertaException.class);
-  }
-
-  @Test
-  @DisplayName("Deve consultar assinatura existente retornando o uuid do usuario")
-  void deveConsultarAssinaturaExistenteRetornandoUuidDoUsuario() {
-    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
-    Usuario usuario = new Usuario("Fulano", "fulano@example.com");
-    when(assinaturaRepository.findByUuid(assinatura.getUuid())).thenReturn(Optional.of(assinatura));
-    when(usuarioRepository.findById(42L)).thenReturn(Optional.of(usuario));
-
-    AssinaturaResponse resposta = service.consultar(assinatura.getUuid());
-
-    assertThat(resposta.id()).as("Uuid da assinatura").isEqualTo(assinatura.getUuid());
-    assertThat(resposta.usuarioId()).as("Uuid publico do usuario").isEqualTo(usuario.getUuid());
-    assertThat(resposta.plano()).as("Plano").isEqualTo(Plano.PREMIUM);
-    assertThat(resposta.status()).as("Status").isEqualTo(StatusAssinatura.AGUARDANDO_PAGAMENTO);
-    assertThat(resposta.dataInicio()).as("Data inicio nula enquanto aguarda").isNull();
-    assertThat(resposta.dataExpiracao()).as("Data expiracao nula enquanto aguarda").isNull();
-  }
-
-  @Test
-  @DisplayName("Deve lancar nao encontrado ao consultar assinatura inexistente")
-  void deveLancarNaoEncontradoAoConsultarAssinaturaInexistente() {
-    when(assinaturaRepository.findByUuid("uuid-inexistente")).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> service.consultar("uuid-inexistente"))
-        .as("Assinatura inexistente deve gerar nao encontrado")
-        .isInstanceOf(AssinaturaNaoEncontradaException.class);
   }
 }

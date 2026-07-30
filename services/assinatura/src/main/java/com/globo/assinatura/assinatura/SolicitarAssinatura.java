@@ -7,13 +7,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Orquestra os casos de uso do dominio de assinatura.
+ * Command de solicitacao de assinatura.
  *
- * <p>Atualmente expoe a solicitacao de uma assinatura nova, resolvendo o usuario dono pelo uuid
- * publico e delegando a persistencia ao repositorio.
+ * <p>Cria uma assinatura para o usuario e o plano informados, aplicando a regra "um usuario, uma
+ * assinatura aberta". Responsavel apenas por escrita.
  */
 @Service
-public class AssinaturaService {
+public class SolicitarAssinatura {
 
   private static final List<StatusAssinatura> STATUS_ABERTOS =
       List.of(StatusAssinatura.AGUARDANDO_PAGAMENTO, StatusAssinatura.ATIVA);
@@ -22,12 +22,12 @@ public class AssinaturaService {
   private final AssinaturaRepository assinaturaRepository;
 
   /**
-   * Constroi o servico com os repositorios injetados.
+   * Constroi o command com os repositorios injetados.
    *
    * @param usuarioRepository repositorio de persistencia de usuarios
    * @param assinaturaRepository repositorio de persistencia de assinaturas
    */
-  public AssinaturaService(
+  public SolicitarAssinatura(
       UsuarioRepository usuarioRepository, AssinaturaRepository assinaturaRepository) {
     this.usuarioRepository = usuarioRepository;
     this.assinaturaRepository = assinaturaRepository;
@@ -39,9 +39,11 @@ public class AssinaturaService {
    * @param usuarioUuid uuid publico do usuario que solicita a assinatura
    * @param plano plano contratado
    * @return a assinatura criada
+   * @throws UsuarioNaoEncontradoException se o uuid nao corresponder a um usuario cadastrado
+   * @throws AssinaturaAbertaException se o usuario ja possuir assinatura aberta
    */
   @Transactional
-  public Assinatura solicitar(String usuarioUuid, Plano plano) {
+  public Assinatura executar(String usuarioUuid, Plano plano) {
     Usuario usuario =
         usuarioRepository.findByUuid(usuarioUuid).orElseThrow(UsuarioNaoEncontradoException::new);
     if (assinaturaRepository.existsByUsuarioIdAndStatusIn(usuario.getId(), STATUS_ABERTOS)) {
@@ -49,25 +51,5 @@ public class AssinaturaService {
     }
     Assinatura assinatura = new Assinatura(usuario.getId(), plano);
     return assinaturaRepository.save(assinatura);
-  }
-
-  /**
-   * Consulta uma assinatura pelo uuid publico.
-   *
-   * @param uuid uuid publico da assinatura
-   * @return a representacao completa da assinatura, com o uuid publico do usuario dono
-   */
-  @Transactional(readOnly = true)
-  public AssinaturaResponse consultar(String uuid) {
-    Assinatura assinatura =
-        assinaturaRepository.findByUuid(uuid).orElseThrow(AssinaturaNaoEncontradaException::new);
-    Usuario usuario = usuarioRepository.findById(assinatura.getUsuarioId()).orElseThrow();
-    return new AssinaturaResponse(
-        assinatura.getUuid(),
-        usuario.getUuid(),
-        assinatura.getPlano(),
-        assinatura.getDataInicio(),
-        assinatura.getDataExpiracao(),
-        assinatura.getStatus());
   }
 }
