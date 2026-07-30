@@ -131,6 +131,12 @@ void deveAtualizarUsuario() {
 }
 ```
 
+## Comentários e JavaDocs
+
+- Descreva apenas o comportamento atual, o propósito e as regras permanentes do código.
+- Não inclua etapas do planejamento, identificadores de tarefas, fases de implementação ou comportamentos futuros.
+- Mantenha informações como, tickets e ordem de implementação somente nos documentos de planejamento.
+
 ## Documentação
 
 - Diagramas de sequência em `docs/*.puml`.
