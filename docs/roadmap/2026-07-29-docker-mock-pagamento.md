@@ -117,17 +117,17 @@ Corrija qualquer uma antes de começar:
 
 | # | Entregável | Depende de | Status |
 |---|-----------|-----------|--------|
-| 1 | Dockerfile do `assinatura` (`INFRA-1`) | — | [ ] |
-| 2 | `assinatura` no docker-compose (`INFRA-2`) | 1 | [ ] |
-| 3 | Profiles e `.env` (`INFRA-3`) | 2 | [ ] |
-| 4 | Reorganização monorepo (`REPO-1`) | 3 | [ ] |
-| 5 | Skeleton do mock em Go (`REPO-2`) | 4 | [ ] |
-| 6 | Endpoints do mock (`MOCK-1`) | 5 | [ ] |
-| 7 | Webhook do mock (`MOCK-2`) | 6 | [ ] |
-| 8 | Mock no compose (`MOCK-3`) | 6 | [ ] |
-| 9 | Cliente do mock no `assinatura` (`INT-1`) | 8 | [ ] |
-| 10 | README de setup (`DOCS-1`) | 9 | [ ] |
-| 11 | Changelog e versão `0.1.0` (`DOCS-2`) | 10 | [ ] |
+| 1 | Dockerfile do `assinatura` (`INFRA-1`) | — | [x] |
+| 2 | `assinatura` no docker-compose (`INFRA-2`) | 1 | [x] |
+| 3 | Profiles e `.env` (`INFRA-3`) | 2 | [x] |
+| 4 | Reorganização monorepo (`REPO-1`) | 3 | [x] |
+| 5 | Skeleton do mock em Go (`REPO-2`) | 4 | [x] |
+| 6 | Endpoints do mock (`MOCK-1`) | 5 | [x] |
+| 7 | Webhook do mock (`MOCK-2`) | 6 | [x] |
+| 8 | Mock no compose (`MOCK-3`) | 6 | [x] |
+| 9 | Cliente do mock no `assinatura` (`INT-1`) | 8 | [x] (escopo reduzido: smoke test de integração; implementação do cliente HTTP ficou para etapa futura) |
+| 10 | README de setup (`DOCS-1`) | 9 | [x] |
+| 11 | Changelog e versão `0.1.0` (`DOCS-2`) | 10 | [x] |
 
 **Racional da ordem:** primeiro dockerizamos o que existe e validamos a fundação
 (1 a 3). Depois reorganizamos o repo para receber o novo serviço (4 a 5). Aí

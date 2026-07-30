@@ -1,0 +1,12 @@
+info:
+  name: Sistema de Assinaturas
+  type: http
+  seq: 1
+
+environments:
+  - name: Local
+    env:
+      assinaturaUrl: http://localhost:18080
+      pagamentoUrl: http://localhost:18082
+      mockGatewayUrl: http://localhost:8081
+      mockWebhookSecret: mock-webhook-secret
