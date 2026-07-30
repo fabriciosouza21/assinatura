@@ -4,7 +4,11 @@ import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Drena a outbox publicando eventos pendentes no Kafka e transita o estado de cada evento conforme
@@ -15,6 +19,7 @@ import org.springframework.kafka.core.KafkaTemplate;
  * OutboxStatus#FALHA} (DLQ persistida). A entrega e pelo menos uma vez: o consumidor deduplica por
  * {@code eventId}.
  */
+@Component
 public class OutboxPublisher {
 
   private static final Logger log = LoggerFactory.getLogger(OutboxPublisher.class);
@@ -26,7 +31,7 @@ public class OutboxPublisher {
   private final int tamanhoLote;
 
   /**
-   * Constroi o publisher.
+   * Constroi o publisher com os beans e a configuracao externalizada injetados.
    *
    * @param outboxRepository repositorio da outbox
    * @param kafkaTemplate template de publicacao no Kafka
@@ -38,8 +43,8 @@ public class OutboxPublisher {
       OutboxRepository outboxRepository,
       KafkaTemplate<String, String> kafkaTemplate,
       RetryPolicy retryPolicy,
-      String topico,
-      int tamanhoLote) {
+      @Value("${app.kafka.topico-assinatura-solicitada}") String topico,
+      @Value("${app.outbox.tamanho-lote}") int tamanhoLote) {
     this.outboxRepository = outboxRepository;
     this.kafkaTemplate = kafkaTemplate;
     this.retryPolicy = retryPolicy;
@@ -47,7 +52,9 @@ public class OutboxPublisher {
     this.tamanhoLote = tamanhoLote;
   }
 
-  /** Seleciona eventos pendentes e publica cada um no Kafka. */
+  /** Seleciona eventos pendentes prontos para envio e publica cada um no Kafka. */
+  @Scheduled(fixedDelayString = "${app.outbox.intervalo-ms}")
+  @Transactional
   public void publicarPendentes() {
     List<OutboxEvent> eventos = outboxRepository.buscarPublicaveis(Instant.now(), tamanhoLote);
     for (OutboxEvent evento : eventos) {
@@ -62,6 +69,7 @@ public class OutboxPublisher {
           .whenComplete((resultado, erro) -> tratarResultado(evento, erro));
     } catch (RuntimeException e) {
       tratarFalha(evento, e);
+      outboxRepository.save(evento);
     }
   }
 
