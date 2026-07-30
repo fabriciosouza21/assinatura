@@ -6,12 +6,15 @@ import static org.mockito.Mockito.when;
 
 import com.globo.assinatura.messaging.event.PagamentoStatusAtualizado;
 import com.globo.assinatura.messaging.event.StatusPagamento;
+import com.globo.assinatura.pagamento.PagamentoEventoProcessado;
+import com.globo.assinatura.pagamento.PagamentoEventoProcessadoRepository;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -20,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ProcessarPagamentoTest {
 
   @Mock private AssinaturaRepository assinaturaRepository;
+  @Mock private PagamentoEventoProcessadoRepository pagamentoEventoProcessadoRepository;
 
   @InjectMocks private ProcessarPagamento command;
 
@@ -44,5 +48,29 @@ class ProcessarPagamentoTest {
     assertThat(assinatura.getStatus())
         .as("assinatura aprovada deve transitar para ativa")
         .isEqualTo(StatusAssinatura.ATIVA);
+  }
+
+  @Test
+  @DisplayName("Deve registrar o evento processado ao aprovar o pagamento")
+  void deveRegistrarEventoProcessadoQuandoPagamentoAprovado() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    when(assinaturaRepository.findByUuidForUpdate(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            UUID.fromString("11111111-1111-1111-1111-111111111111"),
+            Instant.now(),
+            UUID.fromString(assinatura.getUuid()),
+            StatusPagamento.APPROVED,
+            UUID.randomUUID());
+
+    command.executar(evento);
+
+    ArgumentCaptor<PagamentoEventoProcessado> captor =
+        ArgumentCaptor.forClass(PagamentoEventoProcessado.class);
+    verify(pagamentoEventoProcessadoRepository).save(captor.capture());
+    assertThat(captor.getValue().getEventId())
+        .as("evento processado deve registrar o eventId recebido")
+        .isEqualTo(evento.eventId());
   }
 }
