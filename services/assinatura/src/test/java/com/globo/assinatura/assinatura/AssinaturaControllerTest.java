@@ -76,6 +76,20 @@ class AssinaturaControllerTest {
   }
 
   @Test
+  @DisplayName("Deve retornar 409 ao solicitar para usuario com assinatura aberta")
+  void deveRetornarConflictAoSolicitarParaUsuarioComAssinaturaAberta() throws Exception {
+    when(solicitarAssinatura.executar(any(), any())).thenThrow(new AssinaturaAbertaException());
+    String corpo =
+        objectMapper.writeValueAsString(
+            new AssinaturaRequest("550e8400-e29b-41d4-a716-446655440000", Plano.BASICO));
+
+    mockMvc
+        .perform(post("/assinaturas").contentType(MediaType.APPLICATION_JSON).content(corpo))
+        .andExpect(status().isConflict())
+        .andExpect(content().string(""));
+  }
+
+  @Test
   @DisplayName("Deve consultar assinatura por uuid e retornar 200")
   void deveConsultarAssinaturaPorUuidRetornandoOk() throws Exception {
     AssinaturaResponse resposta =

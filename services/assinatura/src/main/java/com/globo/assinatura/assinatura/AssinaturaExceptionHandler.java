@@ -1,5 +1,6 @@
 package com.globo.assinatura.assinatura;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -22,5 +23,16 @@ public class AssinaturaExceptionHandler {
   @ExceptionHandler(UsuarioNaoEncontradoException.class)
   public ResponseEntity<Void> tratarUsuarioNaoEncontrado(UsuarioNaoEncontradoException ex) {
     return ResponseEntity.notFound().build();
+  }
+
+  /**
+   * Mapeia {@link AssinaturaAbertaException} para {@code 409 Conflict}.
+   *
+   * @param ex excecao lancada quando o usuario ja possui assinatura aberta
+   * @return resposta com status {@code 409} e corpo vazio
+   */
+  @ExceptionHandler(AssinaturaAbertaException.class)
+  public ResponseEntity<Void> tratarAssinaturaAberta(AssinaturaAbertaException ex) {
+    return ResponseEntity.status(HttpStatus.CONFLICT).build();
   }
 }
