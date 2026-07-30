@@ -1,8 +1,10 @@
 package com.globo.assinatura.assinatura;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -15,6 +17,7 @@ import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSec
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -30,6 +33,7 @@ import org.springframework.test.web.servlet.MockMvc;
             type = FilterType.REGEX,
             pattern = "com\\.globo\\.assinatura\\.security\\..*"))
 @ImportAutoConfiguration(exclude = {ServletWebSecurityAutoConfiguration.class})
+@Import(AssinaturaExceptionHandler.class)
 class AssinaturaControllerTest {
 
   @Autowired private MockMvc mockMvc;
@@ -55,6 +59,20 @@ class AssinaturaControllerTest {
         .andExpect(status().isAccepted())
         .andExpect(jsonPath("$.id").value(assinatura.getUuid()))
         .andExpect(jsonPath("$.status").value("AGUARDANDO_PAGAMENTO"));
+  }
+
+  @Test
+  @DisplayName("Deve retornar 404 ao solicitar para usuario inexistente")
+  void deveRetornarNotFoundAoSolicitarParaUsuarioInexistente() throws Exception {
+    when(solicitarAssinatura.executar(any(), any())).thenThrow(new UsuarioNaoEncontradoException());
+    String corpo =
+        objectMapper.writeValueAsString(
+            new AssinaturaRequest("550e8400-e29b-41d4-a716-446655440000", Plano.BASICO));
+
+    mockMvc
+        .perform(post("/assinaturas").contentType(MediaType.APPLICATION_JSON).content(corpo))
+        .andExpect(status().isNotFound())
+        .andExpect(content().string(""));
   }
 
   @Test
