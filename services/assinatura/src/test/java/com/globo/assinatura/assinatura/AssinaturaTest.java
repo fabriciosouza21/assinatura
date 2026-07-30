@@ -60,4 +60,14 @@ class AssinaturaTest {
         .as("Data expiracao atribuida na ativacao")
         .isEqualTo(LocalDate.of(2026, 2, 1));
   }
+
+  @Test
+  @DisplayName("Deve transitar para pagamento recusado ao recusar o pagamento")
+  void deveTransitarParaPagamentoRecusadoAoRecusarPagamento() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.recusarPagamento();
+    assertThat(assinatura.getStatus())
+        .as("Status apos recusa")
+        .isEqualTo(StatusAssinatura.PAGAMENTO_RECUSADO);
+  }
 }

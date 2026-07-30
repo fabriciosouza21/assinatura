@@ -131,4 +131,9 @@ public class Assinatura {
     this.dataInicio = dataInicio;
     this.dataExpiracao = dataExpiracao;
   }
+
+  /** Transita o ciclo de vida para pagamento recusado apos a reprovacao do pagamento. */
+  public void recusarPagamento() {
+    this.status = StatusAssinatura.PAGAMENTO_RECUSADO;
+  }
 }
