@@ -26,6 +26,17 @@ public class AssinaturaExceptionHandler {
   }
 
   /**
+   * Mapeia {@link AssinaturaNaoEncontradaException} para {@code 404 Not Found}.
+   *
+   * @param ex excecao lancada quando a assinatura consultada nao existe
+   * @return resposta com status {@code 404} e corpo vazio
+   */
+  @ExceptionHandler(AssinaturaNaoEncontradaException.class)
+  public ResponseEntity<Void> tratarAssinaturaNaoEncontrada(AssinaturaNaoEncontradaException ex) {
+    return ResponseEntity.notFound().build();
+  }
+
+  /**
    * Mapeia {@link AssinaturaAbertaException} para {@code 409 Conflict}.
    *
    * @param ex excecao lancada quando o usuario ja possui assinatura aberta

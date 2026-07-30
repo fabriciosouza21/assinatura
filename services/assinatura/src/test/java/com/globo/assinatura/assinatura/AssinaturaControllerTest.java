@@ -110,4 +110,16 @@ class AssinaturaControllerTest {
         .andExpect(jsonPath("$.plano").value("PREMIUM"))
         .andExpect(jsonPath("$.status").value("AGUARDANDO_PAGAMENTO"));
   }
+
+  @Test
+  @DisplayName("Deve retornar 404 ao consultar assinatura inexistente")
+  void deveRetornarNotFoundAoConsultarAssinaturaInexistente() throws Exception {
+    when(consultarAssinatura.executar("uuid-inexistente"))
+        .thenThrow(new AssinaturaNaoEncontradaException());
+
+    mockMvc
+        .perform(get("/assinaturas/uuid-inexistente"))
+        .andExpect(status().isNotFound())
+        .andExpect(content().string(""));
+  }
 }
