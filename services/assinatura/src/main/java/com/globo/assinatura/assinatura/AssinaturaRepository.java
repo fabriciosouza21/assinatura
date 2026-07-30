@@ -1,5 +1,6 @@
 package com.globo.assinatura.assinatura;
 
+import java.util.Collection;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
@@ -7,4 +8,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
  *
  * <p>Estende {@link JpaRepository} para fornecer as operacoes basicas de CRUD.
  */
-public interface AssinaturaRepository extends JpaRepository<Assinatura, Long> {}
+public interface AssinaturaRepository extends JpaRepository<Assinatura, Long> {
+
+  /**
+   * Verifica se existe assinatura para o usuario em algum dos status informados.
+   *
+   * @param usuarioId identificador interno do usuario
+   * @param status colecao de status considerados abertos
+   * @return {@code true} se existir ao menos uma assinatura em um dos status; {@code false} caso
+   *     contrario
+   */
+  boolean existsByUsuarioIdAndStatusIn(Long usuarioId, Collection<StatusAssinatura> status);
+}

@@ -2,6 +2,7 @@ package com.globo.assinatura.assinatura;
 
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class AssinaturaService {
+
+  private static final List<StatusAssinatura> STATUS_ABERTOS =
+      List.of(StatusAssinatura.AGUARDANDO_PAGAMENTO, StatusAssinatura.ATIVA);
 
   private final UsuarioRepository usuarioRepository;
   private final AssinaturaRepository assinaturaRepository;
@@ -40,6 +44,9 @@ public class AssinaturaService {
   public Assinatura solicitar(String usuarioUuid, Plano plano) {
     Usuario usuario =
         usuarioRepository.findByUuid(usuarioUuid).orElseThrow(UsuarioNaoEncontradoException::new);
+    if (assinaturaRepository.existsByUsuarioIdAndStatusIn(usuario.getId(), STATUS_ABERTOS)) {
+      throw new AssinaturaAbertaException();
+    }
     Assinatura assinatura = new Assinatura(usuario.getId(), plano);
     return assinaturaRepository.save(assinatura);
   }

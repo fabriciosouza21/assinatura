@@ -3,6 +3,7 @@ package com.globo.assinatura.assinatura;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -55,5 +56,18 @@ class AssinaturaServiceTest {
     assertThatThrownBy(() -> service.solicitar("uuid-inexistente", Plano.BASICO))
         .as("Usuario inexistente deve gerar nao encontrado")
         .isInstanceOf(UsuarioNaoEncontradoException.class);
+  }
+
+  @Test
+  @DisplayName("Deve lancar conflito ao solicitar para usuario com assinatura aberta")
+  void deveLancarConflitoAoSolicitarParaUsuarioComAssinaturaAberta() {
+    Usuario usuario = new Usuario("Fulano", "fulano@example.com");
+    usuario.setId(42L);
+    when(usuarioRepository.findByUuid("uuid-usuario")).thenReturn(Optional.of(usuario));
+    when(assinaturaRepository.existsByUsuarioIdAndStatusIn(eq(42L), any())).thenReturn(true);
+
+    assertThatThrownBy(() -> service.solicitar("uuid-usuario", Plano.BASICO))
+        .as("Assinatura aberta deve gerar conflito")
+        .isInstanceOf(AssinaturaAbertaException.class);
   }
 }
