@@ -32,6 +32,12 @@ build/
 ### VS Code ###
 .vscode/
 
+### Build artifacts ###
+docker/mock-pagamento/mock-pagamento
+
+### Local tooling ###
+.zcode/
+
 ### Env ###
 .env
 
