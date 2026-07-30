@@ -132,4 +132,25 @@ class ProcessarPagamentoTest {
         .as("data expiracao deve ser um mes apos o inicio")
         .isEqualTo(LocalDate.of(2026, 2, 15));
   }
+
+  @Test
+  @DisplayName("Deve transitar para pagamento recusado quando o pagamento e rejeitado")
+  void deveTransitarParaPagamentoRecusadoQuandoRejeitado() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    when(assinaturaRepository.findByUuidForUpdate(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            UUID.randomUUID(),
+            Instant.now(),
+            UUID.fromString(assinatura.getUuid()),
+            StatusPagamento.REJECTED,
+            UUID.randomUUID());
+
+    command.executar(evento);
+
+    assertThat(assinatura.getStatus())
+        .as("assinatura rejeitada deve ir para pagamento recusado")
+        .isEqualTo(StatusAssinatura.PAGAMENTO_RECUSADO);
+  }
 }

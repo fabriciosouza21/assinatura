@@ -1,6 +1,7 @@
 package com.globo.assinatura.assinatura;
 
 import com.globo.assinatura.messaging.event.PagamentoStatusAtualizado;
+import com.globo.assinatura.messaging.event.StatusPagamento;
 import com.globo.assinatura.pagamento.PagamentoEventoProcessado;
 import com.globo.assinatura.pagamento.PagamentoEventoProcessadoRepository;
 import java.time.Clock;
@@ -49,7 +50,11 @@ public class ProcessarPagamento {
     LocalDate hoje = LocalDate.now(clock);
     Assinatura assinatura =
         assinaturaRepository.findByUuidForUpdate(evento.assinaturaId().toString()).orElseThrow();
-    assinatura.ativar(hoje, hoje.plusMonths(1));
+    if (evento.status() == StatusPagamento.REJECTED) {
+      assinatura.recusarPagamento();
+    } else {
+      assinatura.ativar(hoje, hoje.plusMonths(1));
+    }
     pagamentoEventoProcessadoRepository.save(
         new PagamentoEventoProcessado(evento.eventId(), assinatura.getUuid()));
   }
