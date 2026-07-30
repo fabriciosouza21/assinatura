@@ -50,4 +50,14 @@ class AssinaturaTest {
         .as("Data inicio atribuida na ativacao")
         .isEqualTo(LocalDate.of(2026, 1, 1));
   }
+
+  @Test
+  @DisplayName("Deve atribuir a data de expiracao ao ativar a assinatura")
+  void deveAtribuirDataExpiracaoAoAtivar() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assertThat(assinatura.getDataExpiracao())
+        .as("Data expiracao atribuida na ativacao")
+        .isEqualTo(LocalDate.of(2026, 2, 1));
+  }
 }
