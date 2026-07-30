@@ -1,6 +1,8 @@
 package com.globo.assinatura.assinatura;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -152,5 +154,25 @@ class ProcessarPagamentoTest {
     assertThat(assinatura.getStatus())
         .as("assinatura rejeitada deve ir para pagamento recusado")
         .isEqualTo(StatusAssinatura.PAGAMENTO_RECUSADO);
+  }
+
+  @Test
+  @DisplayName("Deve manter a assinatura inalterada quando o pagamento esta pendente")
+  void deveManterAssinaturaInalteradaQuandoPagamentoPendente() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            UUID.randomUUID(),
+            Instant.now(),
+            UUID.fromString(assinatura.getUuid()),
+            StatusPagamento.PENDING,
+            UUID.randomUUID());
+
+    command.executar(evento);
+
+    assertThat(assinatura.getStatus())
+        .as("assinatura pendente deve permanecer aguardando pagamento")
+        .isEqualTo(StatusAssinatura.AGUARDANDO_PAGAMENTO);
+    verify(pagamentoEventoProcessadoRepository, never()).save(any(PagamentoEventoProcessado.class));
   }
 }

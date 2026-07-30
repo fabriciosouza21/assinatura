@@ -47,6 +47,9 @@ public class ProcessarPagamento {
    */
   @Transactional
   public void executar(PagamentoStatusAtualizado evento) {
+    if (evento.status() == StatusPagamento.PENDING) {
+      return;
+    }
     LocalDate hoje = LocalDate.now(clock);
     Assinatura assinatura =
         assinaturaRepository.findByUuidForUpdate(evento.assinaturaId().toString()).orElseThrow();
