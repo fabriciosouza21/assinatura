@@ -1,0 +1,97 @@
+@startuml
+title Outbox — publicação de AssinaturaSolicitada
+
+autonumber
+hide footbox
+skinparam responseMessageBelowArrow true
+
+actor Cliente
+boundary "API REST" as API
+control "Assinatura Service" as AS
+control "Outbox Publisher" as OP
+database "Banco de Dados" as DB
+queue "Kafka" as KAFKA
+
+== Gravação atômica ==
+
+Cliente -> API: POST /assinaturas\nIdempotency-Key: uuid
+API -> AS: solicitar assinatura
+AS -> DB: BEGIN
+AS -> DB: INSERT assinatura\nstatus = AGUARDANDO_PAGAMENTO
+AS -> DB: INSERT outbox\nstatus = PENDENTE
+
+note over AS, DB
+  Evento salvo na outbox:
+  {
+    "eventId": "uuid",
+    "tipo": "AssinaturaSolicitada",
+    "ocorridoEm": "2026-07-30T10:00:00-03:00",
+    "assinaturaId": "assinatura_uuid",
+    "usuarioId": "usuario_uuid",
+    "plano": "PREMIUM",
+    "valor": 49.90
+  }
+end note
+
+AS -> DB: COMMIT
+AS --> API: assinatura criada
+API --> Cliente: 202 Accepted\n{id: "assinatura_uuid",\nstatus: "AGUARDANDO_PAGAMENTO"}
+
+note over AS, DB
+  A assinatura e o evento são confirmados
+  ou revertidos na mesma transação.
+end note
+
+== Publicação da outbox ==
+
+loop A cada intervalo configurado
+  OP -> DB: BEGIN
+  OP -> DB: SELECT eventos publicáveis\nFOR UPDATE SKIP LOCKED\nLIMIT 100
+
+  alt Nenhum evento pendente
+    DB --> OP: lista vazia
+    OP -> DB: COMMIT
+  else Eventos encontrados
+    DB --> OP: eventos pendentes
+
+    loop Para cada evento
+      OP -> KAFKA: Publicar AssinaturaSolicitada\nkey = assinaturaId
+
+      alt Kafka confirmou a publicação
+        KAFKA --> OP: ACK
+        OP -> DB: UPDATE outbox\nstatus = PUBLICADO\npublished_at = now()
+      else Erro ou timeout
+        KAFKA --> OP: falha
+        OP -> DB: UPDATE outbox\ntentativas = tentativas + 1\nultimo_erro = mensagem
+
+        alt Ainda há tentativas (tentativas < 3)
+          OP -> DB: UPDATE outbox\nstatus = PENDENTE\nproxima_tentativa_em = now()\n+ backoff exponencial + jitter
+        else Terceira tentativa falhou
+          OP -> DB: UPDATE outbox\nstatus = FALHA
+        end
+      end
+    end
+
+    OP -> DB: COMMIT
+  end
+end
+
+note over OP, KAFKA
+  Garantia: entrega pelo menos uma vez.
+
+  Se o Kafka confirmar e o processo falhar antes
+  do COMMIT, o evento poderá ser publicado novamente.
+  O consumidor deve deduplicar pelo eventId.
+end note
+
+note over OP, DB
+  FOR UPDATE SKIP LOCKED permite executar mais de uma
+  instância do publisher sem processar simultaneamente
+  a mesma linha da outbox.
+
+  Configuração:
+  - máximo de tentativas: 3
+  - atraso: backoff exponencial + jitter aleatório
+end note
+
+@enduml
