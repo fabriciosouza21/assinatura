@@ -37,3 +37,6 @@ build/
 
 ### Handoff entre agentes ###
 .handoff/
+
+### Worktrees ###
+.worktrees/
