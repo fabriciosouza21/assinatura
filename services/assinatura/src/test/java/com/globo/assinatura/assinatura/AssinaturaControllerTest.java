@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.globo.assinatura.web.ProblemExceptionHandler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,7 +34,7 @@ import org.springframework.test.web.servlet.MockMvc;
             type = FilterType.REGEX,
             pattern = "com\\.globo\\.assinatura\\.security\\..*"))
 @ImportAutoConfiguration(exclude = {ServletWebSecurityAutoConfiguration.class})
-@Import(AssinaturaExceptionHandler.class)
+@Import({AssinaturaExceptionHandler.class, ProblemExceptionHandler.class})
 class AssinaturaControllerTest {
 
   @Autowired private MockMvc mockMvc;
@@ -121,5 +122,18 @@ class AssinaturaControllerTest {
         .perform(get("/assinaturas/uuid-inexistente"))
         .andExpect(status().isNotFound())
         .andExpect(content().string(""));
+  }
+
+  @Test
+  @DisplayName("Deve retornar 400 com problem ao omitir usuarioId")
+  void deveRetornarBadRequestAoOmitirUsuarioId() throws Exception {
+    String corpo = objectMapper.writeValueAsString(new AssinaturaRequest(null, Plano.PREMIUM));
+
+    mockMvc
+        .perform(post("/assinaturas").contentType(MediaType.APPLICATION_JSON).content(corpo))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.title").value("Requisicao invalida"))
+        .andExpect(jsonPath("$.errors[0].campo").value("usuarioId"));
   }
 }

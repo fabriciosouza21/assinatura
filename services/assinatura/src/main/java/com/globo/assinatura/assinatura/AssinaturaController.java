@@ -1,5 +1,6 @@
 package com.globo.assinatura.assinatura;
 
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,7 +38,7 @@ public class AssinaturaController {
    */
   @PostMapping
   public ResponseEntity<AssinaturaCriadaResponse> solicitar(
-      @RequestBody AssinaturaRequest request) {
+      @Valid @RequestBody AssinaturaRequest request) {
     Assinatura assinatura = solicitarAssinatura.executar(request.usuarioId(), request.plano());
     return ResponseEntity.status(HttpStatus.ACCEPTED)
         .body(new AssinaturaCriadaResponse(assinatura.getUuid(), assinatura.getStatus()));
