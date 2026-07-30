@@ -3,8 +3,11 @@ package com.globo.assinatura.usuario;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import com.globo.assinatura.user.User;
 import com.globo.assinatura.user.UserRepository;
@@ -49,8 +52,7 @@ class UsuarioServiceTest {
   @Test
   @DisplayName("Deve lancar conflito ao cadastrar cliente com email ja existente")
   void cadastraClienteComEmailExistenteLancaConflito() {
-    org.mockito.Mockito.when(usuarioRepository.existsByEmail("existente@example.com"))
-        .thenReturn(true);
+    when(usuarioRepository.existsByEmail("existente@example.com")).thenReturn(true);
 
     assertThatThrownBy(
             () -> usuarioService.cadastrar("Fulano", "existente@example.com", "SenhaForte1"))
@@ -64,16 +66,16 @@ class UsuarioServiceTest {
   @Test
   @DisplayName("Deve criar Usuario e User auth ligado na mesma transacao ao cadastrar cliente")
   void deveCriarCredencialAoCadastrarCliente() {
-    org.mockito.Mockito.when(usuarioRepository.existsByEmail("novo@example.com")).thenReturn(false);
-    org.mockito.Mockito.when(passwordEncoder.encode("SenhaForte1")).thenReturn("hash-bcrypt");
-    org.mockito.Mockito.doAnswer(
+    when(usuarioRepository.existsByEmail("novo@example.com")).thenReturn(false);
+    when(passwordEncoder.encode("SenhaForte1")).thenReturn("hash-bcrypt");
+    doAnswer(
             inv -> {
               Usuario u = inv.getArgument(0);
               u.setId(1L);
               return u;
             })
         .when(usuarioRepository)
-        .save(org.mockito.ArgumentMatchers.any(Usuario.class));
+        .save(any(Usuario.class));
 
     usuarioService.cadastrar("Fulano", "novo@example.com", "SenhaForte1");
 

@@ -1,11 +1,11 @@
 package com.globo.assinatura.auth;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,17 +41,22 @@ class AuthControllerTest {
 
   @Autowired private MockMvc mockMvc;
 
+  private final ObjectMapper objectMapper = new ObjectMapper();
+
   @MockitoBean private AuthService authService;
 
   @Test
   @DisplayName("Deve retornar 401 com corpo vazio ao receber credenciais invalidas")
   void loginComCredenciaisInvalidasRetornaUnauthorized() throws Exception {
-    when(authService.login(any(LoginRequest.class)))
+    LoginRequest credenciais = new LoginRequest("cliente@example.com", "errada");
+    when(authService.login(credenciais))
         .thenThrow(new BadCredentialsException("Credenciais invalidas"));
-    String corpo = "{\"username\":\"cliente@example.com\",\"password\":\"errada\"}";
 
     mockMvc
-        .perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON).content(corpo))
+        .perform(
+            post("/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(credenciais)))
         .andExpect(status().isUnauthorized())
         .andExpect(content().string(""));
   }
