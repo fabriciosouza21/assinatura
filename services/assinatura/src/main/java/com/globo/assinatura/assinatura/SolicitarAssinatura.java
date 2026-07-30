@@ -3,6 +3,7 @@ package com.globo.assinatura.assinatura;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
 import java.util.List;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +51,10 @@ public class SolicitarAssinatura {
       throw new AssinaturaAbertaException();
     }
     Assinatura assinatura = new Assinatura(usuario.getId(), plano);
-    return assinaturaRepository.save(assinatura);
+    try {
+      return assinaturaRepository.save(assinatura);
+    } catch (DataIntegrityViolationException e) {
+      throw new AssinaturaAbertaException();
+    }
   }
 }

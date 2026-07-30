@@ -17,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 class SolicitarAssinaturaTest {
@@ -68,6 +69,21 @@ class SolicitarAssinaturaTest {
 
     assertThatThrownBy(() -> command.executar("uuid-usuario", Plano.BASICO))
         .as("Assinatura aberta deve gerar conflito")
+        .isInstanceOf(AssinaturaAbertaException.class);
+  }
+
+  @Test
+  @DisplayName("Deve lancar conflito quando o insert viola o indice unico sob concorrencia")
+  void deveLancarConflitoQuandoInsertViolaIndiceUnico() {
+    Usuario usuario = new Usuario("Fulano", "fulano@example.com");
+    usuario.setId(42L);
+    when(usuarioRepository.findByUuid("uuid-usuario")).thenReturn(Optional.of(usuario));
+    when(assinaturaRepository.existsByUsuarioIdAndStatusIn(eq(42L), any())).thenReturn(false);
+    when(assinaturaRepository.save(any(Assinatura.class)))
+        .thenThrow(new DataIntegrityViolationException("uq_assinatura_aberta_usuario"));
+
+    assertThatThrownBy(() -> command.executar("uuid-usuario", Plano.BASICO))
+        .as("Violacao do indice unico sob concorrencia deve gerar conflito")
         .isInstanceOf(AssinaturaAbertaException.class);
   }
 }
