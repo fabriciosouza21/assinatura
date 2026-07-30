@@ -40,4 +40,14 @@ class AssinaturaTest {
     assinatura.ativar((LocalDate) null, (LocalDate) null);
     assertThat(assinatura.getStatus()).as("Status apos ativacao").isEqualTo(StatusAssinatura.ATIVA);
   }
+
+  @Test
+  @DisplayName("Deve atribuir a data de inicio ao ativar a assinatura")
+  void deveAtribuirDataInicioAoAtivar() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assertThat(assinatura.getDataInicio())
+        .as("Data inicio atribuida na ativacao")
+        .isEqualTo(LocalDate.of(2026, 1, 1));
+  }
 }

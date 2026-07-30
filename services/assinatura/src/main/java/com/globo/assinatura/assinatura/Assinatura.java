@@ -128,5 +128,6 @@ public class Assinatura {
    */
   public void ativar(LocalDate dataInicio, LocalDate dataExpiracao) {
     this.status = StatusAssinatura.ATIVA;
+    this.dataInicio = dataInicio;
   }
 }
