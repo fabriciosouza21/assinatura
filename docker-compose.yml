@@ -105,6 +105,7 @@ services:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       APP_GATEWAY_BASE_URL: http://mock-pagamento:8081
       APP_GATEWAY_WEBHOOK_SECRET: ${MOCK_WEBHOOK_SECRET:-mock-webhook-secret}
+      APP_GATEWAY_WEBHOOK_NOTIFICATION_URL: http://pagamento:8080/webhooks/payments
     ports:
       - "18082:8080"
     depends_on:
