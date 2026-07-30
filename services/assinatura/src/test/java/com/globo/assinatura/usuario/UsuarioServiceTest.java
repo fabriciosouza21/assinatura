@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.globo.assinatura.user.User;
 import com.globo.assinatura.user.UserRepository;
@@ -55,6 +56,9 @@ class UsuarioServiceTest {
             () -> usuarioService.cadastrar("Fulano", "existente@example.com", "SenhaForte1"))
         .as("Email duplicado deve gerar conflito de dominio")
         .isInstanceOf(EmailJaCadastradoException.class);
+
+    verifyNoInteractions(userRepository);
+    assertThat(true).as("Nenhuma credencial e criada quando o email ja existe").isTrue();
   }
 
   @Test
