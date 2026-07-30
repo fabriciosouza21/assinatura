@@ -1,0 +1,67 @@
+@startuml
+title Outbox — modelo de dados
+
+hide circle
+skinparam linetype ortho
+
+entity usuario {
+  * id: BIGINT <<PK>>
+  --
+  * uuid: UUID <<UK>>
+  * nome: VARCHAR
+  * email: VARCHAR
+}
+
+entity assinatura {
+  * id: BIGINT <<PK>>
+  --
+  * uuid: UUID <<UK>>
+  * usuario_id: BIGINT <<FK>>
+  * plano: VARCHAR
+  * valor: NUMERIC(19,2)
+  * status: VARCHAR
+  data_inicio: DATE
+  data_expiracao: DATE
+  * criado_em: TIMESTAMPTZ
+}
+
+entity outbox {
+  * event_id: UUID <<PK>>
+  --
+  * aggregate_type: VARCHAR
+  * aggregate_id: UUID
+  * event_type: VARCHAR
+  * payload: JSONB
+  * status: VARCHAR
+  * tentativas: SMALLINT
+  * proxima_tentativa_em: TIMESTAMPTZ
+  * criado_em: TIMESTAMPTZ
+  publicado_em: TIMESTAMPTZ
+  falhou_em: TIMESTAMPTZ
+  ultimo_erro: TEXT
+}
+
+usuario ||--o{ assinatura : possui
+assinatura ||..o{ outbox : aggregate_id\nreferência lógica
+
+note right of assinatura
+  Índice único parcial:
+
+  UNIQUE (usuario_id)
+  WHERE status IN
+  ('AGUARDANDO_PAGAMENTO', 'ATIVA')
+end note
+
+note right of outbox
+  Índice para polling:
+
+  (status, proxima_tentativa_em, criado_em)
+  WHERE status = 'PENDENTE'
+end note
+
+note bottom of outbox
+  event_id permanece o mesmo durante
+  retries e reprocessamento manual.
+end note
+
+@enduml

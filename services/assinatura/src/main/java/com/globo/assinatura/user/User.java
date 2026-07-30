@@ -4,6 +4,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
 
@@ -21,6 +22,8 @@ public class User {
   private String password;
 
   private String role;
+
+  private Long usuarioId;
 
   private Instant createdAt;
 
@@ -44,6 +47,11 @@ public class User {
   /** Retorna o papel do usuário, como {@code "ROLE_USER"}. */
   public String getRole() {
     return role;
+  }
+
+  /** Retorna o id do {@code Usuario} de domínio ligado, ou {@code null} para o admin. */
+  public Long getUsuarioId() {
+    return usuarioId;
   }
 
   /** Retorna o instante de criação do registro. */
@@ -76,6 +84,11 @@ public class User {
     this.role = role;
   }
 
+  /** Define o id do {@code Usuario} de domínio ligado. */
+  public void setUsuarioId(Long usuarioId) {
+    this.usuarioId = usuarioId;
+  }
+
   /** Define o instante de criação do registro. */
   public void setCreatedAt(Instant createdAt) {
     this.createdAt = createdAt;
@@ -84,5 +97,13 @@ public class User {
   /** Define o instante da última atualização do registro. */
   public void setUpdatedAt(Instant updatedAt) {
     this.updatedAt = updatedAt;
+  }
+
+  /** Preenche os instantes de criação e atualização antes do primeiro persist. */
+  @PrePersist
+  void aoPersistir() {
+    Instant agora = Instant.now();
+    this.createdAt = agora;
+    this.updatedAt = agora;
   }
 }

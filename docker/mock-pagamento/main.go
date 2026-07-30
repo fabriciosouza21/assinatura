@@ -22,7 +22,7 @@ import (
 type Payment struct {
 	ID                string    `json:"id"`
 	ExternalReference string    `json:"externalReference"`
-	Amount            int       `json:"amount"`
+	Amount            float64   `json:"amount"`
 	Currency          string    `json:"currency"`
 	PaymentMethod     string    `json:"paymentMethod"`
 	Status            string    `json:"status"`
@@ -33,11 +33,11 @@ type Payment struct {
 }
 
 type CreatePaymentRequest struct {
-	ExternalReference string `json:"externalReference"`
-	Amount            int    `json:"amount"`
-	Currency          string `json:"currency"`
-	PaymentMethod     string `json:"paymentMethod"`
-	NotificationURL   string `json:"notificationUrl"`
+	ExternalReference string  `json:"externalReference"`
+	Amount            float64 `json:"amount"`
+	Currency          string  `json:"currency"`
+	PaymentMethod     string  `json:"paymentMethod"`
+	NotificationURL   string  `json:"notificationUrl"`
 }
 
 type StatusUpdateRequest struct {

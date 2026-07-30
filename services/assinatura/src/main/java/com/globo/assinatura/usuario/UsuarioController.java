@@ -32,7 +32,7 @@ public class UsuarioController {
    */
   @PostMapping
   public ResponseEntity<UsuarioResponse> cadastrar(@Valid @RequestBody UsuarioRequest request) {
-    String uuid = usuarioService.cadastrar(request.nome(), request.email());
+    String uuid = usuarioService.cadastrar(request.nome(), request.email(), request.senha());
     return ResponseEntity.status(HttpStatus.CREATED).body(new UsuarioResponse(uuid));
   }
 }

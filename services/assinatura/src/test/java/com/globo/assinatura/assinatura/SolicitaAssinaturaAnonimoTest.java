@@ -2,6 +2,7 @@ package com.globo.assinatura.assinatura;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -40,11 +41,13 @@ class SolicitaAssinaturaAnonimoTest {
 
   @LocalServerPort private int port;
 
+  private final ObjectMapper objectMapper = new ObjectMapper();
+
   @Test
   @DisplayName("Deve permitir solicitacao anonima em /assinaturas")
   void devePermitirSolicitacaoAnonima() throws Exception {
     String usuarioId = UUID.randomUUID().toString();
-    String corpo = "{\"usuarioId\":\"" + usuarioId + "\",\"plano\":\"BASICO\"}";
+    String corpo = objectMapper.writeValueAsString(new AssinaturaRequest(usuarioId, Plano.BASICO));
 
     HttpRequest request =
         HttpRequest.newBuilder()

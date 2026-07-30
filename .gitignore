@@ -32,8 +32,17 @@ build/
 ### VS Code ###
 .vscode/
 
+### Build artifacts ###
+docker/mock-pagamento/mock-pagamento
+
+### Local tooling ###
+.zcode/
+
 ### Env ###
 .env
 
 ### Handoff entre agentes ###
 .handoff/
+
+### Worktrees ###
+.worktrees/

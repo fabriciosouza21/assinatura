@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,18 +43,22 @@ class UsuarioControllerTest {
 
   @Autowired private MockMvc mockMvc;
 
+  private final ObjectMapper objectMapper = new ObjectMapper();
+
   @MockitoBean private UsuarioService usuarioService;
 
   @Test
   @DisplayName("Deve cadastrar usuario valido e retornar 201 com o uuid")
   void cadastraUsuarioRetornaCreatedComId() throws Exception {
-    when(usuarioService.cadastrar("Fulano", "novo@example.com")).thenReturn("uuid-do-usuario");
+    UsuarioRequest request = new UsuarioRequest("Fulano", "novo@example.com", "SenhaForte1");
+    when(usuarioService.cadastrar("Fulano", "novo@example.com", "SenhaForte1"))
+        .thenReturn("uuid-do-usuario");
 
     mockMvc
         .perform(
             post("/usuarios")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"nome\":\"Fulano\",\"email\":\"novo@example.com\"}"))
+                .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.id").value("uuid-do-usuario"));
   }
@@ -61,47 +66,67 @@ class UsuarioControllerTest {
   @Test
   @DisplayName("Deve rejeitar cadastro com nome vazio retornando 400")
   void cadastraUsuarioComNomeVazioRetornaBadRequest() throws Exception {
+    UsuarioRequest request = new UsuarioRequest("", "valido@example.com", "SenhaForte1");
+
     mockMvc
         .perform(
             post("/usuarios")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"nome\":\"\",\"email\":\"valido@example.com\"}"))
+                .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isBadRequest());
   }
 
   @Test
   @DisplayName("Deve rejeitar cadastro com email invalido retornando 400")
   void cadastraUsuarioComEmailInvalidoRetornaBadRequest() throws Exception {
+    UsuarioRequest request = new UsuarioRequest("Fulano", "nao-e-um-email", "SenhaForte1");
+
     mockMvc
         .perform(
             post("/usuarios")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"nome\":\"Fulano\",\"email\":\"nao-e-um-email\"}"))
+                .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isBadRequest());
   }
 
   @Test
   @DisplayName("Deve rejeitar cadastro com email ja cadastrado retornando 409")
   void cadastraUsuarioComEmailExistenteRetornaConflict() throws Exception {
-    when(usuarioService.cadastrar("Fulano", "existente@example.com"))
+    UsuarioRequest request = new UsuarioRequest("Fulano", "existente@example.com", "SenhaForte1");
+    when(usuarioService.cadastrar("Fulano", "existente@example.com", "SenhaForte1"))
         .thenThrow(new EmailJaCadastradoException());
 
     mockMvc
         .perform(
             post("/usuarios")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"nome\":\"Fulano\",\"email\":\"existente@example.com\"}"))
+                .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isConflict());
   }
 
   @Test
   @DisplayName("Deve rejeitar cadastro com email ausente retornando 400")
   void cadastraUsuarioComEmailAusenteRetornaBadRequest() throws Exception {
+    UsuarioRequest request = new UsuarioRequest("Fulano", null, "SenhaForte1");
+
     mockMvc
         .perform(
             post("/usuarios")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"nome\":\"Fulano\"}"))
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  @DisplayName("Deve rejeitar cadastro com senha curta retornando 400")
+  void cadastraUsuarioComSenhaCurtaRetornaBadRequest() throws Exception {
+    UsuarioRequest request = new UsuarioRequest("Fulano", "valido@example.com", "123");
+
+    mockMvc
+        .perform(
+            post("/usuarios")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isBadRequest());
   }
 }

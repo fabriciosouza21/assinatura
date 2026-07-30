@@ -16,7 +16,7 @@ http:
     data: |-
       {
         "externalReference": "assinatura-uuid-123",
-        "amount": 3990,
+        "amount": 39.90,
         "currency": "BRL",
         "paymentMethod": "PIX",
         "notificationUrl": "http://pagamento:8080/webhooks/payments"

@@ -2,6 +2,7 @@ package com.globo.assinatura.usuario;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -41,11 +42,14 @@ class CadastraUsuarioAnonimoTest {
 
   @LocalServerPort private int port;
 
+  private final ObjectMapper objectMapper = new ObjectMapper();
+
   @Test
   @DisplayName("Deve permitir cadastro anonimo em /usuarios")
   void devePermitirCadastroAnonimo() throws Exception {
     String emailUnico = "anonimo-" + UUID.randomUUID() + "@example.com";
-    String corpo = "{\"nome\":\"Fulano\",\"email\":\"" + emailUnico + "\"}";
+    String corpo =
+        objectMapper.writeValueAsString(new UsuarioRequest("Fulano", emailUnico, "SenhaForte1"));
 
     HttpRequest request =
         HttpRequest.newBuilder()

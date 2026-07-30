@@ -1,0 +1,34 @@
+@startuml
+title Outbox — ciclo de vida do evento
+
+hide empty description
+
+[*] --> PENDENTE : assinatura e evento\nconfirmados na mesma transação
+
+PENDENTE --> PUBLICADO : Kafka confirmou\n[ACK]
+PENDENTE --> PENDENTE : publicação falhou\n[tentativas < 3]\n/ agendar backoff + jitter
+PENDENTE --> FALHA : terceira tentativa falhou\n/ registrar erro e failed_at
+
+FALHA --> PENDENTE : causa corrigida\n/ reprocessar e zerar tentativas
+FALHA --> DESCARTADO : falha permanente\n/ encerramento operacional
+
+PUBLICADO --> [*]
+DESCARTADO --> [*]
+
+note right of PENDENTE
+  Somente eventos PENDENTES com
+  proxima_tentativa_em <= now()
+  são selecionados pelo publisher.
+end note
+
+note right of FALHA
+  Estado de dead letter persistido.
+  Não há retry automático.
+end note
+
+note bottom of PUBLICADO
+  A entrega é at-least-once.
+  O consumidor deduplica por eventId.
+end note
+
+@enduml

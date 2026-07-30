@@ -1,0 +1,69 @@
+@startuml
+title Cadastro e login de cliente (FF-1)
+
+autonumber
+hide footbox
+skinparam responseMessageBelowArrow true
+
+actor Cliente
+boundary "API REST" as API
+control "Usuario Service" as US
+control "Auth Service" as AS
+database "Banco de Dados" as DB
+
+== Cadastrar usuario (com credencial) ==
+
+Cliente -> API: POST /usuarios\n{nome, email, senha}
+API -> US: cadastrar(nome, email, senha)
+US -> DB: BEGIN
+US -> DB: INSERT usuarios (uuid, nome, email)
+
+alt Email ja cadastrado
+    DB --> US: conflito (uq_usuarios_email)
+    US -> DB: ROLLBACK
+    US --> API: conflito
+    API --> Cliente: 409 Conflict
+else Email livre
+    US -> DB: INSERT users\n(username=email,\npassword=bcrypt(senha),\nrole=ROLE_CLIENT,\nusuario_id=usuarios.id)
+    DB --> US: ok
+    US -> DB: COMMIT
+    US --> API: usuario criado
+    API --> Cliente: 201 Created\n{id: "usuario_uuid"}
+end
+
+note over US, DB
+  usuarios e users sao criados na mesma transacao.
+  users.usuario_id referencia usuarios.id (1:1).
+  A senha nunca e devolvida na resposta.
+end note
+
+== Login do cliente ==
+
+Cliente -> API: POST /auth/login\n{username: email, password: senha}
+API -> AS: login(username, password)
+AS -> DB: SELECT users WHERE username = email
+DB --> AS: User (role=ROLE_CLIENT)
+AS -> AS: passwordEncoder.matches?\njwtService.generateToken(email, ROLE_CLIENT)
+
+alt Credenciais invalidas
+    AS --> API: BadCredentialsException
+    API --> Cliente: 401 Unauthorized
+else Credenciais validas
+    AS --> API: {token, tokenType, expiresInMs}
+    API --> Cliente: 200 OK\n{token, tokenType:"Bearer",\nexpiresInMs}
+end
+
+note over Cliente, API
+  JWT: subject=email, claim role=ROLE_CLIENT.
+  O admin continua logando com username="admin".
+end note
+
+note over DB
+  Esquema (migration V4):
+  ALTER TABLE users ALTER COLUMN username TYPE VARCHAR(255);
+  ALTER TABLE users ADD COLUMN usuario_id BIGINT REFERENCES usuarios(id);
+  CREATE UNIQUE INDEX uq_users_usuario
+    ON users (usuario_id) WHERE usuario_id IS NOT NULL;
+end note
+
+@enduml

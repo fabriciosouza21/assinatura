@@ -1,0 +1,109 @@
+@startuml
+title BE-5 — Criação de cobrança no gateway
+caption Branch: feat/pagamento-cria-cobranca
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundCorner 12
+skinparam defaultFontName "DejaVu Sans"
+skinparam defaultFontSize 13
+skinparam ArrowColor #475569
+skinparam ArrowThickness 1.2
+skinparam activity {
+  BackgroundColor #F8FAFC
+  BorderColor #64748B
+  FontColor #0F172A
+  DiamondBackgroundColor #FFF7ED
+  DiamondBorderColor #C2410C
+  DiamondFontColor #7C2D12
+  StartColor #16A34A
+  EndColor #334155
+}
+skinparam note {
+  BackgroundColor #FFFBEB
+  BorderColor #D97706
+  FontColor #78350F
+}
+
+|Kafka|
+start
+:Disponibilizar evento\nAssinaturaSolicitada;
+
+note right
+  Dados necessários:
+  - assinatura_uuid
+  - usuario_uuid
+  - plano
+  - valor
+end note
+
+|Pagamento Service|
+:Consumir o evento;
+:Validar os dados necessários;
+
+if (Evento válido?) then (Sim)
+  :Montar a requisição de cobrança;
+
+  note right
+    Base URL:
+    app.gateway.base-url
+
+    POST /v1/payments
+    Idempotency-Key: assinatura_uuid
+  end note
+
+  |Gateway Mock|
+  :Receber a requisição;
+  :Localizar ou criar a cobrança\npela Idempotency-Key;
+  :Responder 201 Created\n{ paymentId, status: "PENDING" };
+
+  |Pagamento Service|
+  if (Resposta PENDING válida?) then (Sim)
+    :Persistir a correlação\nassinatura_uuid ↔ paymentId\ncom status PENDING;
+
+    note right
+      A persistência deve ser idempotente
+      por assinatura_uuid.
+    end note
+
+    if (Persistência concluída?) then (Sim)
+      :Confirmar o processamento;
+
+      |Kafka|
+      :Registrar o offset;
+      stop
+    else (Não)
+      |Pagamento Service|
+      :Sinalizar falha transitória;
+    endif
+  else (Não)
+    :Sinalizar resposta inválida\nou falha do gateway;
+  endif
+else (Não)
+  :Sinalizar evento inválido;
+endif
+
+|Kafka|
+:Não registrar o offset;
+:Reprocessar com a política do consumer\naté 3 tentativas, com jitter;
+
+note right
+  Em um novo consumo, a mesma
+  Idempotency-Key evita a criação
+  de outra cobrança no gateway.
+end note
+
+if (Processamento recuperado?) then (Sim)
+  :Registrar o offset;
+else (Não)
+  :Encaminhar AssinaturaSolicitada\npara a DLQ;
+endif
+
+stop
+
+legend bottom
+  Este processo termina com a cobrança PENDING persistida.
+  Webhook e publicação de PagamentoStatusAtualizado pertencem ao BE-6.
+endlegend
+
+@enduml
