@@ -49,7 +49,7 @@ public class ProcessarPagamento {
     LocalDate hoje = LocalDate.now(clock);
     Assinatura assinatura =
         assinaturaRepository.findByUuidForUpdate(evento.assinaturaId().toString()).orElseThrow();
-    assinatura.ativar(hoje, hoje);
+    assinatura.ativar(hoje, hoje.plusMonths(1));
     pagamentoEventoProcessadoRepository.save(
         new PagamentoEventoProcessado(evento.eventId(), assinatura.getUuid()));
   }

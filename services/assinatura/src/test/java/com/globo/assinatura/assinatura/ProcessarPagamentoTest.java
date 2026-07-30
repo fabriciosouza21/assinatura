@@ -108,4 +108,28 @@ class ProcessarPagamentoTest {
         .as("data inicio deve ser a data fixa do relogio")
         .isEqualTo(LocalDate.of(2026, 1, 15));
   }
+
+  @Test
+  @DisplayName("Deve definir a data de expiracao para um mes apos o inicio")
+  void deveDefinirDataExpiracaoParaUmMesAposInicio() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    when(assinaturaRepository.findByUuidForUpdate(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            UUID.randomUUID(),
+            Instant.now(),
+            UUID.fromString(assinatura.getUuid()),
+            StatusPagamento.APPROVED,
+            UUID.randomUUID());
+    relogio = Clock.fixed(Instant.parse("2026-01-15T10:00:00Z"), ZoneOffset.UTC);
+    command =
+        new ProcessarPagamento(assinaturaRepository, pagamentoEventoProcessadoRepository, relogio);
+
+    command.executar(evento);
+
+    assertThat(assinatura.getDataExpiracao())
+        .as("data expiracao deve ser um mes apos o inicio")
+        .isEqualTo(LocalDate.of(2026, 2, 15));
+  }
 }
