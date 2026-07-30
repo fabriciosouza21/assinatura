@@ -4,7 +4,6 @@ import com.globo.pagamento.gateway.CobrancaCriada;
 import com.globo.pagamento.gateway.GatewayPagamentoClient;
 import com.globo.pagamento.messaging.event.AssinaturaSolicitada;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Command de criacao de cobranca a partir de um evento {@link AssinaturaSolicitada}.
@@ -33,9 +32,13 @@ public class CriarCobrancaService {
   /**
    * Processa o evento de assinatura solicitada, criando a cobranca se necessario.
    *
+   * <p>A criacao da cobranca no gateway ocorre fora de qualquer transacao de banco, evitando
+   * segurar uma conexao do pool durante a chamada de rede. A persistencia fica a cargo do {@code
+   * save} do repositorio, com a unicidade por {@code assinaturaUuid} como rede de segurança da
+   * idempotencia.
+   *
    * @param evento evento consumido do topico {@code assinatura-solicitada}
    */
-  @Transactional
   public void processar(AssinaturaSolicitada evento) {
     String assinaturaId = evento.assinaturaId().toString();
     if (cobrancaRepository.existsByAssinaturaUuid(assinaturaId)) {

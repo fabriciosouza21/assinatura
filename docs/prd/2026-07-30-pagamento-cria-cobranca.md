@@ -51,7 +51,7 @@ criar a cobranca no gateway mock e persistir a correlacao em `PENDING`.
   WebClient com header `Idempotency-Key: <assinaturaId>` e body
   `{externalReference: assinaturaId, amount: <valor em reais>,
   currency: "BRL", paymentMethod: "PIX", notificationUrl: <configurado>}`.
-  Espera resposta com `paymentId` e `status: "PENDING"`.
+  Espera resposta com `paymentId`.
 - Persiste a correlacao `assinaturaId <-> paymentId` com status `PENDING`. A
   persistencia e idempotente por `assinaturaId`.
 - Envia o `valor` do evento (`BigDecimal` reais) direto ao gateway mock, sem

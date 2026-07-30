@@ -1,5 +1,6 @@
 package com.globo.pagamento.gateway;
 
+import io.netty.channel.ChannelOption;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -15,7 +16,7 @@ import reactor.netty.http.client.HttpClient;
 public class GatewayWebClientConfig {
 
   /**
-   * Cria o client do gateway com a base url e timeout de leitura.
+   * Cria o client do gateway com a base url e os timeouts de conexao e leitura.
    *
    * @param baseUrl url base do gateway, via {@code app.gateway.base-url}
    * @param webhookUrl url de notificacoes de webhook, via {@code
@@ -31,7 +32,9 @@ public class GatewayWebClientConfig {
             .baseUrl(baseUrl)
             .clientConnector(
                 new ReactorClientHttpConnector(
-                    HttpClient.create().responseTimeout(Duration.ofSeconds(10))))
+                    HttpClient.create()
+                        .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 2000)
+                        .responseTimeout(Duration.ofSeconds(10))))
             .build();
     return new GatewayPagamentoClient(webClient, webhookUrl);
   }
