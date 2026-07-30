@@ -70,4 +70,22 @@ class AssinaturaServiceTest {
         .as("Assinatura aberta deve gerar conflito")
         .isInstanceOf(AssinaturaAbertaException.class);
   }
+
+  @Test
+  @DisplayName("Deve consultar assinatura existente retornando o uuid do usuario")
+  void deveConsultarAssinaturaExistenteRetornandoUuidDoUsuario() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    Usuario usuario = new Usuario("Fulano", "fulano@example.com");
+    when(assinaturaRepository.findByUuid(assinatura.getUuid())).thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.of(usuario));
+
+    AssinaturaResponse resposta = service.consultar(assinatura.getUuid());
+
+    assertThat(resposta.id()).as("Uuid da assinatura").isEqualTo(assinatura.getUuid());
+    assertThat(resposta.usuarioId()).as("Uuid publico do usuario").isEqualTo(usuario.getUuid());
+    assertThat(resposta.plano()).as("Plano").isEqualTo(Plano.PREMIUM);
+    assertThat(resposta.status()).as("Status").isEqualTo(StatusAssinatura.AGUARDANDO_PAGAMENTO);
+    assertThat(resposta.dataInicio()).as("Data inicio nula enquanto aguarda").isNull();
+    assertThat(resposta.dataExpiracao()).as("Data expiracao nula enquanto aguarda").isNull();
+  }
 }

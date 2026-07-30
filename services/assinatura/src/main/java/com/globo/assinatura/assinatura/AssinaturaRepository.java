@@ -1,6 +1,7 @@
 package com.globo.assinatura.assinatura;
 
 import java.util.Collection;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
@@ -19,4 +20,12 @@ public interface AssinaturaRepository extends JpaRepository<Assinatura, Long> {
    *     contrario
    */
   boolean existsByUsuarioIdAndStatusIn(Long usuarioId, Collection<StatusAssinatura> status);
+
+  /**
+   * Busca uma assinatura pelo uuid publico.
+   *
+   * @param uuid uuid publico da assinatura
+   * @return a assinatura encontrada, ou vazio se nao existir
+   */
+  Optional<Assinatura> findByUuid(String uuid);
 }

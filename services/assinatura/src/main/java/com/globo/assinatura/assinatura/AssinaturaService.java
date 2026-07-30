@@ -50,4 +50,23 @@ public class AssinaturaService {
     Assinatura assinatura = new Assinatura(usuario.getId(), plano);
     return assinaturaRepository.save(assinatura);
   }
+
+  /**
+   * Consulta uma assinatura pelo uuid publico.
+   *
+   * @param uuid uuid publico da assinatura
+   * @return a representacao completa da assinatura, com o uuid publico do usuario dono
+   */
+  @Transactional(readOnly = true)
+  public AssinaturaResponse consultar(String uuid) {
+    Assinatura assinatura = assinaturaRepository.findByUuid(uuid).orElseThrow();
+    Usuario usuario = usuarioRepository.findById(assinatura.getUsuarioId()).orElseThrow();
+    return new AssinaturaResponse(
+        assinatura.getUuid(),
+        usuario.getUuid(),
+        assinatura.getPlano(),
+        assinatura.getDataInicio(),
+        assinatura.getDataExpiracao(),
+        assinatura.getStatus());
+  }
 }
