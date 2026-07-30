@@ -53,6 +53,9 @@ public class ProcessarPagamento {
     LocalDate hoje = LocalDate.now(clock);
     Assinatura assinatura =
         assinaturaRepository.findByUuidForUpdate(evento.assinaturaId().toString()).orElseThrow();
+    if (pagamentoEventoProcessadoRepository.existsByEventId(evento.eventId())) {
+      return;
+    }
     if (evento.status() == StatusPagamento.REJECTED) {
       assinatura.recusarPagamento();
     } else {

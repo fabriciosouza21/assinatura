@@ -175,4 +175,28 @@ class ProcessarPagamentoTest {
         .isEqualTo(StatusAssinatura.AGUARDANDO_PAGAMENTO);
     verify(pagamentoEventoProcessadoRepository, never()).save(any(PagamentoEventoProcessado.class));
   }
+
+  @Test
+  @DisplayName("Deve ignorar redelivery de evento ja processado")
+  void deveIgnorarRedeliveryDeEventoJaProcessado() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    when(assinaturaRepository.findByUuidForUpdate(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    UUID eventId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    when(pagamentoEventoProcessadoRepository.existsByEventId(eventId)).thenReturn(true);
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            eventId,
+            Instant.now(),
+            UUID.fromString(assinatura.getUuid()),
+            StatusPagamento.APPROVED,
+            UUID.randomUUID());
+
+    command.executar(evento);
+
+    assertThat(assinatura.getStatus())
+        .as("redelivery nao deve transitar a assinatura")
+        .isEqualTo(StatusAssinatura.AGUARDANDO_PAGAMENTO);
+    verify(pagamentoEventoProcessadoRepository, never()).save(any(PagamentoEventoProcessado.class));
+  }
 }
