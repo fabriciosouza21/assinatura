@@ -43,7 +43,7 @@ class CriarCobrancaServiceTest {
     String assinaturaId = evento.assinaturaId().toString();
     when(cobrancaRepository.existsByAssinaturaUuid(assinaturaId)).thenReturn(false);
     when(gatewayPagamentoClient.criarCobranca(eq(assinaturaId), eq(evento.valor())))
-        .thenReturn(new CobrancaCriada("pay_123", "PENDING"));
+        .thenReturn(new CobrancaCriada("pay_123"));
 
     service.processar(evento);
 

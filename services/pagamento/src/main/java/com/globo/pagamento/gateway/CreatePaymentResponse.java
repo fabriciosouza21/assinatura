@@ -10,12 +10,10 @@ import java.math.BigDecimal;
  * @param amount valor em reais
  * @param currency moeda da cobranca
  * @param paymentMethod meio de pagamento
- * @param status status inicial da cobranca
  */
 record CreatePaymentResponse(
     String id,
     String externalReference,
     BigDecimal amount,
     String currency,
-    String paymentMethod,
-    String status) {}
+    String paymentMethod) {}

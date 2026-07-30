@@ -29,7 +29,7 @@ public class GatewayPagamentoClient {
    * @param assinaturaId identificador da assinatura, usado como chave de idempotencia e referencia
    *     externa
    * @param valor valor em reais, enviado sem conversao para centavos
-   * @return resultado com o {@code paymentId} e o {@code status} inicial
+   * @return resultado com o {@code paymentId} da cobranca criada
    */
   public CobrancaCriada criarCobranca(String assinaturaId, BigDecimal valor) {
     CreatePaymentRequest request =
@@ -43,6 +43,6 @@ public class GatewayPagamentoClient {
             .retrieve()
             .bodyToMono(CreatePaymentResponse.class)
             .block();
-    return new CobrancaCriada(response.id(), response.status());
+    return new CobrancaCriada(response.id());
   }
 }

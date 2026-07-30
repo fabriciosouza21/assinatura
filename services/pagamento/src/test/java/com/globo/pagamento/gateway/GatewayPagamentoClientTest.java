@@ -19,7 +19,7 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <p>Verifica o contrato {@code POST /v1/payments}: o header {@code Idempotency-Key} com o {@code
  * assinaturaId}, o body com {@code amount} em reais (sem conversao para centavos) e o mapeamento da
- * resposta para {@code paymentId} e {@code status}.
+ * resposta para {@code paymentId}.
  */
 class GatewayPagamentoClientTest {
 
@@ -49,18 +49,12 @@ class GatewayPagamentoClientTest {
             .setBody(
                 jsonMapper.writeValueAsString(
                     new CreatePaymentResponse(
-                        "pay_123",
-                        "assinatura-uuid",
-                        new BigDecimal("19.90"),
-                        "BRL",
-                        "PIX",
-                        "PENDING")))
+                        "pay_123", "assinatura-uuid", new BigDecimal("19.90"), "BRL", "PIX")))
             .setResponseCode(201));
 
     CobrancaCriada cobranca = client.criarCobranca("assinatura-uuid", new BigDecimal("19.90"));
 
     assertThat(cobranca.paymentId()).as("PaymentId do gateway").isEqualTo("pay_123");
-    assertThat(cobranca.status()).as("Status inicial da cobranca").isEqualTo("PENDING");
 
     RecordedRequest requisicao = server.takeRequest();
     assertThat(requisicao.getPath()).as("Path da criacao de cobranca").isEqualTo("/v1/payments");
