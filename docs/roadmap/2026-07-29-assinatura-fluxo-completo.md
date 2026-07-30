@@ -53,6 +53,7 @@
 - Testável com evento sintético injetado no tópico, antes do pagamento existir.
 
 ### FF-1 — Login de cliente (fast-follow)
+- **Status:** Concluído (PR #4 merged em `develop` em 2026-07-30).
 - Fecha a lacuna aberta pelo ADR 0001 (`docs/adr/0001-endpoints-assinatura-publicos-ate-client-login.md`):
   o cadastro passa a criar também um `User` auth (senha) ligado ao `Usuario` de
   domínio, habilitando `/auth/login` para clientes.
@@ -97,7 +98,7 @@
 | 0 | Criar `develop` a partir de `feat/setup-docker-mock-pagamento` | — | [x] |
 | 1 | Cadastro de usuário (`POST /usuarios` com `uuid`) | 0 | [x] |
 | 2 | Solicitação + consulta de assinatura sem fila (`POST`/`GET`, `409`) | 1 | [x] |
-| FF-1 | Login de cliente (fecha lacuna `User`↔`Usuario` do ADR 0001) | 1, 2 | [ ] |
+| FF-1 | Login de cliente (fecha lacuna `User`↔`Usuario` do ADR 0001) | 1, 2 | [x] |
 | 3 | Outbox + publicação de `AssinaturaSolicitada` no Kafka | 2 | [ ] |
 | 4 | Consumer de `PagamentoStatusAtualizado` (ativa/recusa) | 2 | [ ] |
 | 5 | Pagamento: consumer `AssinaturaSolicitada` + chamada ao gateway | 3 | [ ] |
