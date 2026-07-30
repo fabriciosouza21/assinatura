@@ -119,4 +119,14 @@ public class Assinatura {
   public StatusAssinatura getStatus() {
     return status;
   }
+
+  /**
+   * Transita o ciclo de vida para ativa apos a aprovacao do pagamento.
+   *
+   * @param dataInicio data de inicio da vigencia
+   * @param dataExpiracao data de expiracao da vigencia
+   */
+  public void ativar(LocalDate dataInicio, LocalDate dataExpiracao) {
+    this.status = StatusAssinatura.ATIVA;
+  }
 }

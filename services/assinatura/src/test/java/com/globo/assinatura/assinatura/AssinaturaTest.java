@@ -3,6 +3,7 @@ package com.globo.assinatura.assinatura;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,5 +31,13 @@ class AssinaturaTest {
     assertThat(assinatura.getPlano()).as("Plano").isEqualTo(Plano.PREMIUM);
     assertThat(assinatura.getDataInicio()).as("Data inicio nula enquanto aguarda").isNull();
     assertThat(assinatura.getDataExpiracao()).as("Data expiracao nula enquanto aguarda").isNull();
+  }
+
+  @Test
+  @DisplayName("Deve transitar para ativa ao receber o pagamento aprovado")
+  void deveTransitarParaAtivaAoReceberPagamentoAprovado() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar((LocalDate) null, (LocalDate) null);
+    assertThat(assinatura.getStatus()).as("Status apos ativacao").isEqualTo(StatusAssinatura.ATIVA);
   }
 }
