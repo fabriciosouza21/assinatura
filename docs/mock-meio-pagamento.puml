@@ -20,7 +20,7 @@ note over PS, MOCK
   Requisição:
   {
     "externalReference": "assinatura_uuid",
-    "amount": 4990,
+    "amount": 39.90,
     "currency": "BRL",
     "paymentMethod": "PIX",
     "notificationUrl":
@@ -44,7 +44,7 @@ note over PS, MOCK
   {
     "id": "pay_uuid",
     "externalReference": "assinatura_uuid",
-    "amount": 4990,
+    "amount": 39.90,
     "currency": "BRL",
     "paymentMethod": "PIX",
     "status": "PENDING",
@@ -119,7 +119,7 @@ note over PS, MOCK
   {
     "id": "pay_uuid",
     "externalReference": "assinatura_uuid",
-    "amount": 4990,
+    "amount": 39.90,
     "currency": "BRL",
     "paymentMethod": "PIX",
     "status": "APPROVED",
