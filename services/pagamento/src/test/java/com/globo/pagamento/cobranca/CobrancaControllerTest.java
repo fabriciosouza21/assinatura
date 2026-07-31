@@ -2,6 +2,7 @@ package com.globo.pagamento.cobranca;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -38,5 +39,16 @@ class CobrancaControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.paymentId").value("pay-123"))
         .andExpect(jsonPath("$.status").value("APPROVED"));
+  }
+
+  @Test
+  @DisplayName("Deve retornar 404 com corpo vazio quando a cobranca nao existe")
+  void deveRetornar404ComCorpoVazioQuandoCobrancaInexistente() throws Exception {
+    when(consultarCobranca.executar("inexistente")).thenThrow(new CobrancaNaoEncontradaException());
+
+    mockMvc
+        .perform(get("/cobrancas/{assinaturaId}", "inexistente"))
+        .andExpect(status().isNotFound())
+        .andExpect(content().string(""));
   }
 }
