@@ -38,6 +38,10 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: ${APP_KAFKA_PRODUCER_ACKS:all}
+      retries: ${APP_KAFKA_PRODUCER_RETRIES:2147483647}
+      properties:
+        enable.idempotence: ${APP_KAFKA_PRODUCER_ENABLE_IDEMPOTENCE:true}
 
 app:
   jwt:
