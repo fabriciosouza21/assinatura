@@ -194,4 +194,13 @@ public class Assinatura {
     }
     this.status = StatusAssinatura.PAGAMENTO_RECUSADO;
   }
+
+  /**
+   * Avanca o ciclo de renovacao para o proximo periodo.
+   *
+   * @param novoFimCiclo data de fim do novo ciclo
+   */
+  public void renovar(LocalDate novoFimCiclo) {
+    this.inicioCiclo = this.fimCiclo;
+  }
 }

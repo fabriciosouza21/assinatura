@@ -107,4 +107,17 @@ class AssinaturaTest {
         .as("Renovacao automatica habilitada no primeiro ciclo")
         .isTrue();
   }
+
+  @Test
+  @DisplayName("Deve avancar o inicio do ciclo para o fim anterior ao renovar")
+  void deveAvancarInicioDoCicloAoRenovar() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+
+    assinatura.renovar(LocalDate.of(2026, 3, 1));
+
+    assertThat(assinatura.getInicioCiclo())
+        .as("Inicio do ciclo avanca para o fim anterior")
+        .isEqualTo(LocalDate.of(2026, 2, 1));
+  }
 }
