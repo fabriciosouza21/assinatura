@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -199,5 +201,45 @@ class ProcessarWebhookPagamentoTest {
             "sha256=abc");
 
     assertThat(publicado).as("EventId tratado como ja processado").isEqualTo(eventId);
+  }
+
+  @Test
+  @DisplayName("Deve publicar mesmo quando nao ha cobranca correlacionada")
+  void devePublicarMesmoSemCobrancaCorrelacionada() throws Exception {
+    UUID eventId = UUID.fromString(EVENT_ID);
+    when(hmacValidator.valido(eq(CORPO), any())).thenReturn(true);
+    when(eventoRepository.existsByEventId(eventId)).thenReturn(false);
+    when(gatewayClient.consultarStatus(PAYMENT_ID)).thenReturn(StatusGateway.APPROVED);
+    when(cobrancaRepository.findByPaymentId(PAYMENT_ID)).thenReturn(Optional.empty());
+    when(kafkaTemplate.send(any(), any(), any())).thenReturn(PUBLICADO);
+
+    UUID publicado =
+        command.processar(
+            CORPO,
+            eventId,
+            UUID.fromString(ASSINATURA_ID),
+            UUID.fromString(PAYMENT_ID),
+            "sha256=abc");
+
+    assertThat(publicado).as("EventId publicado mesmo sem cobranca").isEqualTo(eventId);
+    verify(cobrancaRepository, never()).save(any());
+    verify(eventoRepository).save(any());
+  }
+
+  @Test
+  @DisplayName("Deve gravar o eventId somente apos a publicacao no Kafka confirmar")
+  void deveGravarEventIdAposPublicacaoConfirmada() throws Exception {
+    UUID eventId = UUID.fromString(EVENT_ID);
+    when(hmacValidator.valido(eq(CORPO), any())).thenReturn(true);
+    when(eventoRepository.existsByEventId(eventId)).thenReturn(false);
+    when(gatewayClient.consultarStatus(PAYMENT_ID)).thenReturn(StatusGateway.APPROVED);
+    when(kafkaTemplate.send(any(), any(), any())).thenReturn(PUBLICADO);
+
+    command.processar(
+        CORPO, eventId, UUID.fromString(ASSINATURA_ID), UUID.fromString(PAYMENT_ID), "sha256=abc");
+
+    InOrder ordem = inOrder(kafkaTemplate, eventoRepository);
+    ordem.verify(kafkaTemplate).send(eq("pagamento-status-atualizado"), eq(ASSINATURA_ID), any());
+    ordem.verify(eventoRepository).save(any());
   }
 }

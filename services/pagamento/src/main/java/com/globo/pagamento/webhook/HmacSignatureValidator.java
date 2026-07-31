@@ -2,6 +2,7 @@ package com.globo.pagamento.webhook;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.HexFormat;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -38,7 +39,7 @@ public class HmacSignatureValidator {
     if (headerAssinatura == null || !headerAssinatura.startsWith(PREFIXO)) {
       return false;
     }
-    String esperada = PREFIXO + hex(hmac(corpo));
+    String esperada = PREFIXO + HexFormat.of().formatHex(hmac(corpo));
     byte[] esperadaBytes = esperada.getBytes(StandardCharsets.UTF_8);
     byte[] recebidaBytes = headerAssinatura.getBytes(StandardCharsets.UTF_8);
     return MessageDigest.isEqual(esperadaBytes, recebidaBytes);
@@ -52,13 +53,5 @@ public class HmacSignatureValidator {
     } catch (Exception e) {
       throw new IllegalStateException("Falha ao calcular HMAC do webhook", e);
     }
-  }
-
-  private static String hex(byte[] bytes) {
-    StringBuilder hex = new StringBuilder(bytes.length * 2);
-    for (byte b : bytes) {
-      hex.append(String.format("%02x", b));
-    }
-    return hex.toString();
   }
 }
