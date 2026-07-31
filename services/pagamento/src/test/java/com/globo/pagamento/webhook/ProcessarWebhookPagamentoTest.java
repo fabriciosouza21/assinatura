@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import tools.jackson.databind.json.JsonMapper;
@@ -176,5 +177,27 @@ class ProcessarWebhookPagamentoTest {
         .as("Cobranca marcada como aprovada")
         .isEqualTo(StatusCobranca.APPROVED);
     verify(cobrancaRepository).save(cobranca);
+  }
+
+  @Test
+  @DisplayName("Deve tratar duplicidade concorrente de eventId no save como ja processado")
+  void deveTratarDuplicidadeConcorrenteNoSaveComoJaProcessado() {
+    UUID eventId = UUID.fromString(EVENT_ID);
+    when(hmacValidator.valido(eq(CORPO), any())).thenReturn(true);
+    when(eventoRepository.existsByEventId(eventId)).thenReturn(false);
+    when(gatewayClient.consultarStatus(any())).thenReturn(StatusGateway.APPROVED);
+    when(kafkaTemplate.send(any(), any(), any())).thenReturn(PUBLICADO);
+    when(eventoRepository.save(any()))
+        .thenThrow(new DataIntegrityViolationException("uq_webhook_evento_processado_event_id"));
+
+    UUID publicado =
+        command.processar(
+            CORPO,
+            eventId,
+            UUID.fromString(ASSINATURA_ID),
+            UUID.fromString(PAYMENT_ID),
+            "sha256=abc");
+
+    assertThat(publicado).as("EventId tratado como ja processado").isEqualTo(eventId);
   }
 }

@@ -9,6 +9,7 @@ import com.globo.pagamento.messaging.event.StatusPagamento;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.core.KafkaTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -85,7 +86,11 @@ public class ProcessarWebhookPagamento {
     StatusPagamento status = normalizador.normalizar(statusGateway);
     atualizarCobranca(paymentId, status);
     publicar(eventId, assinaturaId, paymentId, status);
-    eventoRepository.save(new WebhookEventoProcessado(eventId, assinaturaId));
+    try {
+      eventoRepository.save(new WebhookEventoProcessado(eventId, assinaturaId));
+    } catch (DataIntegrityViolationException e) {
+      return eventId;
+    }
     return eventId;
   }
 
