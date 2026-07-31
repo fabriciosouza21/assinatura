@@ -24,3 +24,25 @@ As variáveis de ambiente apontam para as portas do compose:
 2. **Consultar pagamento** → usa o `paymentId` capturado (status `PENDING`).
 3. **Simular aprovação** → força `APPROVED` e dispara o webhook para o serviço
    de pagamento.
+
+## Fluxo encadeado completo (assinatura)
+
+Ponta a ponta, do cadastro do usuário até a assinatura `ATIVA`, sem editar
+variáveis manualmente entre os passos. Cada request captura automaticamente o
+id do passo seguinte via `after-response`.
+
+1. **Cadastrar usuário** → captura `usuarioId`.
+2. **Solicitar assinatura** → usa o `usuarioId` capturado e devolve a assinatura
+   com status `AGUARDANDO_PAGAMENTO`; captura `assinaturaId`.
+3. **Consultar cobrança** (`pagamento/consultar-cobranca`) → usa o `assinaturaId`
+   capturado e devolve o `paymentId` gerado no gateway; captura `paymentId`.
+4. **Simular aprovação** (`mock-gateway/simular-aprovacao`) → usa o `paymentId`
+   capturado, força `APPROVED` e dispara o webhook que leva a assinatura a
+   `ATIVA`.
+5. **Consultar assinatura** → usa o `assinaturaId` capturado para confirmar o
+   status `ATIVA`.
+
+> O passo **Consultar cobrança** é a ponte entre os dois serviços: sem ele, o
+> `paymentId` fica preso no Pagamento Service e não há como aprovar a cobrança
+> no mock. O `assinaturaId` é o uuid público da assinatura, o mesmo valor usado
+> como `Idempotency-Key` e `externalReference` no fluxo do mock.
