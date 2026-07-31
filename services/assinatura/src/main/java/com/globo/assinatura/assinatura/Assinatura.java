@@ -202,5 +202,7 @@ public class Assinatura {
    */
   public void renovar(LocalDate novoFimCiclo) {
     this.inicioCiclo = this.fimCiclo;
+    this.fimCiclo = novoFimCiclo;
+    this.proximaRenovacaoEm = novoFimCiclo;
   }
 }

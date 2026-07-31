@@ -120,4 +120,30 @@ class AssinaturaTest {
         .as("Inicio do ciclo avanca para o fim anterior")
         .isEqualTo(LocalDate.of(2026, 2, 1));
   }
+
+  @Test
+  @DisplayName("Deve definir o fim do ciclo com o novo vencimento ao renovar")
+  void deveDefinirFimDoCicloAoRenovar() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+
+    assinatura.renovar(LocalDate.of(2026, 3, 1));
+
+    assertThat(assinatura.getFimCiclo())
+        .as("Fim do ciclo assume o novo vencimento")
+        .isEqualTo(LocalDate.of(2026, 3, 1));
+  }
+
+  @Test
+  @DisplayName("Deve agendar a proxima renovacao para o novo fim do ciclo")
+  void deveAgendarProximaRenovacaoAoRenovar() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+
+    assinatura.renovar(LocalDate.of(2026, 3, 1));
+
+    assertThat(assinatura.getProximaRenovacaoEm())
+        .as("Proxima renovacao coincide com o novo fim do ciclo")
+        .isEqualTo(LocalDate.of(2026, 3, 1));
+  }
 }
