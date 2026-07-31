@@ -9,6 +9,8 @@ import com.globo.pagamento.messaging.event.StatusPagamento;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.core.KafkaTemplate;
 import tools.jackson.databind.ObjectMapper;
@@ -21,6 +23,8 @@ import tools.jackson.databind.ObjectMapper;
  * {@code eventId} so e gravado como processado apos o Kafka confirmar a publicacao, nunca antes.
  */
 public class ProcessarWebhookPagamento {
+
+  private static final Logger log = LoggerFactory.getLogger(ProcessarWebhookPagamento.class);
 
   private final ObjectMapper objectMapper;
   private final HmacSignatureValidator hmacValidator;
@@ -82,6 +86,11 @@ public class ProcessarWebhookPagamento {
     if (eventoRepository.existsByEventId(eventId)) {
       return eventId;
     }
+    log.info(
+        "Webhook recebido para eventId={} assinaturaId={} paymentId={}",
+        eventId,
+        assinaturaId,
+        paymentId);
     StatusGateway statusGateway = consultarStatus(paymentId);
     StatusPagamento status = normalizador.normalizar(statusGateway);
     atualizarCobranca(paymentId, status);

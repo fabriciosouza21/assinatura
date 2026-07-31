@@ -2,6 +2,8 @@ package com.globo.assinatura.messaging;
 
 import com.globo.assinatura.assinatura.ProcessarPagamento;
 import com.globo.assinatura.messaging.event.PagamentoStatusAtualizado;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
@@ -17,6 +19,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Component
 public class PagamentoStatusConsumer {
+
+  private static final Logger log = LoggerFactory.getLogger(PagamentoStatusConsumer.class);
 
   private final ProcessarPagamento processarPagamento;
   private final ObjectMapper objectMapper;
@@ -42,6 +46,10 @@ public class PagamentoStatusConsumer {
     PagamentoStatusAtualizado evento = desserializar(payload);
     validar(evento);
     processarPagamento.executar(evento);
+    log.info(
+        "Status de pagamento processado para assinaturaId={} com statusFinal={}",
+        evento.assinaturaId(),
+        evento.status());
   }
 
   private PagamentoStatusAtualizado desserializar(String payload) {

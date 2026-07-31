@@ -2,6 +2,8 @@ package com.globo.pagamento.messaging;
 
 import com.globo.pagamento.cobranca.CriarCobrancaService;
 import com.globo.pagamento.messaging.event.AssinaturaSolicitada;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
@@ -16,6 +18,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Component
 public class AssinaturaSolicitadaConsumer {
+
+  private static final Logger log = LoggerFactory.getLogger(AssinaturaSolicitadaConsumer.class);
 
   private final ObjectMapper objectMapper;
   private final CriarCobrancaService criarCobrancaService;
@@ -41,6 +45,8 @@ public class AssinaturaSolicitadaConsumer {
   public void consumir(String payload) {
     AssinaturaSolicitada evento = desserializar(payload);
     validar(evento);
+    log.info(
+        "Evento de assinatura solicitada consumido para assinaturaId={}", evento.assinaturaId());
     criarCobrancaService.processar(evento);
   }
 
