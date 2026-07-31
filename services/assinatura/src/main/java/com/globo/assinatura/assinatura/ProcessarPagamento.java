@@ -52,15 +52,15 @@ public class ProcessarPagamento {
       return;
     }
     LocalDate hoje = LocalDate.now(clock);
+    if (pagamentoEventoProcessadoRepository.existsByEventId(evento.eventId())) {
+      return;
+    }
     Optional<Assinatura> possivelAssinatura =
         assinaturaRepository.buscarPorUuidParaAtualizacao(evento.assinaturaId().toString());
     if (possivelAssinatura.isEmpty()) {
       return;
     }
     Assinatura assinatura = possivelAssinatura.get();
-    if (pagamentoEventoProcessadoRepository.existsByEventId(evento.eventId())) {
-      return;
-    }
     if (evento.status() == StatusPagamento.REJECTED) {
       assinatura.recusarPagamento();
     } else {
