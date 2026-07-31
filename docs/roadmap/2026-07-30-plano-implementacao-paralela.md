@@ -91,7 +91,6 @@
 - **Paralelizável com:** A, C, P-0, D.
 
 ### Track C — Login de cliente (FF-1)
-- **Status:** Concluído (PR #4 merged em `develop` em 2026-07-30). Cadastro cria `User` com `ROLE_CLIENT` na mesma transação; login de cliente emite JWT com `subject=email` e `role=ROLE_CLIENT`; credenciais inválidas devolvem `401`. Migration `V4__adiciona_usuario_id_em_users.sql` (renumerada de V3 após o BE-2 consumir V3). Dívida restante: `JwtAuthenticationFilter` ignora o claim `role` (só relevante no follow-up que exigir auth nos endpoints de assinatura).
 - **Branch:** `feat/login-cliente`
 - **Serviço:** Assinatura
 - **Depende de:** Gate 0 (BE-2). Fecha lacuna do ADR 0001.

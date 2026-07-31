@@ -1,5 +1,7 @@
 package com.globo.assinatura.messaging;
 
+import com.globo.assinatura.outbox.RetryPolicy;
+import java.time.Duration;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,19 +12,32 @@ import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.util.backoff.FixedBackOff;
 import tools.jackson.core.JacksonException;
 
 /**
- * Configuracao de infraestrutura Kafka do servico de assinatura.
+ * Configuracao de mensageria do Assinatura Service.
  *
- * <p>Registra os topicos de status de pagamento e sua DLQ, e configura a fabrica de containers do
- * listener com tratamento de erros: retentativas com backoff fixo para falhas transientes e envio
- * direto para a DLQ para erros de desserializacao e eventos com campos obrigatorios ausentes
- * (payload sempre invalido).
+ * <p>Agrupa tres responsabilidades: a publicacao da outbox (topico {@code assinatura-solicitada} e
+ * politica de retry do publisher), a escuta do topico de status de pagamento (seus topicos e DLQ) e
+ * a fabrica de containers do consumer com tratamento de erros.
  */
 @Configuration
+@EnableScheduling
 public class MessagingConfig {
+
+  /**
+   * Declara o topico de eventos {@code AssinaturaSolicitada}.
+   *
+   * @param nome nome do topico, externalizado por configuracao
+   * @return topico Kafka a ser criado pelo KafkaAdmin
+   */
+  @Bean
+  public NewTopic topicoAssinaturaSolicitada(
+      @Value("${app.kafka.topico-assinatura-solicitada}") String nome) {
+    return new NewTopic(nome, 1, (short) 1);
+  }
 
   /**
    * Cria o topico de status de pagamento atualizado.
@@ -46,6 +61,25 @@ public class MessagingConfig {
   public NewTopic topicoPagamentoStatusAtualizadoDlq(
       @Value("${app.kafka.topico-pagamento-status-atualizado-dlq}") String nome) {
     return new NewTopic(nome, 1, (short) 1);
+  }
+
+  /**
+   * Constroi a politica de retry do publisher a partir da configuracao externalizada.
+   *
+   * @param maximoTentativas maximo de tentativas antes da DLQ
+   * @param backoffInicialSegundos atraso base em segundos, dobrando a cada tentativa
+   * @param jitterMillis amplitude do jitter em milissegundos
+   * @return politica de retry configurada
+   */
+  @Bean
+  public RetryPolicy retryPolicy(
+      @Value("${app.outbox.max-tentativas}") int maximoTentativas,
+      @Value("${app.outbox.backoff-inicial-segundos}") long backoffInicialSegundos,
+      @Value("${app.outbox.jitter-millis}") long jitterMillis) {
+    return new RetryPolicy(
+        maximoTentativas,
+        Duration.ofSeconds(backoffInicialSegundos),
+        Duration.ofMillis(jitterMillis));
   }
 
   /**
