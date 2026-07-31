@@ -54,6 +54,9 @@ public class RenovacaoSolicitadaConsumer {
   }
 
   private void validar(RenovacaoSolicitada evento) {
+    if (evento.eventId() == null) {
+      throw new EventoInvalidoException("eventId ausente");
+    }
     if (evento.renovacaoId() == null) {
       throw new EventoInvalidoException("renovacaoId ausente");
     }

@@ -85,6 +85,28 @@ class RenovacaoSolicitadaConsumerTest {
   }
 
   @Test
+  @DisplayName("Deve lancar evento invalido quando eventId esta ausente")
+  void deveLancarEventoInvalidoQuandoEventIdAusente() {
+    RenovacaoSolicitada semEventId =
+        new RenovacaoSolicitada(
+            null,
+            Instant.parse("2026-07-31T12:00:00Z"),
+            UUID.fromString("00000000-0000-0000-0000-000000000031"),
+            UUID.fromString("00000000-0000-0000-0000-000000000011"),
+            Plano.BASICO,
+            new BigDecimal("19.90"),
+            2);
+    String payload = jsonMapper.writeValueAsString(semEventId);
+
+    assertThatThrownBy(() -> consumer.consumir(payload))
+        .as("Evento sem eventId rejeitado")
+        .isInstanceOf(EventoInvalidoException.class)
+        .hasMessageContaining("eventId");
+
+    verifyNoInteractions(criarPagamentoRenovacaoService);
+  }
+
+  @Test
   @DisplayName("Valor nao positivo deve ser rejeitado antes de persistir")
   void valorNaoPositivoDeveSerRejeitado() {
     String payload =
