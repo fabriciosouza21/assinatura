@@ -5,6 +5,13 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
 
+  # Metricas via OTLP estao fora do escopo desta track (PRD: apenas traces).
+  # Sem isso, o OtlpMeterRegistry tenta publicar em localhost:4318 dentro do container
+  # e gera WARNs de conexao recusada a cada minuto.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.micrometer.metrics.autoconfigure.export.otlp.OtlpMetricsAutoConfiguration
+
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/assinatura}
     username: ${SPRING_DATASOURCE_USERNAME:assinatura}
@@ -35,6 +42,8 @@ spring:
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      observation-enabled: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -42,6 +51,8 @@ spring:
       retries: ${APP_KAFKA_PRODUCER_RETRIES:2147483647}
       properties:
         enable.idempotence: ${APP_KAFKA_PRODUCER_ENABLE_IDEMPOTENCE:true}
+    template:
+      observation-enabled: true
 
 app:
   jwt:
@@ -65,6 +76,9 @@ management:
     web:
       exposure:
         include: health
+  tracing:
+    sampling:
+      probability: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:1.0}
   opentelemetry:
     tracing:
       export:
