@@ -62,18 +62,21 @@ public class GatewayPagamentoClient {
    * @param numero numero da tentativa de cobranca, combinado com {@code renovacaoId} para formar a
    *     chave de idempotencia
    * @param valor valor em reais, enviado sem conversao para centavos
+   * @return resultado com o {@code paymentId} da cobranca criada
    */
-  public void criarCobrancaRenovacao(String renovacaoId, int numero, BigDecimal valor) {
+  public CobrancaCriada criarCobrancaRenovacao(String renovacaoId, int numero, BigDecimal valor) {
     CreatePaymentRequest request =
         new CreatePaymentRequest(renovacaoId, valor, "BRL", "PIX", notificationUrl);
-    webClient
-        .post()
-        .uri("/v1/payments")
-        .header("Idempotency-Key", renovacaoId + ":" + numero)
-        .bodyValue(request)
-        .retrieve()
-        .bodyToMono(Void.class)
-        .block();
+    CreatePaymentResponse response =
+        webClient
+            .post()
+            .uri("/v1/payments")
+            .header("Idempotency-Key", renovacaoId + ":" + numero)
+            .bodyValue(request)
+            .retrieve()
+            .bodyToMono(CreatePaymentResponse.class)
+            .block();
+    return new CobrancaCriada(response.id());
   }
 
   /**

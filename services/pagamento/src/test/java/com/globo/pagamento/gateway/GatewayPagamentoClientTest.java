@@ -94,6 +94,26 @@ class GatewayPagamentoClientTest {
   }
 
   @Test
+  @DisplayName("Deve retornar o payment id da cobranca de renovacao criada no gateway")
+  void deveRetornarPaymentIdDaCobrancaDeRenovacao() throws Exception {
+    server.enqueue(
+        new MockResponse()
+            .setHeader("Content-Type", "application/json")
+            .setBody(
+                jsonMapper.writeValueAsString(
+                    new CreatePaymentResponse(
+                        "pay_renov", "renov-123", new BigDecimal("19.90"), "BRL", "PIX")))
+            .setResponseCode(201));
+
+    CobrancaCriada resultado =
+        client.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90"));
+
+    assertThat(resultado.paymentId())
+        .as("payment id retornado pelo gateway")
+        .isEqualTo("pay_renov");
+  }
+
+  @Test
   @DisplayName("Deve consultar o status oficial da cobranca por paymentId")
   void deveConsultarStatusPorPaymentId() throws Exception {
     server.enqueue(
