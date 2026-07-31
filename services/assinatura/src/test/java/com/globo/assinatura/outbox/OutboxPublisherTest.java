@@ -39,7 +39,9 @@ class OutboxPublisherTest {
             kafkaTemplate,
             new RetryPolicy(3, Duration.ofSeconds(1), Duration.ofMillis(500)),
             new RotasEventoTopicoProperties(
-                Map.of("AssinaturaSolicitada", "assinatura-solicitada")),
+                Map.of(
+                    "AssinaturaSolicitada", "assinatura-solicitada",
+                    "RenovacaoSolicitada", "renovacao-solicitada")),
             100);
     when(kafkaTemplate.send(any(), any(), any()))
         .thenReturn(CompletableFuture.completedFuture(null));
@@ -72,6 +74,19 @@ class OutboxPublisherTest {
 
     verify(kafkaTemplate)
         .send("assinatura-solicitada", evento.getAggregateId().toString(), evento.getPayload());
+  }
+
+  @Test
+  @DisplayName("Deve rotear RenovacaoSolicitada para o topico de renovacao")
+  void deveRotearRenovacaoSolicitadaParaTopicoDeRenovacao() {
+    OutboxEvent evento = eventoPendenteRenovacao();
+    when(outboxRepository.buscarPublicaveis(any(Instant.class), eq(100)))
+        .thenReturn(List.of(evento));
+
+    publisher.publicarPendentes();
+
+    verify(kafkaTemplate)
+        .send("renovacao-solicitada", evento.getAggregateId().toString(), evento.getPayload());
   }
 
   @Test
@@ -169,6 +184,15 @@ class OutboxPublisherTest {
         "Assinatura",
         UUID.fromString("22222222-2222-2222-2222-222222222222"),
         "AssinaturaSolicitada",
+        "{}");
+  }
+
+  private static OutboxEvent eventoPendenteRenovacao() {
+    return OutboxEvent.criar(
+        UUID.fromString("11111111-1111-1111-1111-111111111111"),
+        "Assinatura",
+        UUID.fromString("22222222-2222-2222-2222-222222222222"),
+        "RenovacaoSolicitada",
         "{}");
   }
 }
