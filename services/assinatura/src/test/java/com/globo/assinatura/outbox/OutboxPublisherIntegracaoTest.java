@@ -10,7 +10,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -26,17 +27,18 @@ import org.springframework.test.context.TestPropertySource;
 /**
  * Teste de integracao do fluxo de publicacao da outbox contra um broker Kafka embarcado.
  *
- * <p>Garante que o publisher drena a outbox e publica {@code AssinaturaSolicitada} no topico {@code
- * assinatura-solicitada} com a key de roteamento e o payload do contrato. Exercita o publisher
- * chamando {@code publicarPendentes()} direto, isolando o fluxo de publicacao da janela de
- * agendamento do @{@code Scheduled}. A captura da mensagem publica e feita por um listener de teste
- * (nao por um consumer manual). Usa o {@code @EmbeddedKafka} do spring-kafka-test, dispensando o
- * broker do docker-compose.
+ * <p>Garante que o publisher drena a outbox e roteia cada {@code eventType} ao seu topico de
+ * destino ({@code AssinaturaSolicitada -> assinatura-solicitada}, {@code RenovacaoSolicitada ->
+ * renovacao-solicitada}), com a key de roteamento igual ao {@code aggregateId} e o payload do
+ * contrato. Exercita o publisher chamando {@code publicarPendentes()} direto, isolando o fluxo de
+ * publicacao da janela de agendamento do @{@code Scheduled}. A captura da mensagem publica e feita
+ * por um listener de teste (nao por um consumer manual). Usa o {@code @EmbeddedKafka} do
+ * spring-kafka-test, dispensando o broker do docker-compose.
  */
 @SpringBootTest
 @EmbeddedKafka(
     partitions = 1,
-    topics = {"assinatura-solicitada"},
+    topics = {"assinatura-solicitada", "renovacao-solicitada"},
     bootstrapServersProperty = "spring.kafka.bootstrap-servers")
 @Tag("integration")
 @DirtiesContext
@@ -47,6 +49,7 @@ import org.springframework.test.context.TestPropertySource;
       "spring.datasource.password=assinatura",
       "spring.kafka.consumer.auto-offset-reset=earliest",
       "app.kafka.rotas-evento-topico.AssinaturaSolicitada=assinatura-solicitada",
+      "app.kafka.rotas-evento-topico.RenovacaoSolicitada=renovacao-solicitada",
       "app.outbox.intervalo-ms=60000",
       "app.outbox.tamanho-lote=10",
     })
@@ -55,49 +58,72 @@ class OutboxPublisherIntegracaoTest {
   @Autowired private OutboxRepository outboxRepository;
   @Autowired private OutboxPublisher publisher;
   @Autowired private KafkaListenerEndpointRegistry listenerRegistry;
-  @Autowired private CapturadorEventoAssinaturaSolicitada capturador;
+  @Autowired private CapturadorEventoAssinaturaSolicitada capturadorAssinatura;
+  @Autowired private CapturadorEventoRenovacaoSolicitada capturadorRenovacao;
 
   @BeforeEach
-  void aguardarInicializacaoDoListener() {
-    MessageListenerContainer container =
-        listenerRegistry.getListenerContainer("capturador-assinatura-solicitada");
-    assertThat(container).as("Container do listener de teste registrado").isNotNull();
-    ContainerTestUtils.waitForAssignment(container, 1);
-    capturador.limpar();
+  void aguardarInicializacaoDosListeners() {
+    aguardarAtribuicao("capturador-assinatura-solicitada");
+    aguardarAtribuicao("capturador-renovacao-solicitada");
+    capturadorAssinatura.limpar();
+    capturadorRenovacao.limpar();
   }
 
-  @Test
-  @DisplayName("Deve publicar evento pendente no topico assinatura-solicitada")
-  void devePublicarEventoPendenteNoTopico() {
-    outboxRepository.saveAndFlush(eventoPendente());
+  private void aguardarAtribuicao(String idListener) {
+    MessageListenerContainer container = listenerRegistry.getListenerContainer(idListener);
+    assertThat(container).as("Container do listener %s registrado", idListener).isNotNull();
+    ContainerTestUtils.waitForAssignment(container, 1);
+  }
+
+  @ParameterizedTest(name = "[{index}] eventType={0} -> topico {1}")
+  @CsvSource({
+    "AssinaturaSolicitada, assinatura-solicitada",
+    "RenovacaoSolicitada, renovacao-solicitada"
+  })
+  @DisplayName("Deve rotear o evento pendente para o topico correspondente ao eventType")
+  void deveRoterEventoPendenteParaTopicoCorrespondente(String eventType, String topico) {
+    outboxRepository.saveAndFlush(eventoPendente(eventType, topico));
     publisher.publicarPendentes();
 
     await()
         .atMost(Duration.ofSeconds(10))
         .untilAsserted(
             () -> {
-              ConsumerRecord<String, String> registro = capturador.ultimoRegistro();
-              assertThat(registro).as("Evento publicado e capturado pelo listener").isNotNull();
+              ConsumerRecord<String, String> registro = capturadorDo(topico).ultimoRegistro();
+              assertThat(registro)
+                  .as("Evento %s publicado e capturado no topico %s", eventType, topico)
+                  .isNotNull();
               assertThat(registro.key())
                   .as("Key de roteamento igual ao aggregateId")
                   .isEqualTo("22222222-2222-2222-2222-222222222222");
               assertThat(registro.value())
-                  .as("Payload publicado com os campos do contrato")
+                  .as("Payload publicado com o campo do contrato")
                   .contains("assinaturaId")
                   .contains("22222222-2222-2222-2222-222222222222");
             });
+    assertThat(capturadorDoOutro(topico).ultimoRegistro())
+        .as("Evento %s nao vaza para o outro topico", eventType)
+        .isNull();
   }
 
-  private OutboxEvent eventoPendente() {
+  private CapturadorEvento capturadorDo(String topico) {
+    return "renovacao-solicitada".equals(topico) ? capturadorRenovacao : capturadorAssinatura;
+  }
+
+  private CapturadorEvento capturadorDoOutro(String topico) {
+    return "renovacao-solicitada".equals(topico) ? capturadorAssinatura : capturadorRenovacao;
+  }
+
+  private static OutboxEvent eventoPendente(String eventType, String topico) {
     return OutboxEvent.criar(
-        UUID.fromString("55555555-5555-5555-5555-555555555555"),
+        UUID.randomUUID(),
         "Assinatura",
         UUID.fromString("22222222-2222-2222-2222-222222222222"),
-        "AssinaturaSolicitada",
+        eventType,
         "{\"eventId\":\"x\",\"assinaturaId\":\"22222222-2222-2222-2222-222222222222\"}");
   }
 
-  /** Registra o bean do listener de captura no contexto de teste. */
+  /** Registra os beans dos listeners de captura no contexto de teste. */
   @TestConfiguration(proxyBeanMethods = false)
   static class ConfiguracaoKafkaTeste {
 
@@ -105,10 +131,22 @@ class OutboxPublisherIntegracaoTest {
     CapturadorEventoAssinaturaSolicitada capturadorEventoAssinaturaSolicitada() {
       return new CapturadorEventoAssinaturaSolicitada();
     }
+
+    @Bean
+    CapturadorEventoRenovacaoSolicitada capturadorEventoRenovacaoSolicitada() {
+      return new CapturadorEventoRenovacaoSolicitada();
+    }
   }
 
-  /** Listener de teste que captura o ultimo registro publicado no topico. */
-  static class CapturadorEventoAssinaturaSolicitada {
+  /** Listener de teste que captura o ultimo registro publicado num topico. */
+  interface CapturadorEvento {
+
+    ConsumerRecord<String, String> ultimoRegistro();
+
+    void limpar();
+  }
+
+  static class CapturadorEventoAssinaturaSolicitada implements CapturadorEvento {
 
     private final AtomicReference<ConsumerRecord<String, String>> capturado =
         new AtomicReference<>();
@@ -122,11 +160,38 @@ class OutboxPublisherIntegracaoTest {
       capturado.set(registro);
     }
 
-    ConsumerRecord<String, String> ultimoRegistro() {
+    @Override
+    public ConsumerRecord<String, String> ultimoRegistro() {
       return capturado.get();
     }
 
-    void limpar() {
+    @Override
+    public void limpar() {
+      capturado.set(null);
+    }
+  }
+
+  static class CapturadorEventoRenovacaoSolicitada implements CapturadorEvento {
+
+    private final AtomicReference<ConsumerRecord<String, String>> capturado =
+        new AtomicReference<>();
+
+    @KafkaListener(
+        id = "capturador-renovacao-solicitada",
+        topics = "renovacao-solicitada",
+        groupId = "teste-publisher-outbox",
+        autoStartup = "true")
+    void capturar(ConsumerRecord<String, String> registro) {
+      capturado.set(registro);
+    }
+
+    @Override
+    public ConsumerRecord<String, String> ultimoRegistro() {
+      return capturado.get();
+    }
+
+    @Override
+    public void limpar() {
       capturado.set(null);
     }
   }
