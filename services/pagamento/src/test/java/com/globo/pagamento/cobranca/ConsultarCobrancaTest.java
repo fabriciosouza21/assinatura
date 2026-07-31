@@ -1,6 +1,7 @@
 package com.globo.pagamento.cobranca;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
@@ -29,5 +30,16 @@ class ConsultarCobrancaTest {
 
     assertThat(resposta.paymentId()).as("Payment id da cobranca").isEqualTo("pay-123");
     assertThat(resposta.status()).as("Status da cobranca").isEqualTo(StatusCobranca.APPROVED);
+  }
+
+  @Test
+  @DisplayName("Deve lancar nao encontrado ao consultar cobranca inexistente")
+  void deveLancarNaoEncontradoAoConsultarCobrancaInexistente() {
+    when(cobrancaRepository.findByAssinaturaUuid("assinatura-inexistente"))
+        .thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> query.executar("assinatura-inexistente"))
+        .as("Cobranca inexistente deve gerar nao encontrado")
+        .isInstanceOf(CobrancaNaoEncontradaException.class);
   }
 }

@@ -26,7 +26,10 @@ public class ConsultarCobranca {
    * @return a representacao da cobranca, com o payment id e o status do gateway
    */
   public CobrancaResponse executar(String uuid) {
-    Cobranca cobranca = cobrancaRepository.findByAssinaturaUuid(uuid).orElseThrow();
+    Cobranca cobranca =
+        cobrancaRepository
+            .findByAssinaturaUuid(uuid)
+            .orElseThrow(CobrancaNaoEncontradaException::new);
     return new CobrancaResponse(cobranca.getPaymentId(), cobranca.getStatus());
   }
 }
