@@ -244,9 +244,11 @@ func (s *store) updateStatus(webhookSecret string) http.HandlerFunc {
 		extRef := payment.ExternalReference
 		s.mu.Unlock()
 
-		// Webhook assincrono: nao bloqueia a resposta.
+		// Webhook assincrono: nao bloqueia a resposta. O contexto do trace (que vive no
+		// r.Context() instrumentado pelo otelhttp) e preservado, mas desvinculado do
+		// cancelamento da requisicao original, que morre quando a resposta 202 retorna.
 		if notifURL != "" {
-			go dispatchWebhook(r.Context(), notifURL, webhookSecret, id, extRef)
+			go dispatchWebhook(context.WithoutCancel(r.Context()), notifURL, webhookSecret, id, extRef)
 		}
 
 		writeJSON(w, http.StatusAccepted, StatusUpdateResponse{
