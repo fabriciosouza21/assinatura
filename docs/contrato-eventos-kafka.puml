@@ -63,7 +63,11 @@ note right of AssinaturaSolicitada
   3 tentativas + backoff + jitter,
   status FALHA = DLQ persistida.
 
-  Consumidor deduplica por eventId.
+  Consumidor deduplica por assinaturaId: uma
+  cobrança por assinatura (índice único em
+  cobranca.assinatura_uuid + Idempotency-Key
+  no gateway). eventId identifica o evento no
+  produtor.
 end note
 
 note right of PagamentoStatusAtualizado
