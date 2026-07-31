@@ -108,9 +108,16 @@ public class Cobranca {
   /**
    * Atualiza o status da cobranca para refletir a decisao do gateway.
    *
+   * <p>Ignora a transicao de um status terminal ({@link StatusCobranca#APPROVED} ou {@link
+   * StatusCobranca#REJECTED}) para {@link StatusCobranca#PENDING}, mantendo o status e o {@code
+   * atualizadoEm} intactos diante de notificacoes atrasadas do gateway.
+   *
    * @param status novo status decidido pelo gateway
    */
   public void marcarComo(StatusCobranca status) {
+    if (this.status != StatusCobranca.PENDING && status == StatusCobranca.PENDING) {
+      return;
+    }
     this.status = status;
     this.atualizadoEm = Instant.now();
   }
