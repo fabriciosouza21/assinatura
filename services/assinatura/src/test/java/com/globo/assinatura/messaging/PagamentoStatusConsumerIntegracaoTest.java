@@ -42,9 +42,8 @@ import tools.jackson.databind.ObjectMapper;
  * {@link com.globo.assinatura.assinatura.ProcessarPagamento} e transita a assinatura correlacionada
  * para {@link StatusAssinatura#ATIVA} no banco de dados, com datas de vigencia preenchidas.
  *
- * <p>Diferente da Track A (que cria um consumer para ler o outbox), aqui apenas publica-se no
- * topico via {@link KafkaTemplate}; o {@code @KafkaListener} do app e disparado automaticamente
- * pelo contexto Spring inicializado pelo EmbeddedKafka.
+ * <p>O teste apenas publica no topico via {@link KafkaTemplate}; o {@code @KafkaListener} do app e
+ * disparado automaticamente pelo contexto Spring inicializado pelo EmbeddedKafka.
  */
 @SpringBootTest
 @EmbeddedKafka(
