@@ -44,7 +44,7 @@ class CriarPagamentoRenovacaoServiceTest {
     when(pagamentoRenovacaoRepository.inserirSeNaoExistir(
             eq(evento.renovacaoId().toString()),
             eq(evento.assinaturaId().toString()),
-            eq(evento.plano()),
+            eq(evento.plano().name()),
             eq(evento.valor()),
             eq(evento.cicloReferencia())))
         .thenReturn(1);

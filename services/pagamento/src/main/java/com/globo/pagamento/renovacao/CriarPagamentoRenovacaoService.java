@@ -47,7 +47,7 @@ public class CriarPagamentoRenovacaoService {
         pagamentoRenovacaoRepository.inserirSeNaoExistir(
             evento.renovacaoId().toString(),
             evento.assinaturaId().toString(),
-            evento.plano(),
+            evento.plano().name(),
             evento.valor(),
             evento.cicloReferencia());
     if (inseridas == 0) {
