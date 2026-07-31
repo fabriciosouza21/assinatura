@@ -101,6 +101,15 @@ public class TentativaCobranca {
   }
 
   /**
+   * Registra o identificador da cobranca criada no gateway de pagamento.
+   *
+   * @param paymentId identificador da cobranca no gateway
+   */
+  public void registrarCobranca(String paymentId) {
+    this.paymentId = paymentId;
+  }
+
+  /**
    * Retorna o instante em que a tentativa deve ser cobrada.
    *
    * @return instante da proxima tentativa, ou {@code null} enquanto nao agendada
