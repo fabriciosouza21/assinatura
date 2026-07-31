@@ -74,6 +74,26 @@ class GatewayPagamentoClientTest {
   }
 
   @Test
+  @DisplayName("Deve criar cobranca de renovacao com Idempotency-Key=renovacaoId:numero")
+  void deveEnviarChaveIdempotenciaCompostaNaCobrancaDeRenovacao() throws Exception {
+    server.enqueue(
+        new MockResponse()
+            .setHeader("Content-Type", "application/json")
+            .setBody(
+                jsonMapper.writeValueAsString(
+                    new CreatePaymentResponse(
+                        "pay_renov", "renov-123", new BigDecimal("19.90"), "BRL", "PIX")))
+            .setResponseCode(201));
+
+    client.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90"));
+
+    RecordedRequest requisicao = server.takeRequest();
+    assertThat(requisicao.getHeader("Idempotency-Key"))
+        .as("Header de idempotencia composto por renovacaoId:numeroTentativa")
+        .isEqualTo("renov-123:1");
+  }
+
+  @Test
   @DisplayName("Deve consultar o status oficial da cobranca por paymentId")
   void deveConsultarStatusPorPaymentId() throws Exception {
     server.enqueue(

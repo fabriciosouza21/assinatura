@@ -56,6 +56,27 @@ public class GatewayPagamentoClient {
   }
 
   /**
+   * Cria uma cobranca no gateway para uma tentativa de renovacao da assinatura.
+   *
+   * @param renovacaoId identificador da renovacao, usado como referencia externa
+   * @param numero numero da tentativa de cobranca, combinado com {@code renovacaoId} para formar a
+   *     chave de idempotencia
+   * @param valor valor em reais, enviado sem conversao para centavos
+   */
+  public void criarCobrancaRenovacao(String renovacaoId, int numero, BigDecimal valor) {
+    CreatePaymentRequest request =
+        new CreatePaymentRequest(renovacaoId, valor, "BRL", "PIX", notificationUrl);
+    webClient
+        .post()
+        .uri("/v1/payments")
+        .header("Idempotency-Key", renovacaoId + ":" + numero)
+        .bodyValue(request)
+        .retrieve()
+        .bodyToMono(Void.class)
+        .block();
+  }
+
+  /**
    * Consulta o status oficial da cobranca no gateway.
    *
    * @param paymentId identificador da cobranca no gateway
