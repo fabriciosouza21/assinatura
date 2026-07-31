@@ -75,12 +75,12 @@ public class OutboxPublisher {
 
   private void publicar(OutboxEvent evento) {
     try {
-      kafkaTemplate
-          .send(
-              rotas.rotasEventoTopico().get(evento.getEventType()),
-              evento.getAggregateId().toString(),
-              evento.getPayload())
-          .get();
+      String topico = rotas.rotasEventoTopico().get(evento.getEventType());
+      if (topico == null) {
+        throw new IllegalArgumentException(
+            "Sem rota mapeada para o eventType: " + evento.getEventType());
+      }
+      kafkaTemplate.send(topico, evento.getAggregateId().toString(), evento.getPayload()).get();
       evento.marcarPublicado(Instant.now());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
