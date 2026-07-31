@@ -1,0 +1,45 @@
+package com.globo.assinatura.assinatura;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.LocalDate;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+/** Testes unitarios do agregado {@link Renovacao}. */
+class RenovacaoTest {
+
+  @Test
+  @DisplayName("Deve nascer pendente ao criar a renovacao")
+  void deveNascerPendenteAoCriar() {
+    Renovacao renovacao = new Renovacao(1L, LocalDate.of(2026, 2, 1));
+
+    assertThat(renovacao.getStatus())
+        .as("Status inicial da renovacao")
+        .isEqualTo(StatusRenovacao.PENDENTE);
+  }
+
+  @Test
+  @DisplayName("Deve transitar para aprovada ao aprovar a renovacao")
+  void deveTransitarParaAprovadaAoAprovar() {
+    Renovacao renovacao = new Renovacao(1L, LocalDate.of(2026, 2, 1));
+
+    renovacao.aprovar();
+
+    assertThat(renovacao.getStatus())
+        .as("Status transita para aprovada")
+        .isEqualTo(StatusRenovacao.APROVADA);
+  }
+
+  @Test
+  @DisplayName("Deve transitar para tentativas esgotadas ao esgotar a renovacao")
+  void deveTransitarParaTentativasEsgotadasAoEsgotar() {
+    Renovacao renovacao = new Renovacao(1L, LocalDate.of(2026, 2, 1));
+
+    renovacao.esgotarTentativas();
+
+    assertThat(renovacao.getStatus())
+        .as("Status transita para tentativas esgotadas")
+        .isEqualTo(StatusRenovacao.TENTATIVAS_ESGOTADA);
+  }
+}
