@@ -1,6 +1,5 @@
 package com.globo.pagamento.messaging.event;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.globo.pagamento.cobranca.Plano;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -19,7 +18,6 @@ import java.util.UUID;
  * @param plano plano contratado
  * @param valor valor mensal em reais
  */
-@JsonIgnoreProperties(ignoreUnknown = false)
 public record AssinaturaSolicitada(
     UUID eventId,
     Instant ocorridoEm,
