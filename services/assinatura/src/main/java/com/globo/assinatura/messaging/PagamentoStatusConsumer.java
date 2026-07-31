@@ -4,16 +4,16 @@ import com.globo.assinatura.assinatura.ProcessarPagamento;
 import com.globo.assinatura.messaging.event.PagamentoStatusAtualizado;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 /**
  * Consumer Kafka do topico de status de pagamento.
  *
- * <p>Responsavel apenas por desserializar o payload JSON em {@link PagamentoStatusAtualizado} e
- * delegar o processamento de dominio ao command {@link ProcessarPagamento}. Erros de
- * desserializacao (subtipos de {@code tools.jackson.core.JacksonException}, unchecked) sao
- * tratatados como nao recuperaveis pelo {@code DefaultErrorHandler} configurado em {@link
- * MessagingConfig}, enviando a mensagem direto para a DLQ.
+ * <p>Desserializa o payload JSON em {@link PagamentoStatusAtualizado}, valida os campos
+ * obrigatorios e delega o processamento de dominio ao command {@link ProcessarPagamento}. Eventos
+ * invalidos disparam {@link EventoInvalidoException}, tratada como nao retentavel pelo {@code
+ * DefaultErrorHandler} configurado em {@link MessagingConfig} (vai direto para a DLQ).
  */
 @Component
 public class PagamentoStatusConsumer {
@@ -35,17 +35,32 @@ public class PagamentoStatusConsumer {
   /**
    * Consome uma mensagem do topico de status de pagamento.
    *
-   * <p>Desserializa o payload JSON e delega ao command de processamento. Falhas de desserializacao
-   * sao lancadas como {@code JacksonException} (unchecked) e propagadas para que o {@code
-   * DefaultErrorHandler} do container as encaminhe para a DLQ sem novas tentativas, ja que payload
-   * invalido sempre sera invalido.
-   *
    * @param payload conteudo JSON da mensagem recebida
    */
   @KafkaListener(topics = "${app.kafka.topico-pagamento-status-atualizado}", groupId = "assinatura")
   public void consumir(String payload) {
-    PagamentoStatusAtualizado evento =
-        objectMapper.readValue(payload, PagamentoStatusAtualizado.class);
+    PagamentoStatusAtualizado evento = desserializar(payload);
+    validar(evento);
     processarPagamento.executar(evento);
+  }
+
+  private PagamentoStatusAtualizado desserializar(String payload) {
+    try {
+      return objectMapper.readValue(payload, PagamentoStatusAtualizado.class);
+    } catch (JacksonException e) {
+      throw new EventoInvalidoException("evento mal formado: " + e.getMessage());
+    }
+  }
+
+  private void validar(PagamentoStatusAtualizado evento) {
+    if (evento.eventId() == null) {
+      throw new EventoInvalidoException("eventId ausente");
+    }
+    if (evento.assinaturaId() == null) {
+      throw new EventoInvalidoException("assinaturaId ausente");
+    }
+    if (evento.status() == null) {
+      throw new EventoInvalidoException("status ausente");
+    }
   }
 }

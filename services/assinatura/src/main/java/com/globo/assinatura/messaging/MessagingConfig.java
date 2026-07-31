@@ -18,7 +18,8 @@ import tools.jackson.core.JacksonException;
  *
  * <p>Registra os topicos de status de pagamento e sua DLQ, e configura a fabrica de containers do
  * listener com tratamento de erros: retentativas com backoff fixo para falhas transientes e envio
- * direto para a DLQ para erros de desserializacao (payload sempre invalido).
+ * direto para a DLQ para erros de desserializacao e eventos com campos obrigatorios ausentes
+ * (payload sempre invalido).
  */
 @Configuration
 public class MessagingConfig {
@@ -54,10 +55,13 @@ public class MessagingConfig {
    *
    * <ul>
    *   <li>retentativas com backoff fixo de 1s entre tentativas, totalizando 3 tentativas (1 inicial
-   *       + 2 retentativas);
+   *       + 2 retentativas). O backoff fixo e suficiente porque o consumer retenta contra o proprio
+   *       banco, sem o risco de thundering-herd que justifica o backoff exponencial com jitter no
+   *       consumer do Pagamento Service, que retenta contra o gateway externo;
    *   <li>envio para o topico {@code <topico>-dlq} quando esgotadas as retentativas;
-   *   <li>{@link JacksonException} como nao retentavel, enviando erros de desserializacao direto
-   *       para a DLQ.
+   *   <li>{@link JacksonException} e {@link EventoInvalidoException} como nao retentaveis, enviando
+   *       erros de desserializacao e eventos com campos obrigatorios ausentes direto para a DLQ,
+   *       pois payload invalido sempre sera invalido.
    * </ul>
    *
    * @param consumerFactory fabrica de consumidores injetada pelo Spring
@@ -76,7 +80,7 @@ public class MessagingConfig {
             (record, ex) -> new TopicPartition(record.topic() + "-dlq", record.partition()));
     DefaultErrorHandler errorHandler =
         new DefaultErrorHandler(recoverer, new FixedBackOff(1000L, 2L));
-    errorHandler.addNotRetryableExceptions(JacksonException.class);
+    errorHandler.addNotRetryableExceptions(JacksonException.class, EventoInvalidoException.class);
     factory.setConsumerFactory(consumerFactory);
     factory.setCommonErrorHandler(errorHandler);
     return factory;
