@@ -6,9 +6,11 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.globo.assinatura.messaging.RotasEventoTopicoProperties;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +38,8 @@ class OutboxPublisherTest {
             outboxRepository,
             kafkaTemplate,
             new RetryPolicy(3, Duration.ofSeconds(1), Duration.ofMillis(500)),
-            "assinatura-solicitada",
+            new RotasEventoTopicoProperties(
+                Map.of("AssinaturaSolicitada", "assinatura-solicitada")),
             100);
     when(kafkaTemplate.send(any(), any(), any()))
         .thenReturn(CompletableFuture.completedFuture(null));
