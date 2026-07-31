@@ -39,6 +39,9 @@ public class Renovacao {
 
   /** Marca a renovacao como aprovada apos a confirmacao da cobranca. */
   public void aprovar() {
+    if (this.status == StatusRenovacao.APROVADA) {
+      throw new IllegalStateException("renovacao ja aprovada");
+    }
     this.status = StatusRenovacao.APROVADA;
   }
 

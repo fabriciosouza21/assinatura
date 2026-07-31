@@ -11,5 +11,7 @@ public enum StatusAssinatura {
   /** Ciclo vencido e renovacao em andamento, aguardando o resultado da cobranca. */
   EM_RENOVACAO,
   /** Acesso suspenso apos o esgotamento das tentativas de cobranca da renovacao. */
-  SUSPENSA
+  SUSPENSA,
+  /** Assinatura cancelada por opt-out no vencimento do ciclo. */
+  CANCELADA
 }

@@ -1,6 +1,7 @@
 package com.globo.assinatura.assinatura;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
 import org.junit.jupiter.api.DisplayName;
@@ -41,5 +42,16 @@ class RenovacaoTest {
     assertThat(renovacao.getStatus())
         .as("Status transita para tentativas esgotadas")
         .isEqualTo(StatusRenovacao.TENTATIVAS_ESGOTADA);
+  }
+
+  @Test
+  @DisplayName("Deve lancar excecao ao aprovar renovacao ja aprovada")
+  void deveLancarExcecaoAoAprovarRenovacaoJaAprovada() {
+    Renovacao renovacao = new Renovacao(1L, LocalDate.of(2026, 2, 1));
+    renovacao.aprovar();
+
+    assertThatThrownBy(renovacao::aprovar)
+        .as("Aprovar renovacao ja aprovada e transicao invalida")
+        .isInstanceOf(IllegalStateException.class);
   }
 }

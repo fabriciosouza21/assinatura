@@ -2,6 +2,7 @@ package com.globo.assinatura.assinatura;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
 import java.util.UUID;
@@ -172,5 +173,16 @@ class AssinaturaTest {
     assertThat(assinatura.getStatus())
         .as("Status transita para suspensa")
         .isEqualTo(StatusAssinatura.SUSPENSA);
+  }
+
+  @Test
+  @DisplayName("Deve lancar excecao ao suspender assinatura ativa")
+  void deveLancarExcecaoAoSuspenderAtiva() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+
+    assertThatThrownBy(assinatura::suspender)
+        .as("Suspender assinatura ativa e transicao invalida")
+        .isInstanceOf(IllegalStateException.class);
   }
 }
