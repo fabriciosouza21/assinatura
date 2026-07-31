@@ -1,11 +1,14 @@
 package com.globo.pagamento.cobranca;
 
+import org.springframework.stereotype.Service;
+
 /**
  * Query de consulta de cobranca.
  *
  * <p>Recupera a correlacao de cobranca de uma assinatura pelo uuid publico da assinatura.
  * Responsavel apenas por leitura.
  */
+@Service
 public class ConsultarCobranca {
 
   private final CobrancaRepository cobrancaRepository;
