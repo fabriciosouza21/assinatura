@@ -1,5 +1,6 @@
 package com.globo.pagamento.webhook;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -7,10 +8,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.globo.pagamento.security.SecurityConfig;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -71,6 +77,34 @@ class WebhookPagamentoControllerTest {
   }
 
   @Test
+  @DisplayName("Deve logar ERROR quando o comando lanca excecao nao tratada")
+  void deveLogarErroQuandoComandoLancaExcecaoNaoTratada() throws Exception {
+    when(command.processar(any(), any(), any(), any(), any()))
+        .thenThrow(new RuntimeException("boom"));
+
+    Logger logger = (Logger) LoggerFactory.getLogger(WebhookExceptionHandler.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      mockMvc
+          .perform(
+              post("/webhooks/payments")
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .header("X-Mock-Event-Id", EVENT_ID.toString())
+                  .header("X-Mock-Signature", "sha256=abc")
+                  .content(corpoValido()))
+          .andReturn();
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list.stream().filter(event -> event.getLevel() == Level.ERROR).count())
+        .as("deve registrar ao menos um evento de ERROR no handler catch-all")
+        .isGreaterThanOrEqualTo(1L);
+  }
+
+  @Test
   @DisplayName("Deve retornar 503 quando a publicacao falha")
   void deveRetornar503QuandoPublicacaoFalha() throws Exception {
     when(command.processar(any(), any(), any(), any(), any()))
@@ -85,6 +119,34 @@ class WebhookPagamentoControllerTest {
                 .content(corpoValido()))
         .andExpect(status().isServiceUnavailable())
         .andExpect(content().json("{\"erro\":\"publicacao_indisponivel\"}"));
+  }
+
+  @Test
+  @DisplayName("Deve logar ERROR quando a publicacao falha")
+  void deveLogarErroQuandoPublicacaoFalha() throws Exception {
+    when(command.processar(any(), any(), any(), any(), any()))
+        .thenThrow(new PublicacaoIndisponivelException());
+
+    Logger logger = (Logger) LoggerFactory.getLogger(WebhookExceptionHandler.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      mockMvc
+          .perform(
+              post("/webhooks/payments")
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .header("X-Mock-Event-Id", EVENT_ID.toString())
+                  .header("X-Mock-Signature", "sha256=abc")
+                  .content(corpoValido()))
+          .andExpect(status().isServiceUnavailable());
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list.stream().filter(event -> event.getLevel() == Level.ERROR).count())
+        .as("deve registrar ao menos um evento de ERROR na falha de publicacao")
+        .isGreaterThanOrEqualTo(1L);
   }
 
   private String corpoValido() {
