@@ -1,5 +1,6 @@
 package com.globo.assinatura.outbox;
 
+import com.globo.assinatura.messaging.RotasEventoTopicoProperties;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -31,7 +32,7 @@ public class OutboxPublisher {
   private final OutboxRepository outboxRepository;
   private final KafkaTemplate<String, String> kafkaTemplate;
   private final RetryPolicy retryPolicy;
-  private final String topico;
+  private final RotasEventoTopicoProperties rotas;
   private final int tamanhoLote;
 
   /**
@@ -40,19 +41,19 @@ public class OutboxPublisher {
    * @param outboxRepository repositorio da outbox
    * @param kafkaTemplate template de publicacao no Kafka
    * @param retryPolicy politica de retry
-   * @param topico topico Kafka de destino
+   * @param rotas rotas de eventos da outbox para topicos Kafka
    * @param tamanhoLote maximo de eventos publicados por ciclo
    */
   public OutboxPublisher(
       OutboxRepository outboxRepository,
       KafkaTemplate<String, String> kafkaTemplate,
       RetryPolicy retryPolicy,
-      @Value("${app.kafka.topico-assinatura-solicitada}") String topico,
+      RotasEventoTopicoProperties rotas,
       @Value("${app.outbox.tamanho-lote}") int tamanhoLote) {
     this.outboxRepository = outboxRepository;
     this.kafkaTemplate = kafkaTemplate;
     this.retryPolicy = retryPolicy;
-    this.topico = topico;
+    this.rotas = rotas;
     this.tamanhoLote = tamanhoLote;
   }
 
@@ -74,6 +75,11 @@ public class OutboxPublisher {
 
   private void publicar(OutboxEvent evento) {
     try {
+      String topico = rotas.rotasEventoTopico().get(evento.getEventType());
+      if (topico == null) {
+        throw new IllegalArgumentException(
+            "Sem rota mapeada para o eventType: " + evento.getEventType());
+      }
       kafkaTemplate.send(topico, evento.getAggregateId().toString(), evento.getPayload()).get();
       evento.marcarPublicado(Instant.now());
     } catch (InterruptedException e) {
