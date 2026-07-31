@@ -113,8 +113,8 @@ components:
         de dedup ponta a ponta e como `eventId` do `PagamentoStatusAtualizado`.
       schema:
         type: string
-        pattern: '^evt_[a-f0-9]+$'
-      example: evt_a1b2c3
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
     XMockSignature:
       name: X-Mock-Signature
       in: header
@@ -135,9 +135,9 @@ components:
       properties:
         id:
           type: string
-          pattern: '^evt_[a-f0-9]+$'
+          format: uuid
           description: ID do evento. Replicado no header `X-Mock-Event-Id`.
-          example: evt_a1b2c3
+          example: 550e8400-e29b-41d4-a716-446655440000
         type:
           type: string
           const: payment.updated
@@ -149,9 +149,9 @@ components:
           properties:
             paymentId:
               type: string
-              pattern: '^pay_[a-f0-9]+$'
+              format: uuid
               description: ID da cobrança no gateway. Usado para consultar o status oficial.
-              example: pay_9f8e7d
+              example: 550e8400-e29b-41d4-a716-446655440000
             externalReference:
               type: string
               format: uuid
