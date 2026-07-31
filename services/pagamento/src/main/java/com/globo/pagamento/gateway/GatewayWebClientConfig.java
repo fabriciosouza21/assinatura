@@ -3,9 +3,11 @@ package com.globo.pagamento.gateway;
 import com.globo.pagamento.webhook.HmacSignatureValidator;
 import io.netty.channel.ChannelOption;
 import java.time.Duration;
+import java.util.Arrays;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.netty.http.client.HttpClient;
@@ -44,12 +46,29 @@ public class GatewayWebClientConfig {
   /**
    * Cria o validador de assinatura HMAC do webhook com a chave compartilhada com o gateway.
    *
+   * <p>Rejeita o secret default {@code mock-webhook-secret} (ou em branco) fora do perfil {@code
+   * dev}, impedindo que o servico suba em ambientes nao-dev com a autenticacao do webhook exposta
+   * pela chave publica do repositorio.
+   *
    * @param webhookSecret chave HMAC, via {@code app.gateway.webhook-secret}
+   * @param environment ambiente do Spring, para inspecionar o perfil ativo
    * @return o {@link HmacSignatureValidator} configurado
+   * @throws IllegalStateException se o secret for o default ou em branco fora do perfil {@code dev}
    */
   @Bean
   public HmacSignatureValidator hmacSignatureValidator(
-      @Value("${app.gateway.webhook-secret}") String webhookSecret) {
+      @Value("${app.gateway.webhook-secret}") String webhookSecret, Environment environment) {
+    if (!isDev(environment)
+        && (webhookSecret == null
+            || webhookSecret.isBlank()
+            || "mock-webhook-secret".equals(webhookSecret))) {
+      throw new IllegalStateException(
+          "app.gateway.webhook-secret deve ser definida fora do perfil dev");
+    }
     return new HmacSignatureValidator(webhookSecret);
+  }
+
+  private static boolean isDev(Environment environment) {
+    return Arrays.asList(environment.getActiveProfiles()).contains("dev");
   }
 }
