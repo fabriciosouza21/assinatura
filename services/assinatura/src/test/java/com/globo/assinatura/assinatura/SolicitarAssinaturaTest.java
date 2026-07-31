@@ -123,4 +123,22 @@ class SolicitarAssinaturaTest {
         .isEqualTo("AssinaturaSolicitada");
     assertThat(evento.getStatus()).as("Evento nasce pendente").isEqualTo(OutboxStatus.PENDENTE);
   }
+
+  @Test
+  @DisplayName("Deve propagar falha da outbox para permitir rollback do insert da assinatura")
+  void devePropagarFalhaDaOutboxParaRollbackDoInsert() {
+    Usuario usuario = new Usuario("Fulano", "fulano@example.com");
+    usuario.setId(42L);
+    String usuarioUuid = "11111111-1111-1111-1111-111111111111";
+    usuario.setUuid(usuarioUuid);
+    when(usuarioRepository.findByUuid(usuarioUuid)).thenReturn(Optional.of(usuario));
+    when(assinaturaRepository.save(any(Assinatura.class))).thenAnswer(inv -> inv.getArgument(0));
+    when(outboxRepository.save(any(OutboxEvent.class)))
+        .thenThrow(new RuntimeException("outbox indisponivel"));
+
+    assertThatThrownBy(() -> command.executar(usuarioUuid, Plano.PREMIUM))
+        .as("Falha ao gravar o evento deve propagar para que a transacao role back o insert")
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("outbox indisponivel");
+  }
 }

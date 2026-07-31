@@ -64,6 +64,15 @@ class OutboxPublisherIntegracaoTest {
                     .toIterable()
                     .extracting(ConsumerRecord::key)
                     .contains("22222222-2222-2222-2222-222222222222");
+                assertThat(registros.iterator())
+                    .as("Payload publicado com os campos do contrato")
+                    .toIterable()
+                    .extracting(ConsumerRecord::value)
+                    .anyMatch(
+                        v ->
+                            ((String) v)
+                                .contains(
+                                    "\"assinaturaId\":\"22222222-2222-2222-2222-222222222222\""));
               });
     }
   }

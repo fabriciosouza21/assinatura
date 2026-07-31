@@ -17,9 +17,9 @@ import org.springframework.test.context.TestPropertySource;
 /**
  * Teste de integracao do {@link OutboxRepository} contra o Postgres real.
  *
- * <p>Garante que a migracao V4 cria a tabela {@code outbox} alinhada ao agregado {@link
- * OutboxEvent} e que o indice de polling parcial cobre os eventos pendentes. Usa o Postgres do
- * docker-compose (porta 5433) e delega o schema ao Flyway.
+ * <p>Garante que a migracao {@code V5__cria_tabela_outbox} cria a tabela {@code outbox} alinhada ao
+ * agregado {@link OutboxEvent} e que o indice de polling parcial cobre os eventos pendentes. Usa o
+ * Postgres do docker-compose (porta 5433) e delega o schema ao Flyway.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = Replace.NONE)
