@@ -30,7 +30,7 @@ gateway de pagamento:
 - O pagamento está **pendente**. Nada muda por enquanto; a assinatura segue
   aguardando.
 
-O contrato travado de eventos (`docs/contrato-eventos-kafka.puml`) define o evento
+O contrato travado de eventos (`docs/contratos/contrato-eventos-kafka.puml`) define o evento
 `PagamentoStatusAtualizado` no tópico `pagamento-status-atualizado`, com `status`
 já normalizado em `{APPROVED, REJECTED, PENDING}`. O gateway também emite
 `CANCELLED` e `EXPIRED`, mas o Pagamento Service mapeia ambos para `REJECTED`
@@ -78,7 +78,7 @@ validada injetando um evento sintético no tópico.
 
 ## Constraints
 
-- O contrato do evento é travado em `docs/contrato-eventos-kafka.puml`. Não pode
+- O contrato do evento é travado em `docs/contratos/contrato-eventos-kafka.puml`. Não pode
   ser alterado sem bump de versão. Em particular, o evento
   `PagamentoStatusAtualizado` **não** carrega `valor`; apenas `eventId`,
   `ocorridoEm`, `assinaturaId`, `status` e `paymentId`.

@@ -3,7 +3,7 @@
 **Date:** 2026-07-30
 **Status:** Draft
 **Entrega:** FF-1 (Track C) do roadmap `docs/roadmap/2026-07-29-assinatura-fluxo-completo.md` e `docs/roadmap/2026-07-30-plano-implementacao-paralela.md`
-**Contrato:** `api/auth.yaml`
+**Contrato:** `docs/openapi/auth.yaml`
 
 ## Problem
 

@@ -3,7 +3,7 @@
 **Date:** 2026-07-30
 **Status:** Draft
 **Entrega:** BE-2 do roadmap `docs/roadmap/2026-07-29-assinatura-fluxo-completo.md`
-**Contrato:** `api/assinatura.yaml`
+**Contrato:** `docs/openapi/assinatura.yaml`
 
 ## Problem
 
@@ -15,7 +15,7 @@ todo o downstream (pagamento, ativacao) fica bloqueado, porque nao ha assinatura
 
 ## Background
 
-O diagrama `docs/cadastro-usuario-assinatura.puml` define dois endpoints no
+O diagrama `docs/adesao/cadastro-usuario-assinatura.puml` define dois endpoints no
 inicio do fluxo: `POST /assinaturas` e `GET /assinaturas/{uuid}`. Hoje nenhum
 dos dois existe, nem a tabela `assinatura`. O roadmap recortou o BE-2 como
 "sem fila": solicitacao e consulta sincronas, sem Kafka e sem gateway. A

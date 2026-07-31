@@ -45,6 +45,23 @@ Seguir GitFlow.
 
 Nomes de branch em kebab-case, sem acentos. Verbo no infinitivo descrevendo a entrega.
 
+## Worktrees
+
+Trabalho paralelo acontece em *git worktrees* dentro de `.worktrees/`, na **raiz
+do projeto** (não em diretórios externos ao repositório). Isso mantém todas as
+árvores de trabalho próximas ao clone principal e compartilhando o mesmo `.git`.
+
+```bash
+git worktree add .worktrees/<nome-da-branch> -b feat/<nome> develop
+cd .worktrees/<nome-da-branch>
+```
+
+- Diretório `.worktrees/` já está no `.gitignore` (não é versionado).
+- Uma worktree por branch. Remova com `git worktree remove .worktrees/<nome>`
+  ao terminar e fazer o merge.
+- Numere migrations coordenando entre worktrees do mesmo serviço para não
+  colidir (ver plano de implementação em `docs/roadmap/`).
+
 ## Estilo de código — Java
 
 Aplica-se a `services/assinatura` e `services/pagamento`. Ambos seguem
@@ -98,7 +115,7 @@ Mock isolado de meio de pagamento. **Não faz parte do projeto principal.**
 
 - Apenas biblioteca padrão (`net/http`), sem framework.
 - `gofmt` para formatação. Estado em memória (map + mutex), sem persistência.
-- Contrato do mock em `docs/mock-meio-pagamento.puml`.
+- Contrato do mock em `docs/contratos/mock-meio-pagamento.puml`.
 
 Comandos (a partir de `docker/mock-pagamento`):
 
@@ -148,7 +165,7 @@ void deveAtualizarUsuario() {
 
 ## Documentação
 
-- Diagramas de sequência em `docs/*.puml`.
+- Diagramas de sequência em `docs/**/*.puml`.
 - Roadmap em `docs/roadmap/`.
 - Histórico de mudanças em `CHANGELOG.md`.
 - Setup e validação em `README.md`.

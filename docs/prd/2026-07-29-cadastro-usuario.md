@@ -13,7 +13,7 @@ desafio (solicitar assinatura exige um `usuarioId`).
 
 ## Background
 
-O diagrama `docs/cadastro-usuario-assinatura.puml` define o contrato
+O diagrama `docs/adesao/cadastro-usuario-assinatura.puml` define o contrato
 `POST /usuarios {nome, email} -> 201 {id: usuario_uuid}` como ponto de entrada
 do fluxo completo. A tabela `users` atual nasceu orientada a login
 (`username`, `password`, `role`) e não tem perfil de cliente nem identificador

@@ -3,12 +3,12 @@
 **Versão alvo:** `0.2.0`
 **Branch base:** `develop`
 **Data:** 2026-07-30 (revisado)
-**Contrato de referência:** `docs/contrato-eventos-kafka.puml`
+**Contrato de referência:** `docs/contratos/contrato-eventos-kafka.puml`
 **Alinhado com:** `docs/roadmap/2026-07-29-assinatura-fluxo-completo.md` (BE-2…BE-6, FF-1). Detalha as tracks para execução por múltiplos agentes.
 
 > **Revisão (2026-07-30):** a colocação da outbox foi invertida pela semântica transacional (§1 D1); o Pagamento Service é **stateful** com DB próprio (§1 D8).
 
-> **Como usar:** cada track em §5 é autocontida. Um agent lê este doc + `docs/contrato-eventos-kafka.puml` + os `.puml` citados + `AGENTS.md`, escolhe UMA track, implementa com TDD e verifica com `make verify` antes do merge.
+> **Como usar:** cada track em §5 é autocontida. Um agent lê este doc + `docs/contratos/contrato-eventos-kafka.puml` + os `.puml` citados + `AGENTS.md`, escolhe UMA track, implementa com TDD e verifica com `make verify` antes do merge.
 
 ---
 
@@ -18,7 +18,7 @@
 |----|---------|----------|
 | D1 | **Outbox no Assinatura Service** (publica `AssinaturaSolicitada`) | `INSERT assinatura` + publicação é dual-write **sem arranjo de ordem**: `publish→commit` = cobrança fantasma no gateway; `commit→publish` = assinatura trava em `AGUARDANDO_PAGAMENTO` sem auto-cura (retry devolve 409). A outbox os torna atômicos. |
 | D2 | **`PagamentoStatusAtualizado` por publish-then-ACK direto** (sem outbox) | Só se ACK 200 ao mock após o Kafka confirmar; falha → não-200 → o mock reenvia o webhook. Consumer dedup por `eventId`. Sem perda, sem outbox no Pagamento. |
-| D3 | Contratos travados em `docs/contrato-eventos-kafka.puml` | É o "interruptor" do paralelismo: cada serviço implementa contra o contrato. |
+| D3 | Contratos travados em `docs/contratos/contrato-eventos-kafka.puml` | É o "interruptor" do paralelismo: cada serviço implementa contra o contrato. |
 | D4 | `status` **normalizado** `{APPROVED, REJECTED, PENDING}` | O gateway também emite `CANCELLED`/`EXPIRED`, mapeados para `REJECTED` antes de publicar. |
 | D5 | `valor` em **BigDecimal (reais)**, ex. `39.90`, ponta a ponta | Sem conversão para centavos: o `valor` do evento é enviado direto ao gateway (mock em `float64`). Simplifica o consumer. |
 | D6 | `eventId` do evento = `eventId` do webhook | Dedup ponta-a-ponta; todo consumer deduplica por `eventId` (entrega at-least-once). |
@@ -55,7 +55,7 @@
 ## 4. Gates sequenciais (bloqueantes)
 
 - **Gate 0 — Fechar BE-2.** Merge `feat/solicita-assinatura-sem-fila` → `develop`. Único desbloqueador: tudo usa a entidade `Assinatura` + o fluxo de solicitação. ✅ DONE (PR #3, merged em `develop`).
-- **Gate 1 — Contratos travados.** ✅ DONE (`docs/contrato-eventos-kafka.puml`).
+- **Gate 1 — Contratos travados.** ✅ DONE (`docs/contratos/contrato-eventos-kafka.puml`).
 - A partir do Gate 0, as tracks §5 abrem.
 
 ---
@@ -67,7 +67,7 @@
 - **Branch:** `feat/outbox-assinatura-solicitada`
 - **Serviço:** Assinatura
 - **Depende de:** Gate 0 (BE-2)
-- **Consome:** contrato `AssinaturaSolicitada`; design `docs/outbox-assinatura-solicitada.puml` e `docs/outbox-modelo-dados.puml`
+- **Consome:** contrato `AssinaturaSolicitada`; design `docs/adesao/outbox-assinatura-solicitada.puml` e `docs/adesao/outbox-modelo-dados.puml`
 - **Definition of Done:**
   - Migration cria a tabela `outbox` (schema do `outbox-modelo-dados.puml`) + índice de polling `(status, proxima_tentativa_em, criado_em) WHERE status = 'PENDENTE'`.
   - `AssinaturaService` grava a outbox na **mesma transação** do `INSERT` da assinatura (evento `PENDENTE`).
@@ -123,7 +123,7 @@
 - **Status:** Concluído (PR #6, merged em `develop`).
 - **Branch:** `feat/pagamento-cria-cobranca`
 - **Serviço:** Pagamento
-- **Depende de:** P-0, contrato `AssinaturaSolicitada`, contrato do gateway (`docs/mock-meio-pagamento.puml`); design `docs/pagamento-cria-cobranca-sequencia.puml` e `pagamento-cria-cobranca-processo.puml`
+- **Depende de:** P-0, contrato `AssinaturaSolicitada`, contrato do gateway (`docs/contratos/mock-meio-pagamento.puml`); design `docs/adesao/pagamento-cria-cobranca-sequencia.puml` e `pagamento-cria-cobranca-processo.puml`
 - **Definition of Done:**
   - `@KafkaListener(topico = "assinatura-solicitada", groupId = "pagamento")` desserializa JSON.
   - Busca correlação por `assinaturaId`; se existir, conclui (idempotente). Se não, chama `POST /v1/payments` (`Idempotency-Key = assinaturaId`, WebClient) e persiste correlação `assinaturaId ↔ paymentId` com `status = PENDING` (persistência idempotente por `assinaturaId`).
@@ -136,7 +136,7 @@
 - **Status:** Implementado na branch, pendente de PR e merge.
 - **Branch:** `feat/webhook-pagamento`
 - **Serviço:** Pagamento
-- **Depende de:** D, P-0, contrato `PagamentoStatusAtualizado`, contrato do webhook (`docs/mock-meio-pagamento.puml`)
+- **Depende de:** D, P-0, contrato `PagamentoStatusAtualizado`, contrato do webhook (`docs/contratos/mock-meio-pagamento.puml`)
 - **Definition of Done:**
   - `POST /webhooks/payments`: valida HMAC (`X-Mock-Signature`), consulta status oficial (`GET /v1/payments/{paymentId}`), **normaliza** status (D4) e publica `PagamentoStatusAtualizado` (key = `assinaturaId`).
   - **publish-then-ACK**: retorna `200` só após o Kafka ackar; falha → não-200 → o mock reenvia o webhook.
@@ -198,7 +198,7 @@ Gate 0: BE-2 → develop          Gate 1: contratos ✅
 
 ## 9. Notas para os agentes (handoff)
 
-- **Leia antes:** este doc, `docs/contrato-eventos-kafka.puml`, os `.puml` citados na sua track, `AGENTS.md` (estilo/testes/commits).
+- **Leia antes:** este doc, `docs/contratos/contrato-eventos-kafka.puml`, os `.puml` citados na sua track, `AGENTS.md` (estilo/testes/commits).
 - **Pegue UMA track.** Codifique contra o contrato, não contra a implementação do outro serviço.
 - **TDD:** escreva o teste que reproduz o comportamento antes do código de produção (`AGENTS.md` §Scientific TDD).
 - **Verifique:** `make verify` no serviço alterado. Integração (`@Tag("integration")`) só no fim.

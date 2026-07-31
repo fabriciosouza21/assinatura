@@ -5,7 +5,7 @@
 **Track:** E / BE-6
 **Serviço:** Pagamento
 **Versão alvo:** `0.2.0`
-**Contrato OpenAPI:** `api/webhook-pagamento.yaml`
+**Contrato OpenAPI:** `docs/openapi/webhook-pagamento.yaml`
 
 ## Problema
 
@@ -27,7 +27,7 @@ e o Pagamento Service a cria no gateway (BE-5). A partir daí, o gateway process
 o pagamento e notifica o resultado via webhook: uma chamada HTTP `POST` que ele
 faz para um endpoint que o Pagamento Service precisa expor.
 
-O contrato do mock (`docs/mock-meio-pagamento.puml`) define essa notificação. O
+O contrato do mock (`docs/contratos/mock-meio-pagamento.puml`) define essa notificação. O
 gateway envia um `POST /webhooks/payments` com o corpo
 `{id, type, data:{paymentId, externalReference}}`, dois headers de controle
 (`X-Mock-Event-Id` e `X-Mock-Signature`) e nenhuma informação de status no corpo.
@@ -38,7 +38,7 @@ assinatura.
 
 A entrega da notificação é *at-least-once*. O webhook pode chegar mais de uma
 vez (reenvio do gateway, redelivery de rede). Por isso o contrato de eventos
-travado (`docs/contrato-eventos-kafka.puml`) usa o `eventId` do webhook como
+travado (`docs/contratos/contrato-eventos-kafka.puml`) usa o `eventId` do webhook como
 chave de dedup ponta a ponta. O Pagamento Service precisa ser idempotente por
 esse identificador.
 
@@ -97,7 +97,7 @@ consumindo.
 
 ## Constraints
 
-- O contrato de eventos está travado em `docs/contrato-eventos-kafka.puml`. Não
+- O contrato de eventos está travado em `docs/contratos/contrato-eventos-kafka.puml`. Não
   pode mudar sem bump de versão.
 - A chave HMAC já existe configurada (`app.gateway.webhook-secret`), mas não está
   em uso. Esta entrega a conecta à validação.

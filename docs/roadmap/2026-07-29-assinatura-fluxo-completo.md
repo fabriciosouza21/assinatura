@@ -1,6 +1,6 @@
 # Roadmap: Fluxo completo de assinatura
 
-**PRD:** `docs/cadastro-usuario-assinatura.puml` (contrato de referência)
+**PRD:** `docs/adesao/cadastro-usuario-assinatura.puml` (contrato de referência)
 **Versão alvo:** `0.2.0`
 **Branch base:** `develop` (criada a partir de `feat/setup-docker-mock-pagamento`)
 

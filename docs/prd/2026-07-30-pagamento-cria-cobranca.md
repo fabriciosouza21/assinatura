@@ -3,7 +3,7 @@
 **Date:** 2026-07-30
 **Status:** Draft
 **Entrega:** BE-5 do roadmap `docs/roadmap/2026-07-29-assinatura-fluxo-completo.md` (Track D do plano paralelo `docs/roadmap/2026-07-30-plano-implementacao-paralela.md`)
-**Contrato:** `docs/contrato-eventos-kafka.puml`, `docs/mock-meio-pagamento.puml`
+**Contrato:** `docs/contratos/contrato-eventos-kafka.puml`, `docs/contratos/mock-meio-pagamento.puml`
 
 ## Problem
 
@@ -26,7 +26,7 @@ criar a cobranca no gateway mock e persistir a correlacao em `PENDING`.
   usuarioId, plano, valor}`, no topico `assinatura-solicitada` com key =
   `assinaturaId`. A entrega e at-least-once (outbox do Assinatura), logo o
   consumer deve ser idempotente.
-- O contrato do gateway mock (`docs/mock-meio-pagamento.puml`) define
+- O contrato do gateway mock (`docs/contratos/mock-meio-pagamento.puml`) define
   `POST /v1/payments` com header `Idempotency-Key: <assinaturaId>` e body
   `{externalReference, amount, currency, paymentMethod, notificationUrl}`. A
   resposta traz `id` (`paymentId`) e `status: "PENDING"`. O gateway ja e
@@ -35,8 +35,8 @@ criar a cobranca no gateway mock e persistir a correlacao em `PENDING`.
 - Decisao D8: o Pagamento e stateful e persiste a correlacao para idempotencia e
   auditoria. Nao ha outbox no Pagamento (D2). A publicacao de
   `PagamentoStatusAtualizado` pertence ao BE-6 (Track E), fora do escopo.
-- Os diagramas `docs/pagamento-cria-cobranca-sequencia.puml` e
-  `docs/pagamento-cria-cobranca-processo.puml` detalham este fluxo.
+- Os diagramas `docs/adesao/pagamento-cria-cobranca-sequencia.puml` e
+  `docs/adesao/pagamento-cria-cobranca-processo.puml` detalham este fluxo.
 
 ## Requirements
 

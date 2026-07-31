@@ -3,8 +3,8 @@
 **Date:** 2026-07-30
 **Status:** Draft
 **Entrega:** BE-3 do roadmap `docs/roadmap/2026-07-29-assinatura-fluxo-completo.md` (Track A do plano paralelo `docs/roadmap/2026-07-30-plano-implementacao-paralela.md`)
-**Contrato:** `docs/contrato-eventos-kafka.puml` (evento `AssinaturaSolicitada`)
-**Design:** `docs/outbox-assinatura-solicitada.puml`, `docs/outbox-modelo-dados.puml`
+**Contrato:** `docs/contratos/contrato-eventos-kafka.puml` (evento `AssinaturaSolicitada`)
+**Design:** `docs/adesao/outbox-assinatura-solicitada.puml`, `docs/adesao/outbox-modelo-dados.puml`
 
 ## Problem
 
@@ -23,16 +23,16 @@ outbox para o Kafka com entrega pelo menos uma vez.
 
 ## Background
 
-O contrato de eventos travado (`docs/contrato-eventos-kafka.puml`) define
+O contrato de eventos travado (`docs/contratos/contrato-eventos-kafka.puml`) define
 `AssinaturaSolicitada` no topico `assinatura-solicitada` (key `assinaturaId`),
 produzido pelo Assinatura Service com entrega via outbox (transacional,
 at-least-once) e consumido pelo Pagamento Service, que deduplica por `eventId`.
 
-O diagrama `docs/outbox-assinatura-solicitada.puml` detalha o fluxo em duas
+O diagrama `docs/adesao/outbox-assinatura-solicitada.puml` detalha o fluxo em duas
 fases: gravacao atomica (assinatura + evento `PENDENTE` na mesma tx) e
 publicacao assincrona (`SELECT ... FOR UPDATE SKIP LOCKED`, retry com backoff +
 jitter, `FALHA` como DLQ persistida apos 3 tentativas). O modelo de dados
-`docs/outbox-modelo-dados.puml` define a tabela `outbox` e o indice de polling
+`docs/adesao/outbox-modelo-dados.puml` define a tabela `outbox` e o indice de polling
 parcial `(status, proxima_tentativa_em, criado_em) WHERE status = 'PENDENTE'`.
 
 O BE-2 ja deixou o enum `Plano` com `valor()` em `BigDecimal` (BASICO 19.90,
@@ -91,7 +91,7 @@ duplicados por servico (sem modulo compartilhado).
 
 - O schema e Flyway-owned (`ddl-auto: validate`). A tabela `outbox` exige uma
   nova migration `V4`.
-- O contrato `docs/contrato-eventos-kafka.puml` esta travado; campos e tipos do
+- O contrato `docs/contratos/contrato-eventos-kafka.puml` esta travado; campos e tipos do
   evento nao mudam sem bump de versao.
 - DTOs duplicados por servico (D7): `AssinaturaSolicitada` em
   `com.globo.assinatura.messaging.event`, serializacao String/JSON via Jackson.
