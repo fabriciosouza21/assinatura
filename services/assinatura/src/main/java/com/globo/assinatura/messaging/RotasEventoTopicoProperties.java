@@ -19,6 +19,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *       AssinaturaSolicitada: assinatura-solicitada
  *       RenovacaoSolicitada: renovacao-solicitada
  * </code></pre>
+ *
+ * @param rotasEventoTopico mapa de eventType para topico Kafka de destino
  */
 @ConfigurationProperties("app.kafka")
 public record RotasEventoTopicoProperties(Map<String, String> rotasEventoTopico) {}
