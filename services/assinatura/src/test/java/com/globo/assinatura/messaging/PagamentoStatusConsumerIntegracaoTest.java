@@ -11,15 +11,25 @@ import com.globo.assinatura.messaging.event.PagamentoStatusAtualizado;
 import com.globo.assinatura.messaging.event.StatusPagamento;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.test.EmbeddedKafkaBroker;
 import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.test.context.TestPropertySource;
 import tools.jackson.databind.ObjectMapper;
 
@@ -52,10 +62,13 @@ class PagamentoStatusConsumerIntegracaoTest {
 
   private static final String TOPICO_PAGAMENTO_STATUS = "pagamento-status-atualizado";
 
+  private static final String TOPICO_PAGAMENTO_STATUS_DLQ = "pagamento-status-atualizado-dlq";
+
   @Autowired private AssinaturaRepository assinaturaRepository;
   @Autowired private UsuarioRepository usuarioRepository;
   @Autowired private KafkaTemplate<String, String> kafkaTemplate;
   @Autowired private ObjectMapper objectMapper;
+  @Autowired private EmbeddedKafkaBroker embeddedKafka;
 
   @Test
   @DisplayName("Deve ativar a assinatura no banco ao consumir evento APPROVED do topico Kafka")
@@ -92,5 +105,45 @@ class PagamentoStatusConsumerIntegracaoTest {
                   .as("Data de expiracao da vigencia preenchida")
                   .isNotNull();
             });
+  }
+
+  @Test
+  @DisplayName("Deve enviar payload invalido para o topico de falha")
+  void deveEnviarPayloadInvalidoParaTopicoDeFalha() throws Exception {
+    String assinaturaId = "33333333-3333-3333-3333-333333333333";
+    String payloadInvalido = "{isto-nao-e-json";
+
+    try (KafkaConsumer<String, String> consumer = consumidorDlq()) {
+      consumer.subscribe(List.of(TOPICO_PAGAMENTO_STATUS_DLQ));
+      consumer.poll(Duration.ofSeconds(1));
+
+      kafkaTemplate.send(TOPICO_PAGAMENTO_STATUS, assinaturaId, payloadInvalido).get();
+
+      await()
+          .atMost(Duration.ofSeconds(10))
+          .untilAsserted(
+              () -> {
+                ConsumerRecords<String, String> registros = consumer.poll(Duration.ofSeconds(1));
+                assertThat(registros)
+                    .as("DLQ recebeu o payload invalido")
+                    .extracting(ConsumerRecord::value)
+                    .anyMatch(valor -> valor.contains("isto-nao-e-json"));
+              });
+    }
+  }
+
+  /**
+   * Constroi um {@link KafkaConsumer} manual inscrito no topico DLQ, com groupId unico e {@code
+   * auto.offset.reset=earliest}, para observar os registros publicados pelo {@code
+   * DeadLetterPublishingRecoverer} do {@link MessagingConfig}.
+   */
+  private KafkaConsumer<String, String> consumidorDlq() {
+    String groupId = "teste-dlq-" + System.currentTimeMillis();
+    Map<String, Object> props =
+        new HashMap<>(KafkaTestUtils.consumerProps(groupId, "true", embeddedKafka));
+    props.put("auto.offset.reset", "earliest");
+    props.put("key.deserializer", StringDeserializer.class.getName());
+    props.put("value.deserializer", StringDeserializer.class.getName());
+    return new KafkaConsumer<>(props);
   }
 }
