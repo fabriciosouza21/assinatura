@@ -46,7 +46,7 @@ import org.springframework.test.context.TestPropertySource;
       "spring.datasource.username=assinatura",
       "spring.datasource.password=assinatura",
       "spring.kafka.consumer.auto-offset-reset=earliest",
-      "app.kafka.topico-assinatura-solicitada=assinatura-solicitada",
+      "app.kafka.rotas-evento-topico.AssinaturaSolicitada=assinatura-solicitada",
       "app.outbox.intervalo-ms=60000",
       "app.outbox.tamanho-lote=10",
     })
@@ -115,7 +115,7 @@ class OutboxPublisherIntegracaoTest {
 
     @KafkaListener(
         id = "capturador-assinatura-solicitada",
-        topics = "${app.kafka.topico-assinatura-solicitada}",
+        topics = "assinatura-solicitada",
         groupId = "teste-publisher-outbox",
         autoStartup = "true")
     void capturar(ConsumerRecord<String, String> registro) {
