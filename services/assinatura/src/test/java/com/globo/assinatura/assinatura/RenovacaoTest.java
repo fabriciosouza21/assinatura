@@ -54,4 +54,15 @@ class RenovacaoTest {
         .as("Aprovar renovacao ja aprovada e transicao invalida")
         .isInstanceOf(IllegalStateException.class);
   }
+
+  @Test
+  @DisplayName("Deve lancar excecao ao esgotar tentativas de renovacao ja esgotada")
+  void deveLancarExcecaoAoEsgotarRenovacaoJaEsgotada() {
+    Renovacao renovacao = new Renovacao(1L, LocalDate.of(2026, 2, 1));
+    renovacao.esgotarTentativas();
+
+    assertThatThrownBy(renovacao::esgotarTentativas)
+        .as("Esgotar tentativas de renovacao ja esgotada e transicao invalida")
+        .isInstanceOf(IllegalStateException.class);
+  }
 }

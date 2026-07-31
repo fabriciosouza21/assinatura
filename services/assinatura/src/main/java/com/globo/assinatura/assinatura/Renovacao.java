@@ -47,6 +47,9 @@ public class Renovacao {
 
   /** Marca a renovacao com tentativas de cobranca esgotadas. */
   public void esgotarTentativas() {
+    if (this.status == StatusRenovacao.TENTATIVAS_ESGOTADA) {
+      throw new IllegalStateException("renovacao ja com tentativas esgotadas");
+    }
     this.status = StatusRenovacao.TENTATIVAS_ESGOTADA;
   }
 }
