@@ -79,6 +79,15 @@ make test-integration-up    # apenas sobe o Postgres e aguarda a porta 5433
 make test-integration-down  # derruba o Postgres
 ```
 
+> **Nota:** os testes de integração compartilham a base na porta 5433 sem
+> cleanup entre si, então **rodem sempre via `make test-integration`, que
+> recria o Postgres do zero**. Execuções isoladas ou contra base já populada
+> geram `unique constraint` duplicado e falsos negativos. `@Transactional` não
+> resolve o caso: os testes com `@EmbeddedKafka` gravam via consumer numa
+> thread própria, fora do rollback do teste.
+
+
+
 O hook `pre-commit` (em `.githooks/`) roda `make lint` automaticamente em cada
 serviço de `services/` que tiver arquivos `.java` no stage. Bypass:
 `SKIP_PRE_COMMIT=1 git commit ...`.
