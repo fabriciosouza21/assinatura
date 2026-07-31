@@ -54,7 +54,7 @@
 
 ## 4. Gates sequenciais (bloqueantes)
 
-- **Gate 0 — Fechar BE-2.** Merge `feat/solicita-assinatura-sem-fila` → `develop`. Único desbloqueador: tudo usa a entidade `Assinatura` + o fluxo de solicitação. **Em andamento.**
+- **Gate 0 — Fechar BE-2.** Merge `feat/solicita-assinatura-sem-fila` → `develop`. Único desbloqueador: tudo usa a entidade `Assinatura` + o fluxo de solicitação. ✅ DONE (PR #3, merged em `develop`).
 - **Gate 1 — Contratos travados.** ✅ DONE (`docs/contrato-eventos-kafka.puml`).
 - A partir do Gate 0, as tracks §5 abrem.
 
@@ -63,6 +63,7 @@
 ## 5. Tracks (executáveis independentemente)
 
 ### Track A — Outbox + publica `AssinaturaSolicitada` (Assinatura) — **track pesada**
+- **Status:** Concluído (PR #7, merged em `develop`).
 - **Branch:** `feat/outbox-assinatura-solicitada`
 - **Serviço:** Assinatura
 - **Depende de:** Gate 0 (BE-2)
@@ -77,6 +78,7 @@
 - **Paralelizável com:** B, C, P-0.
 
 ### Track B — Consome `PagamentoStatusAtualizado`
+- **Status:** Concluído (PR #8, merged em `develop`).
 - **Branch:** `feat/consome-pagamento-status`
 - **Serviço:** Assinatura
 - **Depende de:** Gate 0 (BE-2)
@@ -91,6 +93,7 @@
 - **Paralelizável com:** A, C, P-0, D.
 
 ### Track C — Login de cliente (FF-1)
+- **Status:** Concluído (PR #4, merged em `develop`).
 - **Branch:** `feat/login-cliente`
 - **Serviço:** Assinatura
 - **Depende de:** Gate 0 (BE-2). Fecha lacuna do ADR 0001.
@@ -103,6 +106,7 @@
 - **Restrição de ordem:** deve ser mergeado **antes** do fluxo end-to-end acionar o gateway com transações reais (convergência §8).
 
 ### Track P-0 — DB do Pagamento Service (fundação)
+- **Status:** Concluído (PR #5, merged em `develop`).
 - **Branch:** `feat/pagamento-db`
 - **Serviço:** Pagamento
 - **Depende de:** Gate 0
@@ -116,6 +120,7 @@
 - **Paralelizável com:** A, B, C. **Bloqueia** D e E.
 
 ### Track D — Consome `AssinaturaSolicitada` + cria cobrança (Pagamento, stateful)
+- **Status:** Concluído (PR #6, merged em `develop`).
 - **Branch:** `feat/pagamento-cria-cobranca`
 - **Serviço:** Pagamento
 - **Depende de:** P-0, contrato `AssinaturaSolicitada`, contrato do gateway (`docs/mock-meio-pagamento.puml`); design `docs/pagamento-cria-cobranca-sequencia.puml` e `pagamento-cria-cobranca-processo.puml`
@@ -128,6 +133,7 @@
 - **Paralelizável com:** A, B, C (serviços distintos). **Bloqueia** E.
 
 ### Track E — Webhook + publica `PagamentoStatusAtualizado` (publish-then-ACK, stateful)
+- **Status:** Implementado na branch, pendente de PR e merge.
 - **Branch:** `feat/webhook-pagamento`
 - **Serviço:** Pagamento
 - **Depende de:** D, P-0, contrato `PagamentoStatusAtualizado`, contrato do webhook (`docs/mock-meio-pagamento.puml`)

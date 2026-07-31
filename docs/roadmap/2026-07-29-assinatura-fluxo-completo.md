@@ -99,9 +99,9 @@
 | 1 | Cadastro de usuário (`POST /usuarios` com `uuid`) | 0 | [x] |
 | 2 | Solicitação + consulta de assinatura sem fila (`POST`/`GET`, `409`) | 1 | [x] |
 | FF-1 | Login de cliente (fecha lacuna `User`↔`Usuario` do ADR 0001) | 1, 2 | [x] |
-| 3 | Outbox + publicação de `AssinaturaSolicitada` no Kafka | 2 | [ ] |
-| 4 | Consumer de `PagamentoStatusAtualizado` (ativa/recusa) | 2 | [ ] |
-| 5 | Pagamento: consumer `AssinaturaSolicitada` + chamada ao gateway | 3 | [ ] |
+| 3 | Outbox + publicação de `AssinaturaSolicitada` no Kafka | 2 | [x] |
+| 4 | Consumer de `PagamentoStatusAtualizado` (ativa/recusa) | 2 | [x] |
+| 5 | Pagamento: consumer `AssinaturaSolicitada` + chamada ao gateway | 3 | [x] |
 | 6 | Webhook de pagamento (HMAC + dedup + publica resultado) | 5 | [ ] |
 | 7 | Changelog + bump versão `0.2.0` | 1-6 | [ ] |
 
