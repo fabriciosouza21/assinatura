@@ -2,6 +2,7 @@ package com.globo.pagamento.gateway;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.env.Environment;
+import org.springframework.http.client.reactive.ClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
 
 /**
@@ -60,5 +62,15 @@ class GatewayWebClientConfigTest {
     new GatewayWebClientConfig().gatewayPagamentoClient("http://gw", "http://hook", builderSpy);
 
     verify(builderSpy).build();
+  }
+
+  @Test
+  @DisplayName("Deve aplicar o conector HTTP ao Builder injetado pelo Spring")
+  void deveAplicarConectorHttpAoBuilderInjetado() {
+    WebClient.Builder builderSpy = Mockito.spy(WebClient.builder().baseUrl("http://gw"));
+
+    new GatewayWebClientConfig().gatewayPagamentoClient("http://gw", "http://hook", builderSpy);
+
+    verify(builderSpy).clientConnector(any(ClientHttpConnector.class));
   }
 }
