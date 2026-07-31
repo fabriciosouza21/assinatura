@@ -40,10 +40,9 @@ public class SecurityConfig {
    *
    * @param http o builder de segurança do Spring
    * @return a cadeia de filtros configurada
-   * @throws Exception se a configuração falhar
    */
   @Bean
-  public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+  public SecurityFilterChain securityFilterChain(HttpSecurity http) {
     http.csrf(AbstractHttpConfigurer::disable)
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
@@ -71,11 +70,9 @@ public class SecurityConfig {
    *
    * @param config a configuração de autenticação do Spring
    * @return o gerenciador de autenticação
-   * @throws Exception se a obtenção do gerenciador falhar
    */
   @Bean
-  public AuthenticationManager authenticationManager(AuthenticationConfiguration config)
-      throws Exception {
+  public AuthenticationManager authenticationManager(AuthenticationConfiguration config) {
     return config.getAuthenticationManager();
   }
 }

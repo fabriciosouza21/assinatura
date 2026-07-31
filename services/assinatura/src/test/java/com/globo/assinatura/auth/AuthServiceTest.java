@@ -58,7 +58,7 @@ class AuthServiceTest {
     Claims claims =
         Jwts.parser().verifyWith(chave).build().parseSignedClaims(resposta.token()).getPayload();
     assertThat(claims.getSubject()).as("Subject do JWT e o email").isEqualTo("cliente@example.com");
-    assertThat(claims.get("role")).as("Claim role do cliente").isEqualTo("ROLE_CLIENT");
+    assertThat(claims).as("Claim role do cliente").containsEntry("role", "ROLE_CLIENT");
     assertThat(resposta.tokenType()).as("Tipo do token").isEqualTo("Bearer");
   }
 }
