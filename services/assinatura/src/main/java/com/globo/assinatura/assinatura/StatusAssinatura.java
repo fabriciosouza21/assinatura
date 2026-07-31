@@ -7,5 +7,9 @@ public enum StatusAssinatura {
   /** Pagamento aprovado e assinatura ativa. */
   ATIVA,
   /** Pagamento recusado. */
-  PAGAMENTO_RECUSADO
+  PAGAMENTO_RECUSADO,
+  /** Ciclo vencido e renovacao em andamento, aguardando o resultado da cobranca. */
+  EM_RENOVACAO,
+  /** Acesso suspenso apos o esgotamento das tentativas de cobranca da renovacao. */
+  SUSPENSA
 }

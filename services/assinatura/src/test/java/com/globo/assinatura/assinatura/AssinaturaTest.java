@@ -146,4 +146,31 @@ class AssinaturaTest {
         .as("Proxima renovacao coincide com o novo fim do ciclo")
         .isEqualTo(LocalDate.of(2026, 3, 1));
   }
+
+  @Test
+  @DisplayName("Deve transitar para em renovacao ao iniciar a renovacao")
+  void deveTransitarParaEmRenovacaoAoIniciarRenovacao() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+
+    assinatura.iniciarRenovacao();
+
+    assertThat(assinatura.getStatus())
+        .as("Status transita para em renovacao")
+        .isEqualTo(StatusAssinatura.EM_RENOVACAO);
+  }
+
+  @Test
+  @DisplayName("Deve transitar para suspensa ao suspender a assinatura em renovacao")
+  void deveTransitarParaSuspensaAoSuspender() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.iniciarRenovacao();
+
+    assinatura.suspender();
+
+    assertThat(assinatura.getStatus())
+        .as("Status transita para suspensa")
+        .isEqualTo(StatusAssinatura.SUSPENSA);
+  }
 }
