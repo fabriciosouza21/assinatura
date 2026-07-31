@@ -70,4 +70,20 @@ class AssinaturaTest {
         .as("Status apos recusa")
         .isEqualTo(StatusAssinatura.PAGAMENTO_RECUSADO);
   }
+
+  @Test
+  @DisplayName("Deve permanecer ativa ao receber nova ativacao")
+  void devePermanecerAtivaAoReceberNovaAtivacao() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+
+    assinatura.ativar(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 7, 1));
+
+    assertThat(assinatura.getDataInicio())
+        .as("Data de inicio da primeira ativacao preservada")
+        .isEqualTo(LocalDate.of(2026, 1, 1));
+    assertThat(assinatura.getDataExpiracao())
+        .as("Data de expiracao da primeira ativacao preservada")
+        .isEqualTo(LocalDate.of(2026, 2, 1));
+  }
 }

@@ -123,10 +123,17 @@ public class Assinatura {
   /**
    * Transita o ciclo de vida para ativa apos a aprovacao do pagamento.
    *
+   * <p>Apenas assinaturas aguardando pagamento podem ser ativadas. Eventos de aprovacao tardios ou
+   * duplicados para uma assinatura ja resolvida sao ignorados, preservando a vigencia original,
+   * conforme o comportamento simetrico de {@link #recusarPagamento()}.
+   *
    * @param dataInicio data de inicio da vigencia
    * @param dataExpiracao data de expiracao da vigencia
    */
   public void ativar(LocalDate dataInicio, LocalDate dataExpiracao) {
+    if (this.status != StatusAssinatura.AGUARDANDO_PAGAMENTO) {
+      return;
+    }
     this.status = StatusAssinatura.ATIVA;
     this.dataInicio = dataInicio;
     this.dataExpiracao = dataExpiracao;
