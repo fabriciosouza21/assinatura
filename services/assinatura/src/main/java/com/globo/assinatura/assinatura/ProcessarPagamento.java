@@ -53,7 +53,7 @@ public class ProcessarPagamento {
     }
     LocalDate hoje = LocalDate.now(clock);
     Optional<Assinatura> possivelAssinatura =
-        assinaturaRepository.findByUuidForUpdate(evento.assinaturaId().toString());
+        assinaturaRepository.buscarPorUuidParaAtualizacao(evento.assinaturaId().toString());
     if (possivelAssinatura.isEmpty()) {
       return;
     }

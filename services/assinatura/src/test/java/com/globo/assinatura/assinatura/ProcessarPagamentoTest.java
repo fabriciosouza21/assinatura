@@ -46,7 +46,7 @@ class ProcessarPagamentoTest {
       "Deve carregar a assinatura sob lock e transita-la para ativa quando o pagamento e aprovado")
   void deveAtivarAssinaturaQuandoPagamentoAprovado() {
     Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
-    when(assinaturaRepository.findByUuidForUpdate(assinatura.getUuid()))
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
         .thenReturn(Optional.of(assinatura));
     PagamentoStatusAtualizado evento =
         new PagamentoStatusAtualizado(
@@ -58,7 +58,7 @@ class ProcessarPagamentoTest {
 
     command.executar(evento);
 
-    verify(assinaturaRepository).findByUuidForUpdate(assinatura.getUuid());
+    verify(assinaturaRepository).buscarPorUuidParaAtualizacao(assinatura.getUuid());
     assertThat(assinatura.getStatus())
         .as("assinatura aprovada deve transitar para ativa")
         .isEqualTo(StatusAssinatura.ATIVA);
@@ -68,7 +68,7 @@ class ProcessarPagamentoTest {
   @DisplayName("Deve registrar o evento processado ao aprovar o pagamento")
   void deveRegistrarEventoProcessadoQuandoPagamentoAprovado() {
     Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
-    when(assinaturaRepository.findByUuidForUpdate(assinatura.getUuid()))
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
         .thenReturn(Optional.of(assinatura));
     PagamentoStatusAtualizado evento =
         new PagamentoStatusAtualizado(
@@ -92,7 +92,7 @@ class ProcessarPagamentoTest {
   @DisplayName("Deve definir a data de inicio como hoje ao aprovar o pagamento")
   void deveDefinirDataInicioComoHojeAoAprovarPagamento() {
     Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
-    when(assinaturaRepository.findByUuidForUpdate(assinatura.getUuid()))
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
         .thenReturn(Optional.of(assinatura));
     PagamentoStatusAtualizado evento =
         new PagamentoStatusAtualizado(
@@ -116,7 +116,7 @@ class ProcessarPagamentoTest {
   @DisplayName("Deve definir a data de expiracao para um mes apos o inicio")
   void deveDefinirDataExpiracaoParaUmMesAposInicio() {
     Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
-    when(assinaturaRepository.findByUuidForUpdate(assinatura.getUuid()))
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
         .thenReturn(Optional.of(assinatura));
     PagamentoStatusAtualizado evento =
         new PagamentoStatusAtualizado(
@@ -140,7 +140,7 @@ class ProcessarPagamentoTest {
   @DisplayName("Deve transitar para pagamento recusado quando o pagamento e rejeitado")
   void deveTransitarParaPagamentoRecusadoQuandoRejeitado() {
     Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
-    when(assinaturaRepository.findByUuidForUpdate(assinatura.getUuid()))
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
         .thenReturn(Optional.of(assinatura));
     PagamentoStatusAtualizado evento =
         new PagamentoStatusAtualizado(
@@ -181,7 +181,7 @@ class ProcessarPagamentoTest {
   @DisplayName("Deve ignorar redelivery de evento ja processado")
   void deveIgnorarRedeliveryDeEventoJaProcessado() {
     Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
-    when(assinaturaRepository.findByUuidForUpdate(assinatura.getUuid()))
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
         .thenReturn(Optional.of(assinatura));
     UUID eventId = UUID.fromString("22222222-2222-2222-2222-222222222222");
     when(pagamentoEventoProcessadoRepository.existsByEventId(eventId)).thenReturn(true);
@@ -204,7 +204,8 @@ class ProcessarPagamentoTest {
   @Test
   @DisplayName("Deve ignorar silenciosamente evento para assinatura inexistente")
   void deveIgnorarSilenciosamenteEventoParaAssinaturaInexistente() {
-    when(assinaturaRepository.findByUuidForUpdate(any(String.class))).thenReturn(Optional.empty());
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(any(String.class)))
+        .thenReturn(Optional.empty());
     PagamentoStatusAtualizado evento =
         new PagamentoStatusAtualizado(
             UUID.randomUUID(),
@@ -223,7 +224,7 @@ class ProcessarPagamentoTest {
   void deveManterAssinaturaAtivaAoReceberEventoTardioRejeitado() {
     Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
     assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
-    when(assinaturaRepository.findByUuidForUpdate(assinatura.getUuid()))
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
         .thenReturn(Optional.of(assinatura));
     PagamentoStatusAtualizado evento =
         new PagamentoStatusAtualizado(

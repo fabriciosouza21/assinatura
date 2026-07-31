@@ -1,12 +1,10 @@
 package com.globo.assinatura.assinatura;
 
-import jakarta.persistence.LockModeType;
-import jakarta.persistence.QueryHint;
 import java.util.Collection;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.QueryHints;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Repositorio de persistencia do agregado {@link Assinatura}.
@@ -36,14 +34,15 @@ public interface AssinaturaRepository extends JpaRepository<Assinatura, Long> {
   /**
    * Busca uma assinatura pelo uuid publico adquirindo um lock pessimista de escrita.
    *
-   * <p>A query derivada e executada com {@code SELECT ... FOR UPDATE} ({@link
-   * LockModeType#PESSIMISTIC_WRITE}) e timeout de 3 segundos, garantindo exclusao mutua no
-   * processamento concorrente de eventos de pagamento para a mesma assinatura.
+   * <p>Executa {@code SELECT ... FOR UPDATE} em SQL nativo, prendendo a linha da assinatura ate o
+   * commit da transacao e garantindo exclusao mutua no processamento concorrente de eventos de
+   * pagamento para a mesma assinatura. O lock e em nivel de linha, afetando apenas a assinatura
+   * alvo. O {@code FOR UPDATE} vive no proprio SQL (em nivel de query nativa o Hibernate nao
+   * reescreve a instrucao a partir de {@code @Lock}, por isso o lock fica explicito no SQL).
    *
    * @param uuid uuid publico da assinatura
    * @return a assinatura encontrada sob lock, ou vazio se nao existir
    */
-  @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @QueryHints({@QueryHint(name = "jakarta.persistence.lock.timeout", value = "3000")})
-  Optional<Assinatura> findByUuidForUpdate(String uuid);
+  @Query(value = "SELECT * FROM assinatura WHERE uuid = :uuid FOR UPDATE", nativeQuery = true)
+  Optional<Assinatura> buscarPorUuidParaAtualizacao(@Param("uuid") String uuid);
 }
