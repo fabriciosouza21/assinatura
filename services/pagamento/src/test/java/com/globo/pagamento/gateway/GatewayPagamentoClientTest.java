@@ -72,4 +72,34 @@ class GatewayPagamentoClientTest {
         .as("Referencia externa = assinaturaId")
         .isEqualTo("assinatura-uuid");
   }
+
+  @Test
+  @DisplayName("Deve consultar o status oficial da cobranca por paymentId")
+  void deveConsultarStatusPorPaymentId() throws Exception {
+    server.enqueue(
+        new MockResponse()
+            .setHeader("Content-Type", "application/json")
+            .setBody(
+                jsonMapper.writeValueAsString(
+                    new PaymentResponse(
+                        "pay_123",
+                        "assinatura-uuid",
+                        new BigDecimal("19.90"),
+                        "BRL",
+                        "PIX",
+                        "APPROVED")))
+            .setResponseCode(200));
+
+    StatusGateway status = client.consultarStatus("pay_123");
+
+    assertThat(status)
+        .as("Status oficial retornado pelo gateway")
+        .isEqualTo(StatusGateway.APPROVED);
+
+    RecordedRequest requisicao = server.takeRequest();
+    assertThat(requisicao.getMethod()).as("Metodo da consulta").isEqualTo("GET");
+    assertThat(requisicao.getPath())
+        .as("Path da consulta de status")
+        .isEqualTo("/v1/payments/pay_123");
+  }
 }
