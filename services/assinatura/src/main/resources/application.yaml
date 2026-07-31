@@ -44,6 +44,10 @@ app:
     secret: ${APP_JWT_SECRET:ZmIxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTA=}
     expiration-ms: ${APP_JWT_EXPIRATION_MS:3600000}
 
+  kafka:
+    topico-pagamento-status-atualizado: ${APP_KAFKA_TOPICO_PAGAMENTO_STATUS_ATUALIZADO:pagamento-status-atualizado}
+    topico-pagamento-status-atualizado-dlq: ${APP_KAFKA_TOPICO_PAGAMENTO_STATUS_ATUALIZADO_DLQ:pagamento-status-atualizado-dlq}
+
 management:
   endpoints:
     web:
