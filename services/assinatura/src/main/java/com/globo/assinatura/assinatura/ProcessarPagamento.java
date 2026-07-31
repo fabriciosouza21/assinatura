@@ -5,6 +5,7 @@ import com.globo.assinatura.messaging.event.StatusPagamento;
 import com.globo.assinatura.pagamento.PagamentoEventoProcessado;
 import com.globo.assinatura.pagamento.PagamentoEventoProcessadoRepository;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
@@ -72,6 +73,6 @@ public class ProcessarPagamento {
       assinatura.ativar(hoje, hoje.plusMonths(1));
     }
     pagamentoEventoProcessadoRepository.save(
-        new PagamentoEventoProcessado(evento.eventId(), assinatura.getUuid()));
+        new PagamentoEventoProcessado(evento.eventId(), assinatura.getUuid(), Instant.now(clock)));
   }
 }

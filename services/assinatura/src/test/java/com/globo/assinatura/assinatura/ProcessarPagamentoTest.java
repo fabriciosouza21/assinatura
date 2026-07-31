@@ -89,6 +89,33 @@ class ProcessarPagamentoTest {
   }
 
   @Test
+  @DisplayName("Deve carimbar o instante de processado com o relogio injetado")
+  void deveCarimbarInstanteProcessadoComRelogioInjetado() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    relogio = Clock.fixed(Instant.parse("2026-01-15T10:00:00Z"), ZoneOffset.UTC);
+    command =
+        new ProcessarPagamento(assinaturaRepository, pagamentoEventoProcessadoRepository, relogio);
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            UUID.fromString("11111111-1111-1111-1111-111111111111"),
+            Instant.parse("2026-01-15T09:00:00Z"),
+            UUID.fromString(assinatura.getUuid()),
+            StatusPagamento.APPROVED,
+            UUID.randomUUID());
+
+    command.executar(evento);
+
+    ArgumentCaptor<PagamentoEventoProcessado> captor =
+        ArgumentCaptor.forClass(PagamentoEventoProcessado.class);
+    verify(pagamentoEventoProcessadoRepository).save(captor.capture());
+    assertThat(captor.getValue().getProcessadoEm())
+        .as("processado_em deve vir do relogio injetado, nao do wall-clock")
+        .isEqualTo(Instant.parse("2026-01-15T10:00:00Z"));
+  }
+
+  @Test
   @DisplayName("Deve definir a data de inicio como hoje ao aprovar o pagamento")
   void deveDefinirDataInicioComoHojeAoAprovarPagamento() {
     Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);

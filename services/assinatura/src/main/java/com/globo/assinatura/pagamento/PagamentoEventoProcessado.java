@@ -41,11 +41,12 @@ public class PagamentoEventoProcessado {
    *
    * @param eventId identificador unico do evento recebido do barramento de mensagens
    * @param assinaturaUuid uuid publico da assinatura alvo do evento
+   * @param processadoEm instante em que o evento foi processado, fornecido pelo relogio injetado
    */
-  public PagamentoEventoProcessado(UUID eventId, String assinaturaUuid) {
+  public PagamentoEventoProcessado(UUID eventId, String assinaturaUuid, Instant processadoEm) {
     this.eventId = eventId;
     this.assinaturaUuid = assinaturaUuid;
-    this.processadoEm = Instant.now();
+    this.processadoEm = processadoEm;
   }
 
   /**
