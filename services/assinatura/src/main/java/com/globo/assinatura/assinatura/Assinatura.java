@@ -134,6 +134,9 @@ public class Assinatura {
 
   /** Transita o ciclo de vida para pagamento recusado apos a reprovacao do pagamento. */
   public void recusarPagamento() {
+    if (this.status != StatusAssinatura.AGUARDANDO_PAGAMENTO) {
+      return;
+    }
     this.status = StatusAssinatura.PAGAMENTO_RECUSADO;
   }
 }

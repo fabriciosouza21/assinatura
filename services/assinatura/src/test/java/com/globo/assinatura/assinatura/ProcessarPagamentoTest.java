@@ -217,4 +217,26 @@ class ProcessarPagamentoTest {
         .as("evento para assinatura inexistente nao deve lancar excecao")
         .doesNotThrowAnyException();
   }
+
+  @Test
+  @DisplayName("Deve manter assinatura ativa ao receber evento tardio rejeitado")
+  void deveManterAssinaturaAtivaAoReceberEventoTardioRejeitado() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    when(assinaturaRepository.findByUuidForUpdate(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            UUID.randomUUID(),
+            Instant.now(),
+            UUID.fromString(assinatura.getUuid()),
+            StatusPagamento.REJECTED,
+            UUID.randomUUID());
+
+    command.executar(evento);
+
+    assertThat(assinatura.getStatus())
+        .as("evento tardio nao deve reverter assinatura ja ativa")
+        .isEqualTo(StatusAssinatura.ATIVA);
+  }
 }
