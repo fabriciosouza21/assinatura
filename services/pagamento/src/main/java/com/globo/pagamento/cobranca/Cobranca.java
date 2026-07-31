@@ -105,6 +105,16 @@ public class Cobranca {
     return atualizadoEm;
   }
 
+  /**
+   * Atualiza o status da cobranca para refletir a decisao do gateway.
+   *
+   * @param status novo status decidido pelo gateway
+   */
+  public void marcarComo(StatusCobranca status) {
+    this.status = status;
+    this.atualizadoEm = Instant.now();
+  }
+
   /** Preenche os instantes de criacao e atualizacao antes do primeiro persist. */
   @PrePersist
   void aoPersistir() {
