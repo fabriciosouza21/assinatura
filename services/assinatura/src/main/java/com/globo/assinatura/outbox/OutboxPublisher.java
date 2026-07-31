@@ -82,6 +82,7 @@ public class OutboxPublisher {
       }
       kafkaTemplate.send(topico, evento.getAggregateId().toString(), evento.getPayload()).get();
       evento.marcarPublicado(Instant.now());
+      log.info("Evento de assinatura publicado para assinaturaId={}", evento.getAggregateId());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       tratarFalha(evento, e);

@@ -25,14 +25,18 @@ public class GatewayWebClientConfig {
    * @param baseUrl url base do gateway, via {@code app.gateway.base-url}
    * @param webhookUrl url de notificacoes de webhook, via {@code
    *     app.gateway.webhook-notification-url}
+   * @param builder {@link WebClient.Builder} injetado pelo Spring, que carrega a instrumentacao de
+   *     tracing (ex.: OpenTelemetry) registrada nos autoconfiguradores do Spring Boot; eh o ponto
+   *     de entrada a ser usado para construir o {@link WebClient} de forma observavel
    * @return o {@link GatewayPagamentoClient} configurado
    */
   @Bean
   public GatewayPagamentoClient gatewayPagamentoClient(
       @Value("${app.gateway.base-url}") String baseUrl,
-      @Value("${app.gateway.webhook-notification-url}") String webhookUrl) {
+      @Value("${app.gateway.webhook-notification-url}") String webhookUrl,
+      WebClient.Builder builder) {
     WebClient webClient =
-        WebClient.builder()
+        builder
             .baseUrl(baseUrl)
             .clientConnector(
                 new ReactorClientHttpConnector(

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -15,6 +16,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 // Mock Payment API simplificado.
@@ -81,6 +89,9 @@ func main() {
 	addr := ":" + envOrDefault("MOCK_PORT", "8081")
 	webhookSecret := envOrDefault("MOCK_WEBHOOK_SECRET", "mock-webhook-secret")
 
+	shutdownTracer := initTracer()
+	defer func() { _ = shutdownTracer(context.Background()) }()
+
 	st := &store{
 		byID:          make(map[string]*Payment),
 		byIdempotency: make(map[string]string),
@@ -92,10 +103,54 @@ func main() {
 	mux.HandleFunc("GET /v1/payments/{id}", st.getPayment)
 	mux.HandleFunc("POST /v1/mock/payments/{id}/status", st.updateStatus(webhookSecret))
 
+	handler := otelhttp.NewHandler(mux, "mock-pagamento")
+
 	log.Printf("mock-pagamento ouvindo em %s", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatalf("erro ao subir servidor: %v", err)
 	}
+}
+
+// initTracer configura um TracerProvider OTel com exporter OTLP HTTP e propagacao W3C.
+//
+// O endpoint OTLP e o nome do servico sao externalizados por variavel de ambiente. A criacao do
+// exporter e best-effort: se o backend (Jaeger) estiver indisponivel, o mock sobe mesmo assim com
+// um provider noop, para que a ausencia do exporter nunca bloqueie o fluxo de negocio.
+//
+// Retorna uma funcao de shutdown para drenar os spans ao encerrar o processo.
+func initTracer() func(context.Context) error {
+	endpoint := envOrDefault("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
+	serviceName := envOrDefault("OTEL_SERVICE_NAME", "mock-pagamento")
+
+	exporter, err := otlptracehttp.New(
+		context.Background(),
+		otlptracehttp.WithEndpointURL(endpoint),
+	)
+	if err != nil {
+		log.Printf("tracing: exporter indisponivel (%v); rodando sem exportacao", err)
+		otel.SetTracerProvider(sdktrace.NewTracerProvider())
+		return func(context.Context) error { return nil }
+	}
+
+	res, err := resource.New(
+		context.Background(),
+		resource.WithAttributes(semconv.ServiceName(serviceName)),
+	)
+	if err != nil {
+		log.Printf("tracing: recurso indisponivel (%v); rodando sem atributos", err)
+		res = resource.NewWithAttributes(semconv.SchemaURL, semconv.ServiceName(serviceName))
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithResource(res),
+	)
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+	return tp.Shutdown
 }
 
 func healthz(w http.ResponseWriter, r *http.Request) {
@@ -139,6 +194,7 @@ func (s *store) createPayment(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Unlock()
 
+	log.Printf("pagamento criado: paymentId=%s externalReference=%s", payment.ID, payment.ExternalReference)
 	writeJSON(w, http.StatusCreated, payment)
 }
 
@@ -190,7 +246,7 @@ func (s *store) updateStatus(webhookSecret string) http.HandlerFunc {
 
 		// Webhook assincrono: nao bloqueia a resposta.
 		if notifURL != "" {
-			go dispatchWebhook(notifURL, webhookSecret, id, extRef)
+			go dispatchWebhook(r.Context(), notifURL, webhookSecret, id, extRef)
 		}
 
 		writeJSON(w, http.StatusAccepted, StatusUpdateResponse{
@@ -204,7 +260,10 @@ func (s *store) updateStatus(webhookSecret string) http.HandlerFunc {
 
 // dispatchWebhook envia o evento de pagamento atualizado para a notificationUrl.
 // Headers: X-Mock-Event-Id e X-Mock-Signature (HMAC SHA256 do corpo).
-func dispatchWebhook(notificationURL, secret, paymentID, externalReference string) {
+//
+// Recebe o contexto da requisicao de origem para que o trace propagado pelo otelhttp chegue ao
+// envio do webhook, evitando que ele apareca como um trace orfao no backend.
+func dispatchWebhook(ctx context.Context, notificationURL, secret, paymentID, externalReference string) {
 	event := WebhookEvent{
 		ID:   uuid.NewString(),
 		Type: "payment.updated",
@@ -216,7 +275,7 @@ func dispatchWebhook(notificationURL, secret, paymentID, externalReference strin
 		return
 	}
 
-	req, err := http.NewRequest(http.MethodPost, notificationURL, strings.NewReader(string(body)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, notificationURL, strings.NewReader(string(body)))
 	if err != nil {
 		log.Printf("webhook: erro ao montar requisicao: %v", err)
 		return
@@ -227,7 +286,10 @@ func dispatchWebhook(notificationURL, secret, paymentID, externalReference strin
 	req.Header.Set("X-Mock-Event-Id", event.ID)
 	req.Header.Set("X-Mock-Signature", "sha256="+hex.EncodeToString(mac.Sum(nil)))
 
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{
+		Timeout:   5 * time.Second,
+		Transport: otelhttp.NewTransport(http.DefaultTransport),
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("webhook: falha ao enviar para %s: %v", notificationURL, err)
