@@ -86,4 +86,25 @@ class AssinaturaTest {
         .as("Data de expiracao da primeira ativacao preservada")
         .isEqualTo(LocalDate.of(2026, 2, 1));
   }
+
+  @Test
+  @DisplayName("Deve estabelecer o primeiro ciclo de renovacao ao ativar")
+  void deveEstabelecerPrimeiroCicloAoAtivar() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+
+    assertThat(assinatura.getInicioCiclo())
+        .as("Inicio do ciclo coincide com a data de inicio")
+        .isEqualTo(LocalDate.of(2026, 1, 1));
+    assertThat(assinatura.getFimCiclo())
+        .as("Fim do ciclo coincide com a data de expiracao")
+        .isEqualTo(LocalDate.of(2026, 2, 1));
+    assertThat(assinatura.getProximaRenovacaoEm())
+        .as("Proxima renovacao coincide com o fim do primeiro ciclo")
+        .isEqualTo(LocalDate.of(2026, 2, 1));
+    assertThat(assinatura.isRenovacaoAutomatica())
+        .as("Renovacao automatica habilitada no primeiro ciclo")
+        .isTrue();
+  }
 }
