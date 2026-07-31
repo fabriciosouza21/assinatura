@@ -1,6 +1,7 @@
 package com.globo.assinatura.assinatura;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -198,5 +199,22 @@ class ProcessarPagamentoTest {
         .as("redelivery nao deve transitar a assinatura")
         .isEqualTo(StatusAssinatura.AGUARDANDO_PAGAMENTO);
     verify(pagamentoEventoProcessadoRepository, never()).save(any(PagamentoEventoProcessado.class));
+  }
+
+  @Test
+  @DisplayName("Deve ignorar silenciosamente evento para assinatura inexistente")
+  void deveIgnorarSilenciosamenteEventoParaAssinaturaInexistente() {
+    when(assinaturaRepository.findByUuidForUpdate(any(String.class))).thenReturn(Optional.empty());
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            UUID.randomUUID(),
+            Instant.now(),
+            UUID.randomUUID(),
+            StatusPagamento.APPROVED,
+            UUID.randomUUID());
+
+    assertThatCode(() -> command.executar(evento))
+        .as("evento para assinatura inexistente nao deve lancar excecao")
+        .doesNotThrowAnyException();
   }
 }

@@ -6,6 +6,7 @@ import com.globo.assinatura.pagamento.PagamentoEventoProcessado;
 import com.globo.assinatura.pagamento.PagamentoEventoProcessadoRepository;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,8 +52,12 @@ public class ProcessarPagamento {
       return;
     }
     LocalDate hoje = LocalDate.now(clock);
-    Assinatura assinatura =
-        assinaturaRepository.findByUuidForUpdate(evento.assinaturaId().toString()).orElseThrow();
+    Optional<Assinatura> possivelAssinatura =
+        assinaturaRepository.findByUuidForUpdate(evento.assinaturaId().toString());
+    if (possivelAssinatura.isEmpty()) {
+      return;
+    }
+    Assinatura assinatura = possivelAssinatura.get();
     if (pagamentoEventoProcessadoRepository.existsByEventId(evento.eventId())) {
       return;
     }
