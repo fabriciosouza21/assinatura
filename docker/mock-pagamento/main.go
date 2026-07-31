@@ -13,10 +13,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Mock Payment API simplificado.
-// Estado em memoria (map + mutex), apenas biblioteca padrão.
+// Estado em memoria (map + mutex).
 // Contrato: docs/mock-meio-pagamento.puml
 
 type Payment struct {
@@ -121,7 +123,7 @@ func (s *store) createPayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	payment := &Payment{
-		ID:                newID("pay_"),
+		ID:                uuid.NewString(),
 		ExternalReference: req.ExternalReference,
 		Amount:            req.Amount,
 		Currency:          req.Currency,
@@ -204,7 +206,7 @@ func (s *store) updateStatus(webhookSecret string) http.HandlerFunc {
 // Headers: X-Mock-Event-Id e X-Mock-Signature (HMAC SHA256 do corpo).
 func dispatchWebhook(notificationURL, secret, paymentID, externalReference string) {
 	event := WebhookEvent{
-		ID:   newID("evt_"),
+		ID:   uuid.NewString(),
 		Type: "payment.updated",
 		Data: WebhookEventData{PaymentID: paymentID, ExternalReference: externalReference},
 	}
@@ -247,10 +249,6 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
-}
-
-func newID(prefix string) string {
-	return prefix + mustRandomHex(12)
 }
 
 func randomHex(n int) (string, error) {

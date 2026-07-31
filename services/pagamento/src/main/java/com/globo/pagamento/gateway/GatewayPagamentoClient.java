@@ -5,7 +5,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 /**
  * Client do gateway de pagamento. Encapsula a chamada {@code POST /v1/payments} com a chave de
- * idempotencia e o valor em reais.
+ * idempotencia e o valor em reais, e a consulta {@code GET /v1/payments/{id}} do status oficial.
  */
 public class GatewayPagamentoClient {
 
@@ -44,5 +44,22 @@ public class GatewayPagamentoClient {
             .bodyToMono(CreatePaymentResponse.class)
             .block();
     return new CobrancaCriada(response.id());
+  }
+
+  /**
+   * Consulta o status oficial da cobranca no gateway.
+   *
+   * @param paymentId identificador da cobranca no gateway
+   * @return status oficial reportado pelo gateway
+   */
+  public StatusGateway consultarStatus(String paymentId) {
+    PaymentResponse response =
+        webClient
+            .get()
+            .uri("/v1/payments/{id}", paymentId)
+            .retrieve()
+            .bodyToMono(PaymentResponse.class)
+            .block();
+    return StatusGateway.valueOf(response.status());
   }
 }

@@ -25,4 +25,12 @@ public interface CobrancaRepository extends JpaRepository<Cobranca, Long> {
    * @return {@code true} se existir; {@code false} caso contrario
    */
   boolean existsByAssinaturaUuid(String assinaturaUuid);
+
+  /**
+   * Busca a cobranca pelo identificador retornado pelo gateway.
+   *
+   * @param paymentId identificador da cobranca no gateway
+   * @return a cobranca encontrada, ou vazio se nao existir
+   */
+  Optional<Cobranca> findByPaymentId(String paymentId);
 }

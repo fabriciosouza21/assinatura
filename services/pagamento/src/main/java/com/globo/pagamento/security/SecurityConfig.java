@@ -10,8 +10,9 @@ import org.springframework.security.web.SecurityFilterChain;
 /**
  * Configuração de segurança do Pagamento Service.
  *
- * <p>Por ora libera apenas o healthcheck. O endpoint de webhook ({@code /webhooks/payments}) terá
- * sua assinatura HMAC validada quando o fluxo de pagamento for implementado.
+ * <p>Libera o healthcheck e o endpoint de webhook. O webhook ({@code /webhooks/payments}) e
+ * autenticado por assinatura HMAC, validada no proprio endpoint, por isso fica publico na cadeia do
+ * Spring Security.
  */
 @Configuration
 public class SecurityConfig {
@@ -19,7 +20,8 @@ public class SecurityConfig {
   /**
    * Constrói a cadeia de filtros de segurança.
    *
-   * <p>Libera {@code /actuator/health}; todas as demais rotas exigem autenticação.
+   * <p>Libera {@code /actuator/health} e {@code /webhooks/payments}; todas as demais rotas exigem
+   * autenticacao.
    *
    * @param http o builder de segurança do Spring
    * @return a cadeia de filtros configurada
@@ -31,7 +33,10 @@ public class SecurityConfig {
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             auth ->
-                auth.requestMatchers("/actuator/health").permitAll().anyRequest().authenticated());
+                auth.requestMatchers("/actuator/health", "/webhooks/payments")
+                    .permitAll()
+                    .anyRequest()
+                    .authenticated());
     return http.build();
   }
 }

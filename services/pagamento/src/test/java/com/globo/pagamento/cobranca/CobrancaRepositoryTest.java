@@ -47,4 +47,35 @@ class CobrancaRepositoryTest {
     assertThat(encontrado.get().getCriadoEm()).as("CriadoEm preenchido").isNotNull();
     assertThat(encontrado.get().getAtualizadoEm()).as("AtualizadoEm preenchido").isNotNull();
   }
+
+  @Test
+  @DisplayName("Deve buscar cobranca por paymentId")
+  void deveBuscarCobrancaPorPaymentId() {
+    cobrancaRepository.save(new Cobranca("assinatura-uuid", "pay_456", StatusCobranca.PENDING));
+    cobrancaRepository.flush();
+
+    Optional<Cobranca> encontrado = cobrancaRepository.findByPaymentId("pay_456");
+
+    assertThat(encontrado).as("Cobranca encontrada pelo paymentId").isPresent();
+    assertThat(encontrado.get().getAssinaturaUuid())
+        .as("AssinaturaUuid da cobranca encontrada")
+        .isEqualTo("assinatura-uuid");
+  }
+
+  @Test
+  @DisplayName("Deve marcar cobranca como aprovada atualizando o status")
+  void deveMarcarCobrancaComoAprovadaAtualizandoStatus() {
+    Cobranca cobranca =
+        cobrancaRepository.save(new Cobranca("assinatura-uuid", "pay_789", StatusCobranca.PENDING));
+    cobrancaRepository.flush();
+
+    cobranca.marcarComo(StatusCobranca.APPROVED);
+    cobrancaRepository.saveAndFlush(cobranca);
+
+    Optional<Cobranca> recarregada = cobrancaRepository.findByPaymentId("pay_789");
+    assertThat(recarregada).as("Cobranca recarregada").isPresent();
+    assertThat(recarregada.get().getStatus())
+        .as("Status atualizado para aprovado")
+        .isEqualTo(StatusCobranca.APPROVED);
+  }
 }
