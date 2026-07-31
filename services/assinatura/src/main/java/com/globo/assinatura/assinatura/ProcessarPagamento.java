@@ -44,6 +44,11 @@ public class ProcessarPagamento {
    * Processa o evento de pagamento atualizando a assinatura correlacionada e registrando o evento
    * para idempotencia.
    *
+   * <p>Eventos cuja assinatura ainda nao existe sao ignorados silenciosamente: o evento pode chegar
+   * antes da solicitacao de assinatura correspondente ter sido persistida (ordering eventual entre
+   * os topicos). Nesse caso nada e registrado nem em idempotencia, permitindo que a redelivery pelo
+   * container processe o evento novamente quando a assinatura ja existir.
+   *
    * @param evento evento de status de pagamento recebido
    */
   @Transactional

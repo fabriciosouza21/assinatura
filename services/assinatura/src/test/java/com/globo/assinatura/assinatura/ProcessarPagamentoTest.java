@@ -214,8 +214,9 @@ class ProcessarPagamentoTest {
   }
 
   @Test
-  @DisplayName("Deve ignorar silenciosamente evento para assinatura inexistente")
-  void deveIgnorarSilenciosamenteEventoParaAssinaturaInexistente() {
+  @DisplayName(
+      "Deve ignorar evento para assinatura inexistente sem registrar idempotencia para redelivery")
+  void deveIgnorarEventoParaAssinaturaInexistenteSemRegistrarIdempotencia() {
     when(assinaturaRepository.buscarPorUuidParaAtualizacao(any(String.class)))
         .thenReturn(Optional.empty());
     PagamentoStatusAtualizado evento =
@@ -229,6 +230,7 @@ class ProcessarPagamentoTest {
     assertThatCode(() -> command.executar(evento))
         .as("evento para assinatura inexistente nao deve lancar excecao")
         .doesNotThrowAnyException();
+    verify(pagamentoEventoProcessadoRepository, never()).save(any(PagamentoEventoProcessado.class));
   }
 
   @Test
