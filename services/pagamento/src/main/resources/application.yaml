@@ -10,7 +10,7 @@ spring:
   # e gera WARNs de conexao recusada a cada minuto.
   autoconfigure:
     exclude:
-      - org.springframework.boot.micrometer.metrics.autoconfigure.export.otlp.OtlpMetricsAutoConfiguration
+      - org.springframework.boot.micrometer.metrics.autoconfigure.export.otlp.OtlpMetricsExportAutoConfiguration
 
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/pagamento}
