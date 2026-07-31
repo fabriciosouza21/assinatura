@@ -2,6 +2,7 @@ package com.globo.assinatura.outbox;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,8 +17,11 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Em sucesso, marca o evento como {@link OutboxStatus#PUBLICADO}. Em falha, incrementa as
  * tentativas e reagenda com backoff + jitter; ao esgotar as tentativas, marca como {@link
- * OutboxStatus#FALHA} (DLQ persistida). A entrega e pelo menos uma vez: o consumidor deduplica por
- * {@code eventId}.
+ * OutboxStatus#FALHA} (DLQ persistida). O envio ao Kafka e bloqueante dentro da transacao: o
+ * resultado (ack ou falha) e conhecido antes do commit, garantindo que a marcacao de {@code
+ * PUBLICADO}/{@code FALHA} e o {@code SELECT ... FOR UPDATE SKIP LOCKED} que reservou a linha
+ * compartilhem a mesma transacao. A entrega e pelo menos uma vez: o consumidor deduplica por {@code
+ * eventId}.
  */
 @Component
 public class OutboxPublisher {
@@ -52,7 +56,13 @@ public class OutboxPublisher {
     this.tamanhoLote = tamanhoLote;
   }
 
-  /** Seleciona eventos pendentes prontos para envio e publica cada um no Kafka. */
+  /**
+   * Seleciona eventos pendentes prontos para envio, bloqueando as linhas ate o fim da transacao, e
+   * publica cada um no Kafka dentro da mesma transacao.
+   *
+   * <p>O envio bloqueia aguardando o ack do broker, de modo que o resultado seja conhecido antes do
+   * commit e a transicao de estado ocorra na mesma transacao que reservou a linha.
+   */
   @Scheduled(fixedDelayString = "${app.outbox.intervalo-ms}")
   @Transactional
   public void publicarPendentes() {
@@ -64,20 +74,15 @@ public class OutboxPublisher {
 
   private void publicar(OutboxEvent evento) {
     try {
-      kafkaTemplate
-          .send(topico, evento.getAggregateId().toString(), evento.getPayload())
-          .whenComplete((resultado, erro) -> tratarResultado(evento, erro));
+      kafkaTemplate.send(topico, evento.getAggregateId().toString(), evento.getPayload()).get();
+      evento.marcarPublicado(Instant.now());
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      tratarFalha(evento, e);
+    } catch (ExecutionException e) {
+      tratarFalha(evento, e.getCause());
     } catch (RuntimeException e) {
       tratarFalha(evento, e);
-      outboxRepository.save(evento);
-    }
-  }
-
-  private void tratarResultado(OutboxEvent evento, Throwable erro) {
-    if (erro == null) {
-      evento.marcarPublicado(Instant.now());
-    } else {
-      tratarFalha(evento, erro);
     }
     outboxRepository.save(evento);
   }

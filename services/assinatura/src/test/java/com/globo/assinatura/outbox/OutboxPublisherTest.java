@@ -95,6 +95,52 @@ class OutboxPublisherTest {
   }
 
   @Test
+  @DisplayName("Deve persistir o resultado do envio na mesma thread da transacao do publisher")
+  void devePersistirResultadoNaMesmaThreadDaTransacao() throws Exception {
+    final String threadDoPublisher = Thread.currentThread().getName();
+    // Simula um produtor Kafka real: o ack chega noutra thread, depois do envio.
+    CompletableFuture<org.springframework.kafka.support.SendResult<String, String>> ack =
+        new CompletableFuture<>();
+    when(kafkaTemplate.send(any(), any(), any())).thenReturn(ack);
+    when(outboxRepository.buscarPublicaveis(any(Instant.class), eq(100)))
+        .thenReturn(List.of(eventoPendente()));
+    java.util.concurrent.atomic.AtomicReference<String> threadDoSave =
+        new java.util.concurrent.atomic.AtomicReference<>();
+    when(outboxRepository.save(any()))
+        .thenAnswer(
+            inv -> {
+              threadDoSave.set(Thread.currentThread().getName());
+              return inv.getArgument(0);
+            });
+    java.util.concurrent.ExecutorService executor =
+        java.util.concurrent.Executors.newSingleThreadExecutor();
+    try {
+      // Completa o ack noutra thread apos o publisher comecar a esperar.
+      executor.submit(
+          () -> {
+            try {
+              Thread.sleep(50);
+            } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+            }
+            ack.complete(null);
+          });
+      publisher.publicarPendentes();
+    } finally {
+      executor.shutdownNow();
+    }
+
+    ArgumentCaptor<OutboxEvent> capturado = ArgumentCaptor.forClass(OutboxEvent.class);
+    verify(outboxRepository).save(capturado.capture());
+    assertThat(capturado.getValue().getStatus())
+        .as("Evento transita para PUBLICADO")
+        .isEqualTo(OutboxStatus.PUBLICADO);
+    assertThat(threadDoSave.get())
+        .as("O save deve rodar na thread da transacao, nao numa thread de callback")
+        .isEqualTo(threadDoPublisher);
+  }
+
+  @Test
   @DisplayName("Deve marcar como falha ao esgotar tentativas na terceira falha")
   void deveMarcarComoFalhaAoEsgotarTentativas() {
     when(kafkaTemplate.send(any(), any(), any()))
