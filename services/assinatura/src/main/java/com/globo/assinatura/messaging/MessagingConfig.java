@@ -5,6 +5,7 @@ import java.time.Duration;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
@@ -19,24 +20,35 @@ import tools.jackson.core.JacksonException;
 /**
  * Configuracao de mensageria do Assinatura Service.
  *
- * <p>Agrupa tres responsabilidades: a publicacao da outbox (topico {@code assinatura-solicitada} e
- * politica de retry do publisher), a escuta do topico de status de pagamento (seus topicos e DLQ) e
- * a fabrica de containers do consumer com tratamento de erros.
+ * <p>Agrupa tres responsabilidades: a publicacao da outbox (topicos declarados pelas rotas {@code
+ * eventType -> topico} e politica de retry do publisher), a escuta do topico de status de pagamento
+ * (seus topicos e DLQ) e a fabrica de containers do consumer com tratamento de erros.
  */
 @Configuration
 @EnableScheduling
+@EnableConfigurationProperties(RotasEventoTopicoProperties.class)
 public class MessagingConfig {
 
   /**
    * Declara o topico de eventos {@code AssinaturaSolicitada}.
    *
-   * @param nome nome do topico, externalizado por configuracao
+   * @param rotas rotas de eventos da outbox para topicos Kafka
    * @return topico Kafka a ser criado pelo KafkaAdmin
    */
   @Bean
-  public NewTopic topicoAssinaturaSolicitada(
-      @Value("${app.kafka.topico-assinatura-solicitada}") String nome) {
-    return new NewTopic(nome, 1, (short) 1);
+  public NewTopic topicoAssinaturaSolicitada(RotasEventoTopicoProperties rotas) {
+    return new NewTopic(rotas.rotasEventoTopico().get("AssinaturaSolicitada"), 1, (short) 1);
+  }
+
+  /**
+   * Declara o topico de eventos {@code RenovacaoSolicitada}.
+   *
+   * @param rotas rotas de eventos da outbox para topicos Kafka
+   * @return topico Kafka a ser criado pelo KafkaAdmin
+   */
+  @Bean
+  public NewTopic topicoRenovacaoSolicitada(RotasEventoTopicoProperties rotas) {
+    return new NewTopic(rotas.rotasEventoTopico().get("RenovacaoSolicitada"), 1, (short) 1);
   }
 
   /**

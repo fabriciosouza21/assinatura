@@ -177,6 +177,25 @@ do Gate 0 (§4). Até lá, esta tabela é a fonte da verdade.
 - **Verificação:** simular `APPROVED`/`REJECTED` (3x) no mock → webhook publica o resultado correto; redelivery do `eventId` não republica; `PENDING` não consome tentativa.
 - **Paralelizável com:** BE-9, BE-10, BE-12. Contenção de domínio com BE-12 → ver §6.
 
+#### Follow-ups da revisão do BE-11
+
+A revisão do BE-11 (PR #10) deixou três pontos adiados, não bloqueantes, que
+pertencem às tracks que vão tocar esses agregados:
+
+- **Invariante `numero` do `TentativaCobranca` (BE-12).** Hoje o construtor aceita
+  qualquer `int`; só a constante `PRIMEIRA_TENTATIVA` no call site prende o `1`.
+  Quando o BE-12 introduzir a tentativa nº2/ nº3, mover a sequência para dentro do
+  agregado `PagamentoRenovacao` (método `registrarTentativa()`) e endurecer o
+  construtor com `if (numero < 1) throw IllegalArgumentException`.
+- **Índice parcial para o scheduler (BE-12).** `tentativa_cobranca` não tem índice
+  para `WHERE status = 'PENDENTE' AND proxima_tentativa_em <= now()`, que será um
+  seq scan crescendo com a tabela. Adicionar `CREATE INDEX ... ON tentativa_cobranca
+  (proxima_tentativa_em) WHERE status = 'PENDENTE'` na migration V5 do BE-13 (ou numa
+  V5 própria do BE-12), índice parcial que mantém só o conjunto útil pequeno.
+- **Guard de escala do `valor`.** `NUMERIC(19,2)` arredonda `19.999`→`20.00`
+  silenciosamente. Sem AC de escala no PRD; confirmar com produto se vale um guard
+  `valor.scale() <= 2` no consumer, ou aceitar e documentar o arredondamento do banco.
+
 ---
 
 ## 6. Mapa de paralelismo e sequenciamento

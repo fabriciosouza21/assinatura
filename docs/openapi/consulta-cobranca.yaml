@@ -1,0 +1,94 @@
+openapi: 3.1.0
+info:
+  title: Consulta de cobranca
+  description: |
+    Endpoint publico de leitura exposto pelo Pagamento Service para recuperar a
+    cobranca correlacionada a uma assinatura pelo uuid publico da assinatura.
+
+    Complementa o webhook de pagamento (`docs/openapi/webhook-pagamento.yaml`) ao
+    expor o `paymentId` gerado no gateway, permitindo encadear o fluxo completo de
+    assinatura no cliente de teste: solicitar assinatura -> consultar cobranca ->
+    simular aprovacao no mock -> consultar assinatura `ATIVA`.
+
+    O `assinaturaId` da URL e o uuid publico da assinatura, o mesmo valor usado
+    como `Idempotency-Key` e `externalReference` no fluxo do mock.
+
+    Contrato de referencia:
+      - `docs/prd/2026-07-31-consulta-cobranca.md`
+  version: 0.1.0
+servers:
+  - url: http://pagamento:8080
+    description: Rede interna do docker-compose
+  - url: http://localhost:18082
+    description: Host local (porta publicada)
+tags:
+  - name: cobranca
+    description: Consulta de cobranca por assinatura
+paths:
+  /cobrancas/{assinaturaId}:
+    get:
+      tags: [cobranca]
+      summary: Consulta a cobranca de uma assinatura
+      description: |
+        Retorna o `paymentId` criado no gateway e o `status` atual da cobranca
+        correlacionada a assinatura. Endpoint publico (`permitAll`), nao exige
+        autenticacao, por analogia a ADR 0001.
+      operationId: consultarCobranca
+      parameters:
+        - $ref: '#/components/parameters/AssinaturaId'
+      responses:
+        '200':
+          description: Cobranca encontrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CobrancaResponse'
+              examples:
+                pendente:
+                  summary: Cobranca recem-criada, aguardando pagamento
+                  value:
+                    paymentId: 550e8400-e29b-41d4-a716-446655440000
+                    status: PENDING
+                aprovada:
+                  summary: Pagamento aprovado
+                  value:
+                    paymentId: 550e8400-e29b-41d4-a716-446655440000
+                    status: APPROVED
+                recusada:
+                  summary: Pagamento recusado
+                  value:
+                    paymentId: 550e8400-e29b-41d4-a716-446655440000
+                    status: REJECTED
+        '404':
+          description: Cobranca nao encontrada para o assinaturaId. Corpo vazio.
+
+components:
+  parameters:
+    AssinaturaId:
+      name: assinaturaId
+      in: path
+      required: true
+      description: |
+        Uuid publico da assinatura. Mesmo valor usado como `Idempotency-Key` e
+        `externalReference` na criacao da cobranca no gateway.
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+  schemas:
+    CobrancaResponse:
+      type: object
+      description: Representacao da cobranca retornada na consulta.
+      required: [paymentId, status]
+      additionalProperties: false
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+          description: Identificador da cobranca no gateway de pagamento.
+          example: 550e8400-e29b-41d4-a716-446655440000
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED]
+          description: Status do ciclo de vida da cobranca no gateway.
+          example: PENDING

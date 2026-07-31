@@ -43,7 +43,7 @@ por não renovar e suspende o acesso após três recusas seguidas.
 
 ## Backend — Pagamento Service
 
-### BE-11 — Cria a cobrança da renovação
+### BE-11 — Cria a cobrança da renovação *(entregue — PR #10)*
 `feat/pagamento-cria-cobranca-renovacao`
 - O Pagamento Service consome o pedido de renovação e cria a primeira
   tentativa de cobrança no gateway
@@ -78,7 +78,7 @@ por não renovar e suspende o acesso após três recusas seguidas.
 | 0 | Travar contratos de evento de renovação | — | [ ] |
 | 1 | Publica eventos pelo tipo (BE-7) | 0 | [ ] |
 | 2 | Modelo de ciclo e renovação (BE-8) | 0 | [ ] |
-| 3 | Cria a cobrança da renovação (BE-11) | 0 | [ ] |
+| 3 | Cria a cobrança da renovação (BE-11) | 0 | [x] (#10) |
 | 4 | Varredura de assinaturas vencidas (BE-9) | 1, 2 | [ ] |
 | 5 | Atualiza assinatura pelo resultado (BE-10) | 2, 0 | [ ] |
 | 6 | Repete a cobrança após recusa (BE-12) | 3 | [ ] |
