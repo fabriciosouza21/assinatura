@@ -1,4 +1,4 @@
-.PHONY: help checkstyle spotless lint format test test-integration test-integration-up test-integration-down verify clean java-version
+.PHONY: help checkstyle spotless lint format test test-integration test-integration-clean test-integration-up test-integration-down verify clean java-version
 
 MAVEN := ./mvnw
 MAKE := make
@@ -33,6 +33,10 @@ test: ## Roda os testes unitarios (exclui os marcados com @Tag("integration"))
 	@echo "==> test (unitarios)"
 	@$(MAVEN) test -DexcludedGroups=integration
 
+test-integration-clean: ## Derruba o Postgres do docker-compose e remove o volume (estado limpo)
+	@echo "==> docker compose down -v --remove-orphans"
+	@$(COMPOSE) down -v --remove-orphans
+
 test-integration-up: ## Sobe o Postgres do docker-compose (porta 5433) e aguarda a porta host aceitar TCP
 	@echo "==> docker compose up -d --wait postgres"
 	@$(COMPOSE) up -d --wait postgres
@@ -43,12 +47,13 @@ test-integration-up: ## Sobe o Postgres do docker-compose (porta 5433) e aguarda
 	done; \
 	echo "porta 5433 nao abriu a tempo"; exit 1
 
-test-integration-down: ## Derruba o Postgres do docker-compose
-	@echo "==> docker compose stop postgres"
-	@$(COMPOSE) stop postgres
+test-integration-down: ## Derruba o Postgres do docker-compose e remove o volume
+	@echo "==> docker compose down -v --remove-orphans"
+	@$(COMPOSE) down -v --remove-orphans
 
-test-integration: ## Roda os testes de integracao (@Tag("integration")); sobe o Postgres automaticamente
+test-integration: ## Roda os testes de integracao (@Tag("integration")); recria o Postgres do zero
 	@echo "==> test-integration"
+	@$(MAKE) test-integration-clean
 	@$(MAKE) test-integration-up
 	@$(MAVEN) test -Dgroups=integration
 
