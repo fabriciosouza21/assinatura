@@ -204,6 +204,7 @@ public class Assinatura {
     this.inicioCiclo = this.fimCiclo;
     this.fimCiclo = novoFimCiclo;
     this.proximaRenovacaoEm = novoFimCiclo;
+    this.status = StatusAssinatura.ATIVA;
   }
 
   /** Inicia o processo de renovacao, sinalizando que o ciclo vencido esta em cobranca. */

@@ -110,6 +110,20 @@ class AssinaturaTest {
   }
 
   @Test
+  @DisplayName("Deve voltar para ativa ao renovar a partir de em renovacao")
+  void deveVoltarParaAtivaAoRenovar() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.iniciarRenovacao();
+
+    assinatura.renovar(LocalDate.of(2026, 3, 1));
+
+    assertThat(assinatura.getStatus())
+        .as("Status volta para ativa apos renovar")
+        .isEqualTo(StatusAssinatura.ATIVA);
+  }
+
+  @Test
   @DisplayName("Deve avancar o inicio do ciclo para o fim anterior ao renovar")
   void deveAvancarInicioDoCicloAoRenovar() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
