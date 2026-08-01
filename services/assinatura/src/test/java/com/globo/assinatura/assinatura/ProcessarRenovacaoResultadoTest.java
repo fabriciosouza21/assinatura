@@ -155,4 +155,30 @@ class ProcessarRenovacaoResultadoTest {
         .as("renovacao pendente deve ir para APROVADA ao processar aprovacao")
         .isEqualTo(StatusRenovacao.APROVADA);
   }
+
+  @Test
+  @DisplayName("Deve tratar como no-op idempotente evento sobre renovacao ja aprovada")
+  void deveTratarComoNoOpEventoSobreRenovacaoJaAprovada() {
+    Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
+    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.iniciarRenovacao();
+    Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
+    renovacao.aprovar();
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
+        .thenReturn(Optional.of(renovacao));
+    PagamentoRenovacaoAprovado evento =
+        new PagamentoRenovacaoAprovado(
+            UUID.randomUUID(),
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString(renovacao.getUuid()),
+            UUID.randomUUID(),
+            "pay_123",
+            2);
+
+    assertThatCode(() -> command.executar(evento))
+        .as("evento tardio sobre renovacao ja aprovada nao deve lancar")
+        .doesNotThrowAnyException();
+
+    verify(renovacaoEventoProcessadoRepository, never()).save(any(RenovacaoEventoProcessado.class));
+  }
 }

@@ -41,9 +41,10 @@ public class ProcessarRenovacaoResultado {
    *
    * <p>Eventos ja processados sao ignorados pelo identificador unico, sem acquire lock sobre a
    * renovacao. Eventos cuja renovacao ainda nao existe tambem sao ignorados, sem registrar
-   * idempotencia, permitindo que o redelivery processe o evento quando a renovacao surgir. Caso
-   * contrario, carrega a renovacao sob lock pessimista pelo uuid publico, resolve a assinatura dona
-   * pelo identificador interno e confirma a renovacao do ciclo.
+   * idempotencia, permitindo que o redelivery processe o evento quando a renovacao surgir. Entregas
+   * tardias sobre uma renovacao ja resolvida (status diferente de PENDENTE) sao tratadas como no-op
+   * idempotente. Caso contrario, carrega a renovacao sob lock pessimista pelo uuid publico, resolve
+   * a assinatura dona pelo identificador interno e confirma a renovacao do ciclo.
    *
    * @param evento evento de pagamento de renovacao aprovado
    */
@@ -58,6 +59,9 @@ public class ProcessarRenovacaoResultado {
       return;
     }
     Renovacao renovacao = possivelRenovacao.get();
+    if (renovacao.getStatus() != StatusRenovacao.PENDENTE) {
+      return;
+    }
     Assinatura assinatura =
         assinaturaRepository.findById(renovacao.getAssinaturaId()).orElseThrow();
     renovacao.aprovar();
