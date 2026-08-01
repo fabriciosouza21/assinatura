@@ -45,6 +45,6 @@ public class ProcessarRenovacaoResultado {
             .orElseThrow();
     Assinatura assinatura =
         assinaturaRepository.findById(renovacao.getAssinaturaId()).orElseThrow();
-    assinatura.renovar(assinatura.getFimCiclo());
+    assinatura.renovar(assinatura.getFimCiclo().plusMonths(1));
   }
 }
