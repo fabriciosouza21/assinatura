@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Assim, um redelivery nao duplica pagamento nem tentativa.
  *
  * <p>A tentativa inicial nasce {@link StatusTentativa#PENDENTE}, sem {@code paymentId}: o scheduler
- * que cobra no gateway (BE-12) preenche esses campos quando a cobra.
+ * que cobra a tentativa no gateway preenche esse campo.
  */
 @Service
 public class CriarPagamentoRenovacaoService {

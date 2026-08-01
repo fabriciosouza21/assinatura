@@ -1,6 +1,7 @@
 package com.globo.pagamento.gateway;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import okhttp3.mockwebserver.MockResponse;
@@ -71,6 +72,56 @@ class GatewayPagamentoClientTest {
     assertThat(body.get("externalReference").asText())
         .as("Referencia externa = assinaturaId")
         .isEqualTo("assinatura-uuid");
+  }
+
+  @Test
+  @DisplayName("Deve criar cobranca de renovacao com Idempotency-Key=renovacaoId:numero")
+  void deveEnviarChaveIdempotenciaCompostaNaCobrancaDeRenovacao() throws Exception {
+    server.enqueue(
+        new MockResponse()
+            .setHeader("Content-Type", "application/json")
+            .setBody(
+                jsonMapper.writeValueAsString(
+                    new CreatePaymentResponse(
+                        "pay_renov", "renov-123", new BigDecimal("19.90"), "BRL", "PIX")))
+            .setResponseCode(201));
+
+    client.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90"));
+
+    RecordedRequest requisicao = server.takeRequest();
+    assertThat(requisicao.getHeader("Idempotency-Key"))
+        .as("Header de idempotencia composto por renovacaoId:numeroTentativa")
+        .isEqualTo("renov-123:1");
+  }
+
+  @Test
+  @DisplayName("Deve retornar o payment id da cobranca de renovacao criada no gateway")
+  void deveRetornarPaymentIdDaCobrancaDeRenovacao() throws Exception {
+    server.enqueue(
+        new MockResponse()
+            .setHeader("Content-Type", "application/json")
+            .setBody(
+                jsonMapper.writeValueAsString(
+                    new CreatePaymentResponse(
+                        "pay_renov", "renov-123", new BigDecimal("19.90"), "BRL", "PIX")))
+            .setResponseCode(201));
+
+    CobrancaCriada resultado =
+        client.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90"));
+
+    assertThat(resultado.paymentId())
+        .as("payment id retornado pelo gateway")
+        .isEqualTo("pay_renov");
+  }
+
+  @Test
+  @DisplayName("Deve envolver falha tecnica do gateway em CobrancaGatewayIndisponivelException")
+  void deveEnvolverFalhaTecnicaDoGatewayEmExcecaoDeDominio() {
+    server.enqueue(new MockResponse().setResponseCode(500));
+
+    assertThatThrownBy(() -> client.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90")))
+        .as("falha tecnica do gateway deve virar excecao de dominio")
+        .isInstanceOf(CobrancaGatewayIndisponivelException.class);
   }
 
   @Test

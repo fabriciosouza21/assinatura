@@ -2,6 +2,7 @@ package com.globo.pagamento.renovacao;
 
 import com.globo.pagamento.cobranca.Plano;
 import java.math.BigDecimal;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -55,4 +56,12 @@ public interface PagamentoRenovacaoRepository extends JpaRepository<PagamentoRen
       @Param("plano") String plano,
       @Param("valor") BigDecimal valor,
       @Param("cicloReferencia") int cicloReferencia);
+
+  /**
+   * Busca o pagamento da renovacao pelo identificador publico da renovacao.
+   *
+   * @param renovacaoId identificador publico da renovacao (chave de idempotencia)
+   * @return pagamento da renovacao, ou vazio se nao existir
+   */
+  Optional<PagamentoRenovacao> findByRenovacaoId(String renovacaoId);
 }
