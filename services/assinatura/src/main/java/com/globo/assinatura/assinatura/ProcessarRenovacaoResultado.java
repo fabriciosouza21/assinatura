@@ -60,6 +60,7 @@ public class ProcessarRenovacaoResultado {
     Renovacao renovacao = possivelRenovacao.get();
     Assinatura assinatura =
         assinaturaRepository.findById(renovacao.getAssinaturaId()).orElseThrow();
+    renovacao.aprovar();
     assinatura.renovar(assinatura.getFimCiclo().plusMonths(1));
   }
 }

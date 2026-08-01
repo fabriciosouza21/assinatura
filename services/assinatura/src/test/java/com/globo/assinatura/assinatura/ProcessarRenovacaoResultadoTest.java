@@ -129,4 +129,30 @@ class ProcessarRenovacaoResultadoTest {
 
     verify(renovacaoEventoProcessadoRepository, never()).save(any(RenovacaoEventoProcessado.class));
   }
+
+  @Test
+  @DisplayName("Deve aprovar a renovacao ao processar evento de renovacao aprovada")
+  void deveAprovarRenovacaoAoProcessarEventoAprovado() {
+    Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
+    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.iniciarRenovacao();
+    Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
+        .thenReturn(Optional.of(renovacao));
+    when(assinaturaRepository.findById(42L)).thenReturn(Optional.of(assinatura));
+    PagamentoRenovacaoAprovado evento =
+        new PagamentoRenovacaoAprovado(
+            UUID.randomUUID(),
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString(renovacao.getUuid()),
+            UUID.randomUUID(),
+            "pay_123",
+            2);
+
+    command.executar(evento);
+
+    assertThat(renovacao.getStatus())
+        .as("renovacao pendente deve ir para APROVADA ao processar aprovacao")
+        .isEqualTo(StatusRenovacao.APROVADA);
+  }
 }
