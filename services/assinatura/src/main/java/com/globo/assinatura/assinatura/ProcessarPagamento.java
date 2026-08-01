@@ -8,6 +8,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class ProcessarPagamento {
+
+  private static final Logger log = LoggerFactory.getLogger(ProcessarPagamento.class);
 
   private final AssinaturaRepository assinaturaRepository;
   private final PagamentoEventoProcessadoRepository pagamentoEventoProcessadoRepository;
@@ -78,9 +82,12 @@ public class ProcessarPagamento {
           new PagamentoEventoProcessado(
               evento.eventId(), assinatura.getUuid(), Instant.now(clock)));
     } catch (DataIntegrityViolationException e) {
-      // outra transacao concorrente (ex.: consumer zumbi de um rebalance) ja registrou este
-      // eventId entre o check de idempotencia e este save; o dominio ja foi atualizado de forma
-      // idempotente acima, entao tratamos como no-op.
+      log.warn(
+          "Evento eventId={} da assinaturaId={} ja foi registrado por uma transacao concorrente"
+              + " (provavel rebalance do consumer); tratando save como no-op idempotente",
+          evento.eventId(),
+          assinatura.getUuid(),
+          e);
     }
   }
 }
