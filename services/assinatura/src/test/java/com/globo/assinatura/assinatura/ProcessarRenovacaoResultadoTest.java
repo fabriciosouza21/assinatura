@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.globo.assinatura.messaging.event.AssinaturaRenovada;
 import com.globo.assinatura.messaging.event.PagamentoRenovacaoAprovado;
+import com.globo.assinatura.messaging.event.RenovacaoTentativasEsgotadas;
 import com.globo.assinatura.outbox.OutboxEvent;
 import com.globo.assinatura.outbox.OutboxRepository;
 import com.globo.assinatura.renovacao.RenovacaoEventoProcessado;
@@ -271,5 +272,30 @@ class ProcessarRenovacaoResultadoTest {
     assertThat(eventoSaida.ocorridoEm())
         .as("ocorridoEm do evento de saida deve vir do relogio injetado")
         .isEqualTo(instanteFixo);
+  }
+
+  @Test
+  @DisplayName("Deve suspender a assinatura ao processar evento de tentativas esgotadas")
+  void deveSuspenderAssinaturaAoProcessarEventoEsgotado() {
+    Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
+    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.iniciarRenovacao();
+    Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
+        .thenReturn(Optional.of(renovacao));
+    when(assinaturaRepository.findById(42L)).thenReturn(Optional.of(assinatura));
+    RenovacaoTentativasEsgotadas evento =
+        new RenovacaoTentativasEsgotadas(
+            UUID.randomUUID(),
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString(renovacao.getUuid()),
+            UUID.randomUUID(),
+            2);
+
+    command.executar(evento);
+
+    assertThat(assinatura.getStatus())
+        .as("assinatura em renovacao esgotada deve ir para SUSPENSA")
+        .isEqualTo(StatusAssinatura.SUSPENSA);
   }
 }

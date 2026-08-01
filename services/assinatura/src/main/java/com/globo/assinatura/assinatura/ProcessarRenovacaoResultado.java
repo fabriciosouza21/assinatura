@@ -2,6 +2,7 @@ package com.globo.assinatura.assinatura;
 
 import com.globo.assinatura.messaging.event.AssinaturaRenovada;
 import com.globo.assinatura.messaging.event.PagamentoRenovacaoAprovado;
+import com.globo.assinatura.messaging.event.RenovacaoTentativasEsgotadas;
 import com.globo.assinatura.outbox.OutboxEvent;
 import com.globo.assinatura.outbox.OutboxRepository;
 import com.globo.assinatura.renovacao.RenovacaoEventoProcessadoRepository;
@@ -91,6 +92,37 @@ public class ProcessarRenovacaoResultado {
     renovacao.aprovar();
     assinatura.renovar(assinatura.getFimCiclo().plusMonths(1));
     gravarEvento(assinatura, renovacao, evento);
+  }
+
+  /**
+   * Processa o evento de tentativas esgotadas suspendendo a assinatura dona.
+   *
+   * <p>Segue o mesmo contrato de idempotencia e lock de {@link
+   * #executar(PagamentoRenovacaoAprovado)}: eventos ja processados sao ignorados sem acquire lock;
+   * eventos para renovacao inexistente sao ignorados sem registrar idempotencia; entregas tardias
+   * sobre renovacao ja resolvida sao tratadas como no-op idempotente. Caso contrario, esgota as
+   * tentativas da renovacao e suspende a assinatura dona.
+   *
+   * @param evento evento de tentativas de renovacao esgotadas
+   */
+  @Transactional
+  public void executar(RenovacaoTentativasEsgotadas evento) {
+    if (renovacaoEventoProcessadoRepository.existsByEventId(evento.eventId())) {
+      return;
+    }
+    Optional<Renovacao> possivelRenovacao =
+        renovacaoRepository.buscarPorUuidParaAtualizacao(evento.renovacaoId().toString());
+    if (possivelRenovacao.isEmpty()) {
+      return;
+    }
+    Renovacao renovacao = possivelRenovacao.get();
+    if (renovacao.getStatus() != StatusRenovacao.PENDENTE) {
+      return;
+    }
+    Assinatura assinatura =
+        assinaturaRepository.findById(renovacao.getAssinaturaId()).orElseThrow();
+    renovacao.esgotarTentativas();
+    assinatura.suspender();
   }
 
   private void gravarEvento(
