@@ -44,7 +44,7 @@ public class Assinatura {
 
   private LocalDate proximaRenovacaoEm;
 
-  private boolean renovacaoAutomatica;
+  private boolean renovacaoAutomatica = true;
 
   /** Construtor sem argumentos exigido pelo provedor JPA. */
   protected Assinatura() {}

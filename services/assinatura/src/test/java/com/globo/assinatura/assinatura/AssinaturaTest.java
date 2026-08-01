@@ -89,6 +89,16 @@ class AssinaturaTest {
   }
 
   @Test
+  @DisplayName("Deve nascer com renovacao automatica habilitada por padrao (opt-out)")
+  void deveNascerComRenovacaoAutomaticaHabilitada() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+
+    assertThat(assinatura.isRenovacaoAutomatica())
+        .as("Renovacao automatica nasce habilitada (opt-out, decisao O-R2)")
+        .isTrue();
+  }
+
+  @Test
   @DisplayName("Deve estabelecer o primeiro ciclo de renovacao ao ativar")
   void deveEstabelecerPrimeiroCicloAoAtivar() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
