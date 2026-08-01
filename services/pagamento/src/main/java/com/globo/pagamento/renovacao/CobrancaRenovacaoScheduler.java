@@ -37,15 +37,21 @@ public class CobrancaRenovacaoScheduler {
    * Cobra as tentativas prontas.
    *
    * <p>Itera sobre as tentativas elegiveis, resolve o pagamento da renovacao, cria a cobranca no
-   * gateway e persiste o {@code paymentId} devolvido na tentativa correspondente.
+   * gateway e persiste o {@code paymentId} devolvido na tentativa correspondente. Falhas tecnicas
+   * do gateway pulam a tentativa, que permanece pendente para o proximo ciclo.
    */
   public void cobrar() {
     for (TentativaCobranca tentativa : tentativaCobrancaRepository.buscarProntasParaCobrar()) {
       PagamentoRenovacao pagamento =
           pagamentoRenovacaoRepository.findByRenovacaoId(tentativa.getRenovacaoId()).orElseThrow();
-      CobrancaCriada cobranca =
-          gateway.criarCobrancaRenovacao(
-              tentativa.getRenovacaoId(), tentativa.getNumero(), pagamento.getValor());
+      CobrancaCriada cobranca;
+      try {
+        cobranca =
+            gateway.criarCobrancaRenovacao(
+                tentativa.getRenovacaoId(), tentativa.getNumero(), pagamento.getValor());
+      } catch (RuntimeException e) {
+        continue;
+      }
       tentativa.registrarCobranca(cobranca.paymentId());
       tentativaCobrancaRepository.save(tentativa);
     }

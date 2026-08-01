@@ -55,6 +55,24 @@ class CobrancaRenovacaoSchedulerTest {
         .isEqualTo("pay-123");
   }
 
+  @Test
+  @DisplayName("Nao deve preencher o payment id quando o gateway lanca excecao")
+  void naoDevePreencherPaymentIdQuandoGatewayLancaExcecao() {
+    // Fixture capturada para asseverar estado pos-falha.
+    TentativaCobranca tentativa = tentativaProntaSemPaymentId();
+    when(tentativaCobrancaRepository.buscarProntasParaCobrar()).thenReturn(List.of(tentativa));
+    when(pagamentoRenovacaoRepository.findByRenovacaoId("renov-1"))
+        .thenReturn(Optional.of(pagamentoComValor()));
+    when(gateway.criarCobrancaRenovacao(any(), anyInt(), any()))
+        .thenThrow(new RuntimeException("timeout"));
+
+    scheduler.cobrar();
+
+    assertThat(tentativa.getPaymentId())
+        .as("paymentId deve permanecer null quando o gateway falha")
+        .isNull();
+  }
+
   private TentativaCobranca tentativaProntaSemPaymentId() {
     return new TentativaCobranca("renov-1", 1);
   }
