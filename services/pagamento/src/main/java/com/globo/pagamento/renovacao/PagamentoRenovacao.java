@@ -47,13 +47,6 @@ public class PagamentoRenovacao {
   /**
    * Cria um pagamento de renovacao a partir do evento {@code RenovacaoSolicitada}.
    *
-   * <p>No caminho de escrita em producao a insercao usa {@link
-   * PagamentoRenovacaoRepository#inserirSeNaoExistir}, uma query nativa que nao passa por este
-   * construtor; as mesmas invariantes validadas aqui ja sao aplicadas antes disso por {@code
-   * RenovacaoSolicitadaConsumer.validar}. Este construtor valida do mesmo jeito para nao deixar um
-   * caminho de construcao direta (teste, ou uma futura migracao para {@code repository.save(...)})
-   * sem defesa.
-   *
    * @param renovacaoId identificador publico da renovacao (chave de idempotencia); nao pode ser
    *     nulo nem vazio
    * @param assinaturaId identificador publico da assinatura renovada; nao pode ser nulo nem vazio

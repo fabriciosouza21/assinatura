@@ -36,8 +36,8 @@ public class User {
    * Cria um usuário autenticável com as credenciais informadas.
    *
    * @param username nome de login do usuário; não pode ser nulo nem vazio
-   * @param password senha já hasheada (BCrypt), pronta para persistir; não pode ser nula nem vazia
-   * @param role papel do usuário, como {@code "ROLE_CLIENT"}; não pode ser nulo nem vazio
+   * @param password senha já hasheada, pronta para persistir; não pode ser nula nem vazia
+   * @param role papel do usuário; não pode ser nulo nem vazio
    * @param usuarioId id do {@code Usuario} de domínio ligado, ou {@code null} para o admin
    * @throws IllegalArgumentException se username, password ou role forem nulos ou vazios
    */
