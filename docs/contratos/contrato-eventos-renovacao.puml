@@ -1,0 +1,107 @@
+@startuml
+title Contrato de eventos Kafka — Renovação de assinatura
+
+hide circle
+skinparam classAttributeIconSize 0
+skinparam linetype polyline
+skinparam nodesep 70
+skinparam ranksep 80
+
+class RenovacaoSolicitada <<event>> {
+  + eventId : UUID
+  + ocorridoEm : Instant
+  + renovacaoId : UUID
+  + assinaturaId : UUID
+  + plano : Plano
+  + valor : BigDecimal
+  + cicloReferencia : int
+}
+
+class PagamentoRenovacaoAprovado <<event>> {
+  + eventId : UUID
+  + ocorridoEm : Instant
+  + renovacaoId : UUID
+  + assinaturaId : UUID
+  + paymentId : String
+  + cicloReferencia : int
+}
+
+class RenovacaoTentativasEsgotadas <<event>> {
+  + eventId : UUID
+  + ocorridoEm : Instant
+  + renovacaoId : UUID
+  + assinaturaId : UUID
+  + cicloReferencia : int
+}
+
+enum Plano {
+  BASICO
+  PREMIUM
+  FAMILIA
+}
+
+RenovacaoSolicitada ..> PagamentoRenovacaoAprovado : correlação\n(renovacaoId, assinaturaId)
+RenovacaoSolicitada ..> RenovacaoTentativasEsgotadas : correlação\n(renovacaoId, assinaturaId)
+RenovacaoSolicitada --> Plano
+
+note right of RenovacaoSolicitada
+  **Tópico:** renovacao-solicitada
+  **Kafka key:** assinaturaId
+
+  Produtor: Assinatura Service
+  Consumidor: Pagamento Service (groupId: pagamento)
+
+  Entrega: OUTBOX (transacional). Gravado na
+  mesma transação que cria a renovação e move
+  a assinatura para EM_RENOVACAO. At-least-once.
+
+  renovacaoId = chave de idempotência no
+  consumidor (índice único em
+  pagamento_renovacao.renovacao_id). Um pedido
+  reenviado não cria cobrança duplicada.
+
+  cicloReferencia = ordinal do ciclo dentro da
+  assinatura (>0).
+end note
+
+note right of PagamentoRenovacaoAprovado
+  **Tópico:** renovacao-resultado
+  **Kafka key:** assinaturaId
+
+  Produtor: Pagamento Service (publish-then-ACK)
+  Consumidor: Assinatura Service (groupId: assinatura)
+
+  Entrega: publicação DIRETA. Só confirma o
+  webhook do gateway após o Kafka confirmar.
+
+  eventId = X-Mock-Event-Id do webhook
+  (dedup ponta-a-ponta no consumidor).
+
+  Aprovação encerra as tentativas da renovação.
+end note
+
+note right of RenovacaoTentativasEsgotadas
+  **Tópico:** renovacao-resultado
+  **Kafka key:** assinaturaId
+
+  Produtor: Pagamento Service (publish-then-ACK)
+  Consumidor: Assinatura Service (groupId: assinatura)
+
+  Mesma entrega e dedup de eventId do
+  PagamentoRenovacaoAprovado.
+
+  Emitido na 3ª recusa: esgota as tentativas
+  da renovação e leva à suspensão da assinatura.
+end note
+
+note bottom of RenovacaoSolicitada
+  **Serialização:** String (JSON), Jackson nos records.
+  DTOs duplicados por serviço, pacote {servico}.messaging.event.
+
+  **Tópicos:** o bean NewTopics do serviço produtor declara
+  renovacao-solicitada (Assinatura) e renovacao-resultado
+  + renovacao-resultado-dlq (Pagamento). Os -dlq de consumer
+  seguem o padrão do 0.2.0.
+end note
+
+@enduml
