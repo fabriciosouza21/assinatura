@@ -33,6 +33,8 @@ class UsuarioServiceTest {
   @Test
   @DisplayName("Deve cadastrar cliente novo e retornar o uuid atribuido pela entidade")
   void cadastraClienteNovoRetornaIdentificador() {
+    when(passwordEncoder.encode("SenhaForte1")).thenReturn("hash-bcrypt");
+
     final String resultado = usuarioService.cadastrar("Fulano", "novo@example.com", "SenhaForte1");
 
     ArgumentCaptor<Usuario> capturado = ArgumentCaptor.forClass(Usuario.class);

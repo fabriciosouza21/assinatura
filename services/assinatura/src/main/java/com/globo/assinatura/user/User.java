@@ -29,6 +29,34 @@ public class User {
 
   private Instant updatedAt;
 
+  /** Construtor sem argumentos exigido pelo provedor JPA. */
+  protected User() {}
+
+  /**
+   * Cria um usuário autenticável com as credenciais informadas.
+   *
+   * @param username nome de login do usuário; não pode ser nulo nem vazio
+   * @param password senha já hasheada, pronta para persistir; não pode ser nula nem vazia
+   * @param role papel do usuário; não pode ser nulo nem vazio
+   * @param usuarioId id do {@code Usuario} de domínio ligado, ou {@code null} para o admin
+   * @throws IllegalArgumentException se username, password ou role forem nulos ou vazios
+   */
+  public User(String username, String password, String role, Long usuarioId) {
+    if (username == null || username.isBlank()) {
+      throw new IllegalArgumentException("username nao pode ser vazio");
+    }
+    if (password == null || password.isBlank()) {
+      throw new IllegalArgumentException("password nao pode ser vazio");
+    }
+    if (role == null || role.isBlank()) {
+      throw new IllegalArgumentException("role nao pode ser vazio");
+    }
+    this.username = username;
+    this.password = password;
+    this.role = role;
+    this.usuarioId = usuarioId;
+  }
+
   /** Retorna o identificador do usuário. */
   public Long getId() {
     return id;
@@ -62,41 +90,6 @@ public class User {
   /** Retorna o instante da última atualização do registro. */
   public Instant getUpdatedAt() {
     return updatedAt;
-  }
-
-  /** Define o identificador do usuário. */
-  public void setId(Long id) {
-    this.id = id;
-  }
-
-  /** Define o nome de login do usuário. */
-  public void setUsername(String username) {
-    this.username = username;
-  }
-
-  /** Define a senha do usuário, em texto plano, a ser persistida. */
-  public void setPassword(String password) {
-    this.password = password;
-  }
-
-  /** Define o papel do usuário. */
-  public void setRole(String role) {
-    this.role = role;
-  }
-
-  /** Define o id do {@code Usuario} de domínio ligado. */
-  public void setUsuarioId(Long usuarioId) {
-    this.usuarioId = usuarioId;
-  }
-
-  /** Define o instante de criação do registro. */
-  public void setCreatedAt(Instant createdAt) {
-    this.createdAt = createdAt;
-  }
-
-  /** Define o instante da última atualização do registro. */
-  public void setUpdatedAt(Instant updatedAt) {
-    this.updatedAt = updatedAt;
   }
 
   /** Preenche os instantes de criação e atualização antes do primeiro persist. */
