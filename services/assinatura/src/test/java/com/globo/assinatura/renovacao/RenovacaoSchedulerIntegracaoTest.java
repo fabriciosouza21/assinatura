@@ -12,7 +12,6 @@ import com.globo.assinatura.outbox.OutboxRepository;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
 import java.lang.reflect.Field;
-import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -20,41 +19,44 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
-import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
-import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
-import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Teste de integracao do {@link RenovacaoScheduler} contra o Postgres real.
  *
- * <p>Valida ponta a ponta contra o schema Flyway: a query {@code FOR UPDATE SKIP LOCKED} seleciona
- * a assinatura vencida, o scheduler cria a renovacao, transita para {@code EM_RENOVACAO} e grava
- * {@code RenovacaoSolicitada} na outbox na mesma transacao; a segunda execucao e idempotente; e o
- * opt-out cancela a assinatura. Usa o Postgres do docker-compose (porta 5433).
+ * <p>Valida ponta a ponta contra o schema Flyway, exercitando o scheduler pelo proxy do Spring (de
+ * modo que o {@code @Transactional} envolva de fato a busca, a criacao da renovacao e o evento da
+ * outbox): a query {@code FOR UPDATE SKIP LOCKED} seleciona a assinatura vencida, o scheduler cria
+ * a renovacao, transita para {@code EM_RENOVACAO} e grava {@code RenovacaoSolicitada} na outbox na
+ * mesma transacao; a segunda execucao e idempotente; e o opt-out cancela a assinatura. Usa o
+ * Postgres do docker-compose (porta 5433). Os schedulers reais ficam com intervalos altos para nao
+ * dispararem durante o teste.
  */
-@DataJpaTest
-@AutoConfigureTestDatabase(replace = Replace.NONE)
+@SpringBootTest
 @Tag("integration")
+@DirtiesContext
 @TestPropertySource(
     properties = {
       "spring.datasource.url=jdbc:postgresql://localhost:5433/assinatura",
       "spring.datasource.username=assinatura",
       "spring.datasource.password=assinatura",
+      "app.outbox.intervalo-ms=3600000",
+      "app.renovacao.intervalo-ms=3600000",
     })
 class RenovacaoSchedulerIntegracaoTest {
 
   @Autowired private AssinaturaRepository assinaturaRepository;
   @Autowired private RenovacaoRepository renovacaoRepository;
   @Autowired private OutboxRepository outboxRepository;
+  @Autowired private RenovacaoScheduler scheduler;
   @Autowired private UsuarioRepository usuarioRepository;
 
   @Test
   @DisplayName("Deve renovar assinatura vencida criando renovacao e evento na outbox")
   void deveRenovarAssinaturaVencidaCriandoRenovacaoEventoOutbox() {
     Assinatura assinatura = persistirAssinaturaAtivaVencida(true);
-    RenovacaoScheduler scheduler = novoScheduler();
 
     scheduler.varrerVencimentos();
 
@@ -73,7 +75,6 @@ class RenovacaoSchedulerIntegracaoTest {
   @DisplayName("Segunda execucao nao deve duplicar renovacao nem evento")
   void segundaExecucaoNaoDeveDuplicar() {
     Assinatura assinatura = persistirAssinaturaAtivaVencida(true);
-    RenovacaoScheduler scheduler = novoScheduler();
 
     scheduler.varrerVencimentos();
     long renovacoesAposPrimeira = renovacaoRepository.count();
@@ -98,7 +99,6 @@ class RenovacaoSchedulerIntegracaoTest {
   @DisplayName("Deve cancelar assinatura com opt-out no vencimento")
   void deveCancelarAssinaturaComOptOut() {
     Assinatura assinatura = persistirAssinaturaAtivaVencida(false);
-    RenovacaoScheduler scheduler = novoScheduler();
 
     scheduler.varrerVencimentos();
 
@@ -109,16 +109,6 @@ class RenovacaoSchedulerIntegracaoTest {
     assertThat(renovacaoRepository.countByAssinaturaId(assinatura.getId()))
         .as("Nenhuma renovacao criada para opt-out")
         .isZero();
-  }
-
-  private RenovacaoScheduler novoScheduler() {
-    return new RenovacaoScheduler(
-        assinaturaRepository,
-        renovacaoRepository,
-        outboxRepository,
-        JsonMapper.builder().build(),
-        100,
-        Clock.systemUTC());
   }
 
   private Assinatura persistirAssinaturaAtivaVencida(boolean renovacaoAutomatica) {
