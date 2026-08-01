@@ -44,10 +44,7 @@ class AuthServiceTest {
   @Test
   @DisplayName("Deve emitir JWT com subject=email e role=ROLE_CLIENT ao logar cliente")
   void loginDeClienteEmiteTokenComRoleCliente() {
-    User cliente = new User();
-    cliente.setUsername("cliente@example.com");
-    cliente.setPassword("hash-bcrypt");
-    cliente.setRole("ROLE_CLIENT");
+    User cliente = new User("cliente@example.com", "hash-bcrypt", "ROLE_CLIENT", 1L);
     when(userRepository.findByUsername("cliente@example.com")).thenReturn(Optional.of(cliente));
     when(passwordEncoder.matches("SenhaForte1", "hash-bcrypt")).thenReturn(true);
 

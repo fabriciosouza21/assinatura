@@ -61,11 +61,7 @@ public class UsuarioService {
     Usuario usuario = new Usuario(nome, email);
     usuarioRepository.save(usuario);
 
-    User user = new User();
-    user.setUsername(email);
-    user.setPassword(passwordEncoder.encode(senha));
-    user.setRole(ROLE_CLIENT);
-    user.setUsuarioId(usuario.getId());
+    User user = new User(email, passwordEncoder.encode(senha), ROLE_CLIENT, usuario.getId());
     userRepository.save(user);
 
     return usuario.getUuid();

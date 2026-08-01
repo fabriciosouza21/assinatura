@@ -104,29 +104,11 @@ public class Usuario {
   }
 
   /**
-   * Atribui o nome do usuario.
-   *
-   * @param nome nome do usuario
-   */
-  public void setNome(String nome) {
-    this.nome = nome;
-  }
-
-  /**
    * Retorna o email do usuario.
    *
    * @return email do usuario
    */
   public String getEmail() {
     return email;
-  }
-
-  /**
-   * Atribui o email do usuario.
-   *
-   * @param email email do usuario
-   */
-  public void setEmail(String email) {
-    this.email = email;
   }
 }

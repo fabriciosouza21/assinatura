@@ -47,14 +47,38 @@ public class PagamentoRenovacao {
   /**
    * Cria um pagamento de renovacao a partir do evento {@code RenovacaoSolicitada}.
    *
-   * @param renovacaoId identificador publico da renovacao (chave de idempotencia)
-   * @param assinaturaId identificador publico da assinatura renovada
-   * @param plano plano contratado
-   * @param valor valor mensal em reais
-   * @param cicloReferencia numero do ciclo da renovacao
+   * <p>No caminho de escrita em producao a insercao usa {@link
+   * PagamentoRenovacaoRepository#inserirSeNaoExistir}, uma query nativa que nao passa por este
+   * construtor; as mesmas invariantes validadas aqui ja sao aplicadas antes disso por {@code
+   * RenovacaoSolicitadaConsumer.validar}. Este construtor valida do mesmo jeito para nao deixar um
+   * caminho de construcao direta (teste, ou uma futura migracao para {@code repository.save(...)})
+   * sem defesa.
+   *
+   * @param renovacaoId identificador publico da renovacao (chave de idempotencia); nao pode ser
+   *     nulo nem vazio
+   * @param assinaturaId identificador publico da assinatura renovada; nao pode ser nulo nem vazio
+   * @param plano plano contratado; nao pode ser nulo
+   * @param valor valor mensal em reais; deve ser positivo
+   * @param cicloReferencia numero do ciclo da renovacao; deve ser maior ou igual a 1
+   * @throws IllegalArgumentException se algum campo obrigatorio estiver ausente ou invalido
    */
   public PagamentoRenovacao(
       String renovacaoId, String assinaturaId, Plano plano, BigDecimal valor, int cicloReferencia) {
+    if (renovacaoId == null || renovacaoId.isBlank()) {
+      throw new IllegalArgumentException("renovacaoId nao pode ser vazio");
+    }
+    if (assinaturaId == null || assinaturaId.isBlank()) {
+      throw new IllegalArgumentException("assinaturaId nao pode ser vazio");
+    }
+    if (plano == null) {
+      throw new IllegalArgumentException("plano nao pode ser nulo");
+    }
+    if (valor == null || valor.signum() <= 0) {
+      throw new IllegalArgumentException("valor deve ser positivo");
+    }
+    if (cicloReferencia < 1) {
+      throw new IllegalArgumentException("cicloReferencia deve ser maior ou igual a 1");
+    }
     this.renovacaoId = renovacaoId;
     this.assinaturaId = assinaturaId;
     this.plano = plano;
