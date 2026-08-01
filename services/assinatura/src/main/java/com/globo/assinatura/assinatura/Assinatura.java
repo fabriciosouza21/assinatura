@@ -223,4 +223,17 @@ public class Assinatura {
     }
     this.status = StatusAssinatura.SUSPENSA;
   }
+
+  /**
+   * Cancela a assinatura no vencimento do ciclo quando o dono optou por nao renovar.
+   *
+   * <p>Apenas assinaturas ativas podem ser canceladas por opt-out. Eventos tardios ou duplicados
+   * para uma assinatura ja resolvida sao ignorados.
+   */
+  public void cancelar() {
+    if (this.status != StatusAssinatura.ATIVA) {
+      return;
+    }
+    this.status = StatusAssinatura.CANCELADA;
+  }
 }

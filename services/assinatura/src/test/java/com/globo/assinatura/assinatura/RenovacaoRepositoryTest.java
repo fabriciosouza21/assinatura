@@ -46,9 +46,10 @@ class RenovacaoRepositoryTest {
         assinaturaRepository.saveAndFlush(new Assinatura(usuario.getId(), Plano.PREMIUM));
     Renovacao salvo =
         renovacaoRepository.saveAndFlush(
-            new Renovacao(assinatura.getId(), LocalDate.of(2026, 2, 1)));
+            new Renovacao(assinatura.getId(), LocalDate.of(2026, 2, 1), 1));
 
     assertThat(salvo.getId()).as("Id tecnico gerado pelo banco").isNotNull();
+    assertThat(salvo.getUuid()).as("Uuid publico gerado").isNotNull();
   }
 
   @Test
@@ -58,12 +59,12 @@ class RenovacaoRepositoryTest {
     Assinatura assinatura =
         assinaturaRepository.saveAndFlush(new Assinatura(usuario.getId(), Plano.BASICO));
     LocalDate cicloReferencia = LocalDate.of(2026, 2, 1);
-    renovacaoRepository.saveAndFlush(new Renovacao(assinatura.getId(), cicloReferencia));
+    renovacaoRepository.saveAndFlush(new Renovacao(assinatura.getId(), cicloReferencia, 1));
 
     assertThatThrownBy(
             () ->
                 renovacaoRepository.saveAndFlush(
-                    new Renovacao(assinatura.getId(), cicloReferencia)))
+                    new Renovacao(assinatura.getId(), cicloReferencia, 1)))
         .as("Indice unico impede segunda renovacao para o mesmo ciclo")
         .isInstanceOf(DataIntegrityViolationException.class);
   }

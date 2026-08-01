@@ -13,7 +13,7 @@ class RenovacaoTest {
   @Test
   @DisplayName("Deve nascer pendente ao criar a renovacao")
   void deveNascerPendenteAoCriar() {
-    Renovacao renovacao = new Renovacao(1L, LocalDate.of(2026, 2, 1));
+    Renovacao renovacao = new Renovacao(1L, LocalDate.of(2026, 2, 1), 1);
 
     assertThat(renovacao.getStatus())
         .as("Status inicial da renovacao")
@@ -23,7 +23,7 @@ class RenovacaoTest {
   @Test
   @DisplayName("Deve transitar para aprovada ao aprovar a renovacao")
   void deveTransitarParaAprovadaAoAprovar() {
-    Renovacao renovacao = new Renovacao(1L, LocalDate.of(2026, 2, 1));
+    Renovacao renovacao = new Renovacao(1L, LocalDate.of(2026, 2, 1), 1);
 
     renovacao.aprovar();
 
@@ -35,7 +35,7 @@ class RenovacaoTest {
   @Test
   @DisplayName("Deve transitar para tentativas esgotadas ao esgotar a renovacao")
   void deveTransitarParaTentativasEsgotadasAoEsgotar() {
-    Renovacao renovacao = new Renovacao(1L, LocalDate.of(2026, 2, 1));
+    Renovacao renovacao = new Renovacao(1L, LocalDate.of(2026, 2, 1), 1);
 
     renovacao.esgotarTentativas();
 
@@ -47,7 +47,7 @@ class RenovacaoTest {
   @Test
   @DisplayName("Deve lancar excecao ao aprovar renovacao ja aprovada")
   void deveLancarExcecaoAoAprovarRenovacaoJaAprovada() {
-    Renovacao renovacao = new Renovacao(1L, LocalDate.of(2026, 2, 1));
+    Renovacao renovacao = new Renovacao(1L, LocalDate.of(2026, 2, 1), 1);
     renovacao.aprovar();
 
     assertThatThrownBy(renovacao::aprovar)
@@ -58,7 +58,7 @@ class RenovacaoTest {
   @Test
   @DisplayName("Deve lancar excecao ao esgotar tentativas de renovacao ja esgotada")
   void deveLancarExcecaoAoEsgotarRenovacaoJaEsgotada() {
-    Renovacao renovacao = new Renovacao(1L, LocalDate.of(2026, 2, 1));
+    Renovacao renovacao = new Renovacao(1L, LocalDate.of(2026, 2, 1), 1);
     renovacao.esgotarTentativas();
 
     assertThatThrownBy(renovacao::esgotarTentativas)

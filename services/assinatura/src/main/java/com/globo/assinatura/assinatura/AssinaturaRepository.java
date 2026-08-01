@@ -1,6 +1,8 @@
 package com.globo.assinatura.assinatura;
 
+import java.time.LocalDate;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -45,4 +47,28 @@ public interface AssinaturaRepository extends JpaRepository<Assinatura, Long> {
    */
   @Query(value = "SELECT * FROM assinatura WHERE uuid = :uuid FOR UPDATE", nativeQuery = true)
   Optional<Assinatura> buscarPorUuidParaAtualizacao(@Param("uuid") String uuid);
+
+  /**
+   * Seleciona assinaturas ativas com proxima renovacao vencida, bloqueando as linhas ate o fim da
+   * transacao e pulando as ja bloqueadas por outra instância.
+   *
+   * <p>Executa {@code SELECT ... FOR UPDATE SKIP LOCKED} em SQL nativo. O {@code SKIP LOCKED}
+   * permite que duas instâncias do scheduler processem lotes disjuntos na mesma janela, e o lock de
+   * linha impede que a mesma assinatura seja renovada duas vezes. A condicao {@code <=} recupera
+   * renovações atrasadas apos indisponibilidade da aplicacao.
+   *
+   * @param hoje data corrente usada como limite de vencimento
+   * @param limite maximo de assinaturas selecionadas por ciclo
+   * @return assinaturas vencidas bloqueadas para renovacao
+   */
+  @Query(
+      value =
+          "SELECT * FROM assinatura "
+              + "WHERE status = 'ATIVA' AND proxima_renovacao_em <= :hoje "
+              + "ORDER BY proxima_renovacao_em "
+              + "LIMIT :limite "
+              + "FOR UPDATE SKIP LOCKED",
+      nativeQuery = true)
+  List<Assinatura> buscarVencidasParaRenovacao(
+      @Param("hoje") LocalDate hoje, @Param("limite") int limite);
 }

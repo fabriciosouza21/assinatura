@@ -8,12 +8,15 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
+import java.util.UUID;
 
 /**
  * Representa a renovacao de um ciclo de uma assinatura.
  *
  * <p>Cada ciclo vencido gera uma renovacao, vinculada a assinatura dona pelo identificador interno
- * e referenciando o ciclo pelo fim do periodo renovado.
+ * e referenciando o ciclo pelo fim do periodo renovado. O {@code uuid} publico identifica a
+ * renovacao entre servicos (chave de idempotencia do evento {@code RenovacaoSolicitada}) e o {@code
+ * numeroCiclo} e o ordinal do ciclo dentro da assinatura.
  */
 @Entity
 @Table(name = "renovacao")
@@ -23,9 +26,13 @@ public class Renovacao {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
 
+  private String uuid;
+
   private Long assinaturaId;
 
   private LocalDate cicloReferencia;
+
+  private int numeroCiclo;
 
   @Enumerated(EnumType.STRING)
   private StatusRenovacao status;
@@ -36,14 +43,18 @@ public class Renovacao {
   /**
    * Cria uma renovacao para a assinatura e o ciclo informados.
    *
-   * <p>Nasce em {@link StatusRenovacao#PENDENTE}, aguardando o resultado da cobranca.
+   * <p>Nasce em {@link StatusRenovacao#PENDENTE}, aguardando o resultado da cobranca, com uuid
+   * publico gerado.
    *
    * @param assinaturaId identificador interno da assinatura dona
    * @param cicloReferencia fim do ciclo que esta sendo renovado
+   * @param numeroCiclo ordinal do ciclo dentro da assinatura
    */
-  public Renovacao(Long assinaturaId, LocalDate cicloReferencia) {
+  public Renovacao(Long assinaturaId, LocalDate cicloReferencia, int numeroCiclo) {
+    this.uuid = UUID.randomUUID().toString();
     this.assinaturaId = assinaturaId;
     this.cicloReferencia = cicloReferencia;
+    this.numeroCiclo = numeroCiclo;
     this.status = StatusRenovacao.PENDENTE;
   }
 
@@ -54,6 +65,15 @@ public class Renovacao {
    */
   public Long getId() {
     return id;
+  }
+
+  /**
+   * Retorna o uuid publico da renovacao.
+   *
+   * @return uuid publico
+   */
+  public String getUuid() {
+    return uuid;
   }
 
   /**
@@ -72,6 +92,15 @@ public class Renovacao {
    */
   public LocalDate getCicloReferencia() {
     return cicloReferencia;
+  }
+
+  /**
+   * Retorna o ordinal do ciclo dentro da assinatura.
+   *
+   * @return numero do ciclo
+   */
+  public int getNumeroCiclo() {
+    return numeroCiclo;
   }
 
   /**
