@@ -24,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 class ProcessarPagamentoTest {
@@ -258,6 +259,31 @@ class ProcessarPagamentoTest {
         .as("evento para assinatura inexistente nao deve lancar excecao")
         .doesNotThrowAnyException();
     verify(pagamentoEventoProcessadoRepository, never()).save(any(PagamentoEventoProcessado.class));
+  }
+
+  @Test
+  @DisplayName(
+      "Deve tratar como no-op idempotente quando save do evento processado viola indice unico"
+          + " (race de rebalance)")
+  void deveTratarComoNoOpQuandoSaveDoEventoProcessadoViolaIndiceUnico() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    when(pagamentoEventoProcessadoRepository.save(any(PagamentoEventoProcessado.class)))
+        .thenThrow(new DataIntegrityViolationException("uq_pagamento_evento_processado_event_id"));
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            UUID.randomUUID(),
+            Instant.now(),
+            UUID.fromString(assinatura.getUuid()),
+            StatusPagamento.APPROVED,
+            UUID.randomUUID());
+
+    assertThatCode(() -> command.executar(evento))
+        .as(
+            "violacao do indice unico no save concorrente deve ser absorvida como no-op"
+                + " idempotente, sem propagar para o consumer Kafka")
+        .doesNotThrowAnyException();
   }
 
   @Test

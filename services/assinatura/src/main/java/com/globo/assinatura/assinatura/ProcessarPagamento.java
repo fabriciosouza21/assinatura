@@ -8,6 +8,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -72,7 +73,14 @@ public class ProcessarPagamento {
     } else {
       assinatura.ativar(hoje, hoje.plusMonths(1));
     }
-    pagamentoEventoProcessadoRepository.save(
-        new PagamentoEventoProcessado(evento.eventId(), assinatura.getUuid(), Instant.now(clock)));
+    try {
+      pagamentoEventoProcessadoRepository.save(
+          new PagamentoEventoProcessado(
+              evento.eventId(), assinatura.getUuid(), Instant.now(clock)));
+    } catch (DataIntegrityViolationException e) {
+      // outra transacao concorrente (ex.: consumer zumbi de um rebalance) ja registrou este
+      // eventId entre o check de idempotencia e este save; o dominio ja foi atualizado de forma
+      // idempotente acima, entao tratamos como no-op.
+    }
   }
 }
