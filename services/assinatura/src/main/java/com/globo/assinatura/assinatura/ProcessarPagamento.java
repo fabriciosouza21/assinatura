@@ -82,12 +82,12 @@ public class ProcessarPagamento {
           new PagamentoEventoProcessado(
               evento.eventId(), assinatura.getUuid(), Instant.now(clock)));
     } catch (DataIntegrityViolationException e) {
-      log.warn(
-          "Evento eventId={} da assinaturaId={} ja foi registrado por uma transacao concorrente"
-              + " (provavel rebalance do consumer); tratando save como no-op idempotente",
-          evento.eventId(),
-          assinatura.getUuid(),
-          e);
+      log.atDebug()
+          .addKeyValue("event", "pagamento_evento_deduplicado")
+          .addKeyValue("eventId", evento.eventId())
+          .addKeyValue("assinaturaId", assinatura.getUuid())
+          .addKeyValue("reasonCode", "violacao_constraint_concorrente")
+          .log("Evento de pagamento ja registrado por transacao concorrente");
     }
   }
 }

@@ -98,6 +98,12 @@ public class ProcessarWebhookPagamento {
     try {
       eventoRepository.save(new WebhookEventoProcessado(eventId, assinaturaId));
     } catch (DataIntegrityViolationException e) {
+      log.atDebug()
+          .addKeyValue("event", "webhook_evento_deduplicado")
+          .addKeyValue("eventId", eventId)
+          .addKeyValue("assinaturaId", assinaturaId)
+          .addKeyValue("reasonCode", "violacao_constraint_concorrente")
+          .log("Evento de webhook ja registrado por transacao concorrente");
       return eventId;
     }
     return eventId;
