@@ -107,7 +107,7 @@ public class ProcessarWebhookPagamento {
     try {
       return gatewayClient.consultarStatus(paymentId.toString());
     } catch (RuntimeException e) {
-      throw new PublicacaoIndisponivelException();
+      throw new PublicacaoIndisponivelException(e);
     }
   }
 
@@ -129,9 +129,9 @@ public class ProcessarWebhookPagamento {
       kafkaTemplate.send(topico, assinaturaId.toString(), payload).get();
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      throw new PublicacaoIndisponivelException();
+      throw new PublicacaoIndisponivelException(e);
     } catch (ExecutionException | RuntimeException e) {
-      throw new PublicacaoIndisponivelException();
+      throw new PublicacaoIndisponivelException(e);
     }
   }
 }

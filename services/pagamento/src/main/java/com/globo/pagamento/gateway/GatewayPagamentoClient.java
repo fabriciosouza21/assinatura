@@ -83,7 +83,7 @@ public class GatewayPagamentoClient {
               .block();
       return new CobrancaCriada(response.id());
     } catch (WebClientException e) {
-      throw new CobrancaGatewayIndisponivelException();
+      throw new CobrancaGatewayIndisponivelException(e);
     }
   }
 

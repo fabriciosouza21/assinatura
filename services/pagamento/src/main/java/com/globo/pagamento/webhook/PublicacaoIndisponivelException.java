@@ -10,4 +10,13 @@ public class PublicacaoIndisponivelException extends RuntimeException {
   public PublicacaoIndisponivelException() {
     super("publicacao_indisponivel");
   }
+
+  /**
+   * Constroi a excecao preservando a causa raiz da falha de publicacao ou consulta.
+   *
+   * @param cause causa raiz da falha tecnica
+   */
+  public PublicacaoIndisponivelException(Throwable cause) {
+    super("publicacao_indisponivel", cause);
+  }
 }
