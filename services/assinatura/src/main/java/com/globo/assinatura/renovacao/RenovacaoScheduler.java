@@ -82,24 +82,43 @@ public class RenovacaoScheduler {
   public void varrerVencimentos() {
     List<Assinatura> vencidas =
         assinaturaRepository.buscarVencidasParaRenovacao(LocalDate.now(clock), tamanhoLote);
+    log.atDebug()
+        .addKeyValue("event", "renovacao_batch_inicio")
+        .addKeyValue("tamanhoLote", vencidas.size())
+        .log("Varredura de renovacoes iniciada");
     for (Assinatura assinatura : vencidas) {
       try {
         processar(assinatura);
       } catch (RuntimeException e) {
-        log.warn("Falha ao processar assinatura {}: {}", assinatura.getId(), e.getMessage());
+        log.atWarn()
+            .addKeyValue("event", "renovacao_falha_isolada")
+            .addKeyValue("assinaturaId", assinatura.getUuid())
+            .addKeyValue("errorType", e.getClass().getSimpleName())
+            .log("Falha ao processar assinatura vencida");
       }
     }
+    log.atDebug()
+        .addKeyValue("event", "renovacao_batch_fim")
+        .addKeyValue("tamanhoLote", vencidas.size())
+        .log("Varredura de renovacoes concluida");
   }
 
   private void processar(Assinatura assinatura) {
     if (!assinatura.isRenovacaoAutomatica()) {
       assinatura.cancelar();
-      log.info("Assinatura {} cancelada por opt-out no vencimento", assinatura.getId());
+      log.atInfo()
+          .addKeyValue("event", "assinatura_cancelada_opt_out")
+          .addKeyValue("assinaturaId", assinatura.getUuid())
+          .log("Assinatura cancelada por opt-out no vencimento");
       return;
     }
     LocalDate cicloReferencia = assinatura.getFimCiclo();
     if (renovacaoRepository.existsByAssinaturaIdAndCicloReferencia(
         assinatura.getId(), cicloReferencia)) {
+      log.atDebug()
+          .addKeyValue("event", "renovacao_deduplicada_ciclo")
+          .addKeyValue("assinaturaId", assinatura.getUuid())
+          .log("Renovacao do ciclo ja iniciada");
       return;
     }
     int numeroCiclo = (int) renovacaoRepository.countByAssinaturaId(assinatura.getId()) + 1;
@@ -107,11 +126,12 @@ public class RenovacaoScheduler {
         renovacaoRepository.save(new Renovacao(assinatura.getId(), cicloReferencia, numeroCiclo));
     assinatura.iniciarRenovacao();
     gravarEvento(assinatura, renovacao);
-    log.info(
-        "Renovacao {} criada para a assinatura {} no ciclo {}",
-        renovacao.getUuid(),
-        assinatura.getId(),
-        numeroCiclo);
+    log.atInfo()
+        .addKeyValue("event", "renovacao_criada")
+        .addKeyValue("renovacaoId", renovacao.getUuid())
+        .addKeyValue("assinaturaId", assinatura.getUuid())
+        .addKeyValue("ciclo", numeroCiclo)
+        .log("Renovacao criada");
   }
 
   private void gravarEvento(Assinatura assinatura, Renovacao renovacao) {
