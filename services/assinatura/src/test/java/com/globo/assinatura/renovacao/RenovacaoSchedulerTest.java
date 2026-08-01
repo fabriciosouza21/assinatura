@@ -233,8 +233,8 @@ class RenovacaoSchedulerTest {
     // para que as chamadas aos repositorios recebam o identificador esperado.
     setId(assinatura, 1L);
     if (!renovacaoAutomatica) {
-      // opt-out: nao ha endpoint publico de opt-out (roadmap futuro), entao o flag e ajustado
-      // direto no agregado para exercitar o ramo de cancelamento do scheduler.
+      // Sem setter publico de opt-out no agregado, o flag e ajustado por reflection para
+      // exercitar o ramo de cancelamento do scheduler.
       desabilitarRenovacaoAutomatica(assinatura);
     }
     return assinatura;
