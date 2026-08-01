@@ -8,8 +8,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.globo.assinatura.messaging.event.PagamentoRenovacaoAprovado;
+import com.globo.assinatura.outbox.OutboxEvent;
+import com.globo.assinatura.outbox.OutboxRepository;
 import com.globo.assinatura.renovacao.RenovacaoEventoProcessado;
 import com.globo.assinatura.renovacao.RenovacaoEventoProcessadoRepository;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
@@ -18,8 +21,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(MockitoExtension.class)
 class ProcessarRenovacaoResultadoTest {
@@ -27,14 +32,24 @@ class ProcessarRenovacaoResultadoTest {
   @Mock private RenovacaoRepository renovacaoRepository;
   @Mock private AssinaturaRepository assinaturaRepository;
   @Mock private RenovacaoEventoProcessadoRepository renovacaoEventoProcessadoRepository;
+  @Mock private OutboxRepository outboxRepository;
 
+  private JsonMapper jsonMapper;
+  private Clock relogio;
   private ProcessarRenovacaoResultado command;
 
   @BeforeEach
   void setUp() {
+    jsonMapper = JsonMapper.builder().build();
+    relogio = Clock.systemUTC();
     command =
         new ProcessarRenovacaoResultado(
-            renovacaoRepository, assinaturaRepository, renovacaoEventoProcessadoRepository);
+            renovacaoRepository,
+            assinaturaRepository,
+            renovacaoEventoProcessadoRepository,
+            outboxRepository,
+            jsonMapper,
+            relogio);
   }
 
   @Test
@@ -180,5 +195,39 @@ class ProcessarRenovacaoResultadoTest {
         .doesNotThrowAnyException();
 
     verify(renovacaoEventoProcessadoRepository, never()).save(any(RenovacaoEventoProcessado.class));
+  }
+
+  @Test
+  @DisplayName("Deve gravar AssinaturaRenovada na outbox ao aprovar a renovacao")
+  void deveGravarAssinaturaRenovadaNaOutboxAoAprovarRenovacao() {
+    Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
+    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.iniciarRenovacao();
+    Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
+        .thenReturn(Optional.of(renovacao));
+    when(assinaturaRepository.findById(42L)).thenReturn(Optional.of(assinatura));
+    PagamentoRenovacaoAprovado evento =
+        new PagamentoRenovacaoAprovado(
+            UUID.randomUUID(),
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString(renovacao.getUuid()),
+            UUID.randomUUID(),
+            "pay_123",
+            2);
+
+    command.executar(evento);
+
+    ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+    verify(outboxRepository).save(captor.capture());
+    assertThat(captor.getValue().getEventType())
+        .as("evento de saida deve ser AssinaturaRenovada")
+        .isEqualTo("AssinaturaRenovada");
+    assertThat(captor.getValue().getAggregateType())
+        .as("agregado de origem deve ser Renovacao")
+        .isEqualTo("Renovacao");
+    assertThat(captor.getValue().getAggregateId())
+        .as("aggregateId deve ser o uuid da renovacao resolvida")
+        .isEqualTo(UUID.fromString(renovacao.getUuid()));
   }
 }
