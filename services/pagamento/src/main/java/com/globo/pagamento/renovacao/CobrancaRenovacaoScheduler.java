@@ -5,6 +5,7 @@ import com.globo.pagamento.gateway.GatewayPagamentoClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Scheduler que cobra as tentativas de renovacao prontas para cobranca.
@@ -43,7 +44,14 @@ public class CobrancaRenovacaoScheduler {
    * <p>Itera sobre as tentativas elegiveis, resolve o pagamento da renovacao, cria a cobranca no
    * gateway e persiste o {@code paymentId} devolvido na tentativa correspondente. Falhas tecnicas
    * do gateway pulam a tentativa, que permanece pendente para o proximo ciclo.
+   *
+   * <p>A transacao envolve todo o corpo do loop para segurar o {@code FOR UPDATE SKIP LOCKED} da
+   * selecao ate o {@code save}, atravessando a chamada ao gateway. Sem isso, o lock da tentativa
+   * seria liberado no commit da leitura (cada metodo do repositorio tem sua propria transacao),
+   * abrindo uma janela durante a chamada de rede em que outra instancia poderia selecionar a mesma
+   * tentativa e cobrar duas vezes.
    */
+  @Transactional
   public void cobrar() {
     for (TentativaCobranca tentativa : tentativaCobrancaRepository.buscarProntasParaCobrar()) {
       PagamentoRenovacao pagamento =
