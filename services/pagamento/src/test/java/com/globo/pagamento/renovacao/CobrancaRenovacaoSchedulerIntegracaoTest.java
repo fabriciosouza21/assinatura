@@ -43,6 +43,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
       "spring.datasource.password=assinatura",
       "spring.kafka.listener.auto-startup=false",
       "spring.kafka.admin.auto-startup=false",
+      "app.renovacao.scheduler-intervalo-ms=3600000",
     })
 class CobrancaRenovacaoSchedulerIntegracaoTest {
 

@@ -4,6 +4,7 @@ import com.globo.pagamento.gateway.CobrancaCriada;
 import com.globo.pagamento.gateway.GatewayPagamentoClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +37,17 @@ public class CobrancaRenovacaoScheduler {
     this.tentativaCobrancaRepository = tentativaCobrancaRepository;
     this.pagamentoRenovacaoRepository = pagamentoRenovacaoRepository;
     this.gateway = gateway;
+  }
+
+  /**
+   * Dispara a cobranca das tentativas prontas na cadencia configurada.
+   *
+   * <p>Apenas delega para {@link #cobrar()}; existe como ponto de agendamento separado da logica
+   * transacional para que esta seja testavel isoladamente.
+   */
+  @Scheduled(fixedDelayString = "${app.renovacao.scheduler-intervalo-ms}")
+  public void agendar() {
+    cobrar();
   }
 
   /**

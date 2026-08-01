@@ -53,6 +53,8 @@ app:
     base-url: ${APP_GATEWAY_BASE_URL:http://mock-pagamento:8081}
     webhook-secret: ${APP_GATEWAY_WEBHOOK_SECRET:mock-webhook-secret}
     webhook-notification-url: ${APP_GATEWAY_WEBHOOK_NOTIFICATION_URL:http://pagamento:8080/webhooks/payments}
+  renovacao:
+    scheduler-intervalo-ms: ${APP_RENOVACAO_SCHEDULER_INTERVALO_MS:5000}
 
 management:
   endpoints:
