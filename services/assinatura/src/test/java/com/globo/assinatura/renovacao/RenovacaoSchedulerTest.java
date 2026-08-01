@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,11 +16,15 @@ import com.globo.assinatura.assinatura.Renovacao;
 import com.globo.assinatura.assinatura.RenovacaoRepository;
 import com.globo.assinatura.assinatura.StatusAssinatura;
 import com.globo.assinatura.assinatura.StatusRenovacao;
+import com.globo.assinatura.messaging.event.RenovacaoSolicitada;
 import com.globo.assinatura.outbox.OutboxEvent;
 import com.globo.assinatura.outbox.OutboxRepository;
 import com.globo.assinatura.outbox.OutboxStatus;
 import java.lang.reflect.Field;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -54,7 +59,8 @@ class RenovacaoSchedulerTest {
             renovacaoRepository,
             outboxRepository,
             JsonMapper.builder().build(),
-            100);
+            100,
+            Clock.systemUTC());
   }
 
   @Test
@@ -142,6 +148,60 @@ class RenovacaoSchedulerTest {
     assertThat(renovacaoCaptor.getValue().getNumeroCiclo())
         .as("Terceiro ciclo ordinal apos duas renovacoes")
         .isEqualTo(3);
+  }
+
+  @Test
+  @DisplayName("Deve buscar as vencidas usando a data do relogio injetado, nao o relogio de parede")
+  void deveUsarDataDoRelogioInjetadoAoBuscarVencidas() {
+    RenovacaoScheduler schedulerComRelogio = schedulerComRelogioFixo("2026-01-15T10:00:00Z");
+    when(assinaturaRepository.buscarVencidasParaRenovacao(any(), anyInt())).thenReturn(List.of());
+
+    schedulerComRelogio.varrerVencimentos();
+
+    ArgumentCaptor<LocalDate> dataCaptor = ArgumentCaptor.forClass(LocalDate.class);
+    verify(assinaturaRepository).buscarVencidasParaRenovacao(dataCaptor.capture(), eq(100));
+    assertThat(dataCaptor.getValue())
+        .as("Data do relogio injetado repassada a busca de vencidas")
+        .isEqualTo(LocalDate.of(2026, 1, 15));
+  }
+
+  @Test
+  @DisplayName("Deve carimbar o instante do evento com o relogio injetado")
+  void deveCarimbarInstanteDoEventoComRelogioInjetado() {
+    Instant instanteFixo = Instant.parse("2026-01-15T10:00:00Z");
+    Assinatura assinatura = assinaturaAtivaVencida(true);
+    when(assinaturaRepository.buscarVencidasParaRenovacao(any(), anyInt()))
+        .thenReturn(List.of(assinatura));
+    when(renovacaoRepository.existsByAssinaturaIdAndCicloReferencia(anyLong(), any()))
+        .thenReturn(false);
+    when(renovacaoRepository.countByAssinaturaId(anyLong())).thenReturn(0L);
+    when(renovacaoRepository.save(any(Renovacao.class))).thenAnswer(inv -> inv.getArgument(0));
+    RenovacaoScheduler schedulerComRelogio = schedulerComRelogioFixo(instanteFixo.toString());
+
+    schedulerComRelogio.varrerVencimentos();
+
+    ArgumentCaptor<OutboxEvent> outboxCaptor = ArgumentCaptor.forClass(OutboxEvent.class);
+    verify(outboxRepository).save(outboxCaptor.capture());
+    RenovacaoSolicitada evento =
+        jsonMapper().readValue(outboxCaptor.getValue().getPayload(), RenovacaoSolicitada.class);
+    assertThat(evento.ocorridoEm())
+        .as("Instante do evento carimbado pelo relogio injetado")
+        .isEqualTo(instanteFixo);
+  }
+
+  private RenovacaoScheduler schedulerComRelogioFixo(String instanteIso) {
+    Clock relogioFixo = Clock.fixed(Instant.parse(instanteIso), ZoneOffset.UTC);
+    return new RenovacaoScheduler(
+        assinaturaRepository,
+        renovacaoRepository,
+        outboxRepository,
+        JsonMapper.builder().build(),
+        100,
+        relogioFixo);
+  }
+
+  private static JsonMapper jsonMapper() {
+    return JsonMapper.builder().build();
   }
 
   private Assinatura assinaturaAtivaVencida(boolean renovacaoAutomatica) {

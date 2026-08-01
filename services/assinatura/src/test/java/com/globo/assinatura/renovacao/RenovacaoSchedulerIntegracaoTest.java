@@ -12,6 +12,7 @@ import com.globo.assinatura.outbox.OutboxRepository;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
 import java.lang.reflect.Field;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -116,7 +117,8 @@ class RenovacaoSchedulerIntegracaoTest {
         renovacaoRepository,
         outboxRepository,
         JsonMapper.builder().build(),
-        100);
+        100,
+        Clock.systemUTC());
   }
 
   private Assinatura persistirAssinaturaAtivaVencida(boolean renovacaoAutomatica) {

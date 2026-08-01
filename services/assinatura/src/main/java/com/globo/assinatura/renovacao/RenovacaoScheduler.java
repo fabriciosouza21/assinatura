@@ -7,6 +7,7 @@ import com.globo.assinatura.assinatura.RenovacaoRepository;
 import com.globo.assinatura.messaging.event.RenovacaoSolicitada;
 import com.globo.assinatura.outbox.OutboxEvent;
 import com.globo.assinatura.outbox.OutboxRepository;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -41,27 +42,32 @@ public class RenovacaoScheduler {
   private final OutboxRepository outboxRepository;
   private final JsonMapper jsonMapper;
   private final int tamanhoLote;
+  private final Clock clock;
 
   /**
-   * Constroi o scheduler com os repositorios, o serializador JSON e o tamanho do lote injetados.
+   * Constroi o scheduler com os repositorios, o serializador JSON, o tamanho do lote e o relogio
+   * injetados.
    *
    * @param assinaturaRepository repositorio de persistencia de assinaturas
    * @param renovacaoRepository repositorio de persistencia de renovacoes
    * @param outboxRepository repositorio de persistencia da outbox
    * @param jsonMapper serializador JSON do evento de dominio
    * @param tamanhoLote maximo de assinaturas processadas por ciclo
+   * @param clock relogio para calculo da data de vencimento e do instante do evento
    */
   public RenovacaoScheduler(
       AssinaturaRepository assinaturaRepository,
       RenovacaoRepository renovacaoRepository,
       OutboxRepository outboxRepository,
       JsonMapper jsonMapper,
-      @Value("${app.renovacao.tamanho-lote}") int tamanhoLote) {
+      @Value("${app.renovacao.tamanho-lote}") int tamanhoLote,
+      Clock clock) {
     this.assinaturaRepository = assinaturaRepository;
     this.renovacaoRepository = renovacaoRepository;
     this.outboxRepository = outboxRepository;
     this.jsonMapper = jsonMapper;
     this.tamanhoLote = tamanhoLote;
+    this.clock = clock;
   }
 
   /**
@@ -71,7 +77,7 @@ public class RenovacaoScheduler {
   @Transactional
   public void varrerVencimentos() {
     List<Assinatura> vencidas =
-        assinaturaRepository.buscarVencidasParaRenovacao(LocalDate.now(), tamanhoLote);
+        assinaturaRepository.buscarVencidasParaRenovacao(LocalDate.now(clock), tamanhoLote);
     for (Assinatura assinatura : vencidas) {
       processar(assinatura);
     }
@@ -104,7 +110,7 @@ public class RenovacaoScheduler {
     RenovacaoSolicitada evento =
         new RenovacaoSolicitada(
             UUID.randomUUID(),
-            Instant.now(),
+            Instant.now(clock),
             UUID.fromString(renovacao.getUuid()),
             UUID.fromString(assinatura.getUuid()),
             assinatura.getPlano(),
