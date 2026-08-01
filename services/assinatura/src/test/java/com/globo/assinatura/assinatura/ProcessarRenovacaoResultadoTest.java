@@ -1,9 +1,13 @@
 package com.globo.assinatura.assinatura;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.globo.assinatura.messaging.event.PagamentoRenovacaoAprovado;
+import com.globo.assinatura.renovacao.RenovacaoEventoProcessadoRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
@@ -20,12 +24,15 @@ class ProcessarRenovacaoResultadoTest {
 
   @Mock private RenovacaoRepository renovacaoRepository;
   @Mock private AssinaturaRepository assinaturaRepository;
+  @Mock private RenovacaoEventoProcessadoRepository renovacaoEventoProcessadoRepository;
 
   private ProcessarRenovacaoResultado command;
 
   @BeforeEach
   void setUp() {
-    command = new ProcessarRenovacaoResultado(renovacaoRepository, assinaturaRepository);
+    command =
+        new ProcessarRenovacaoResultado(
+            renovacaoRepository, assinaturaRepository, renovacaoEventoProcessadoRepository);
   }
 
   @Test
@@ -79,5 +86,24 @@ class ProcessarRenovacaoResultadoTest {
     assertThat(assinatura.getFimCiclo())
         .as("novo fim de ciclo deve avancar um mes sobre o anterior")
         .isEqualTo(fimCicloAntes.plusMonths(1));
+  }
+
+  @Test
+  @DisplayName("Deve ignorar redelivery de evento ja processado sem buscar a renovacao sob lock")
+  void deveIgnorarRedeliverySemBuscarRenovacaoSobLock() {
+    UUID eventId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    when(renovacaoEventoProcessadoRepository.existsByEventId(eventId)).thenReturn(true);
+    PagamentoRenovacaoAprovado evento =
+        new PagamentoRenovacaoAprovado(
+            eventId,
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString("55555555-5555-5555-5555-555555555555"),
+            UUID.randomUUID(),
+            "pay_123",
+            2);
+
+    command.executar(evento);
+
+    verify(renovacaoRepository, never()).buscarPorUuidParaAtualizacao(any(String.class));
   }
 }

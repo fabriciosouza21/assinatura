@@ -1,6 +1,7 @@
 package com.globo.assinatura.assinatura;
 
 import com.globo.assinatura.messaging.event.PagamentoRenovacaoAprovado;
+import com.globo.assinatura.renovacao.RenovacaoEventoProcessadoRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,29 +17,38 @@ public class ProcessarRenovacaoResultado {
 
   private final RenovacaoRepository renovacaoRepository;
   private final AssinaturaRepository assinaturaRepository;
+  private final RenovacaoEventoProcessadoRepository renovacaoEventoProcessadoRepository;
 
   /**
    * Constroi o command com os repositorios injetados.
    *
    * @param renovacaoRepository repositorio de persistencia de renovacoes
    * @param assinaturaRepository repositorio de persistencia de assinaturas
+   * @param renovacaoEventoProcessadoRepository repositorio de idempotencia de eventos de renovacao
    */
   public ProcessarRenovacaoResultado(
-      RenovacaoRepository renovacaoRepository, AssinaturaRepository assinaturaRepository) {
+      RenovacaoRepository renovacaoRepository,
+      AssinaturaRepository assinaturaRepository,
+      RenovacaoEventoProcessadoRepository renovacaoEventoProcessadoRepository) {
     this.renovacaoRepository = renovacaoRepository;
     this.assinaturaRepository = assinaturaRepository;
+    this.renovacaoEventoProcessadoRepository = renovacaoEventoProcessadoRepository;
   }
 
   /**
    * Processa o evento de renovacao aprovada atualizando a assinatura dona.
    *
-   * <p>Carrega a renovacao sob lock pessimista pelo uuid publico, resolve a assinatura dona pelo
-   * identificador interno e confirma a renovacao do ciclo.
+   * <p>Eventos ja processados sao ignorados pelo identificador unico, sem acquire lock sobre a
+   * renovacao. Caso contrario, carrega a renovacao sob lock pessimista pelo uuid publico, resolve a
+   * assinatura dona pelo identificador interno e confirma a renovacao do ciclo.
    *
    * @param evento evento de pagamento de renovacao aprovado
    */
   @Transactional
   public void executar(PagamentoRenovacaoAprovado evento) {
+    if (renovacaoEventoProcessadoRepository.existsByEventId(evento.eventId())) {
+      return;
+    }
     Renovacao renovacao =
         renovacaoRepository
             .buscarPorUuidParaAtualizacao(evento.renovacaoId().toString())
