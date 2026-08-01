@@ -53,13 +53,21 @@ public class RenovacaoResultadoConsumer {
       PagamentoRenovacaoAprovado evento = desserializar(arvore, PagamentoRenovacaoAprovado.class);
       validar(evento);
       processarRenovacaoResultado.executar(evento);
-      log.info("Renovacao aprovada processada para renovacaoId={}", evento.renovacaoId());
+      log.atInfo()
+          .addKeyValue("event", "renovacao_aprovada_processada")
+          .addKeyValue("renovacaoId", evento.renovacaoId())
+          .addKeyValue("assinaturaId", evento.assinaturaId())
+          .log("Renovacao aprovada processada");
     } else if ("ESGOTADO".equals(tipo)) {
       RenovacaoTentativasEsgotadas evento =
           desserializar(arvore, RenovacaoTentativasEsgotadas.class);
       validar(evento);
       processarRenovacaoResultado.executar(evento);
-      log.info("Renovacao esgotada processada para renovacaoId={}", evento.renovacaoId());
+      log.atInfo()
+          .addKeyValue("event", "renovacao_esgotada_processada")
+          .addKeyValue("renovacaoId", evento.renovacaoId())
+          .addKeyValue("assinaturaId", evento.assinaturaId())
+          .log("Renovacao esgotada processada");
     } else {
       throw new EventoInvalidoException("tipo desconhecido ou ausente: " + tipo);
     }

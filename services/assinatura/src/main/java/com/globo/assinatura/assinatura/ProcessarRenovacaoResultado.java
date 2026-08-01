@@ -84,15 +84,31 @@ public class ProcessarRenovacaoResultado {
   @Transactional
   public void executar(PagamentoRenovacaoAprovado evento) {
     if (renovacaoEventoProcessadoRepository.existsByEventId(evento.eventId())) {
+      log.atDebug()
+          .addKeyValue("event", "renovacao_evento_deduplicado")
+          .addKeyValue("eventId", evento.eventId())
+          .addKeyValue("renovacaoId", evento.renovacaoId())
+          .log("Evento de renovacao aprovada ja processado");
       return;
     }
     Optional<Renovacao> possivelRenovacao =
         renovacaoRepository.buscarPorUuidParaAtualizacao(evento.renovacaoId().toString());
     if (possivelRenovacao.isEmpty()) {
+      log.atDebug()
+          .addKeyValue("event", "renovacao_desconhecida")
+          .addKeyValue("eventId", evento.eventId())
+          .addKeyValue("renovacaoId", evento.renovacaoId())
+          .log("Renovacao do evento de renovacao aprovada inexistente");
       return;
     }
     Renovacao renovacao = possivelRenovacao.get();
     if (renovacao.getStatus() != StatusRenovacao.PENDENTE) {
+      log.atDebug()
+          .addKeyValue("event", "renovacao_ja_resolvida")
+          .addKeyValue("eventId", evento.eventId())
+          .addKeyValue("renovacaoId", evento.renovacaoId())
+          .addKeyValue("status", renovacao.getStatus())
+          .log("Evento de renovacao aprovada descartado por renovacao ja resolvida");
       return;
     }
     Assinatura assinatura =
@@ -118,15 +134,31 @@ public class ProcessarRenovacaoResultado {
   @Transactional
   public void executar(RenovacaoTentativasEsgotadas evento) {
     if (renovacaoEventoProcessadoRepository.existsByEventId(evento.eventId())) {
+      log.atDebug()
+          .addKeyValue("event", "renovacao_evento_deduplicado")
+          .addKeyValue("eventId", evento.eventId())
+          .addKeyValue("renovacaoId", evento.renovacaoId())
+          .log("Evento de renovacao esgotada ja processado");
       return;
     }
     Optional<Renovacao> possivelRenovacao =
         renovacaoRepository.buscarPorUuidParaAtualizacao(evento.renovacaoId().toString());
     if (possivelRenovacao.isEmpty()) {
+      log.atDebug()
+          .addKeyValue("event", "renovacao_desconhecida")
+          .addKeyValue("eventId", evento.eventId())
+          .addKeyValue("renovacaoId", evento.renovacaoId())
+          .log("Renovacao do evento de renovacao esgotada inexistente");
       return;
     }
     Renovacao renovacao = possivelRenovacao.get();
     if (renovacao.getStatus() != StatusRenovacao.PENDENTE) {
+      log.atDebug()
+          .addKeyValue("event", "renovacao_ja_resolvida")
+          .addKeyValue("eventId", evento.eventId())
+          .addKeyValue("renovacaoId", evento.renovacaoId())
+          .addKeyValue("status", renovacao.getStatus())
+          .log("Evento de renovacao esgotada descartado por renovacao ja resolvida");
       return;
     }
     Assinatura assinatura =
@@ -142,12 +174,12 @@ public class ProcessarRenovacaoResultado {
       renovacaoEventoProcessadoRepository.save(
           new RenovacaoEventoProcessado(eventId, renovacaoUuid, Instant.now(clock)));
     } catch (DataIntegrityViolationException e) {
-      log.warn(
-          "Evento eventId={} da renovacaoId={} ja foi registrado por uma transacao concorrente"
-              + " (provavel rebalance do consumer); tratando save como no-op idempotente",
-          eventId,
-          renovacaoUuid,
-          e);
+      log.atDebug()
+          .addKeyValue("event", "renovacao_evento_deduplicado")
+          .addKeyValue("eventId", eventId)
+          .addKeyValue("renovacaoId", renovacaoUuid)
+          .addKeyValue("reasonCode", "violacao_constraint_concorrente")
+          .log("Evento de renovacao ja registrado por transacao concorrente");
     }
   }
 
