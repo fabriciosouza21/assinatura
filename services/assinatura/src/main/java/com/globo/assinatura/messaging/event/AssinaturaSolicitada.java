@@ -8,9 +8,10 @@ import java.util.UUID;
 /**
  * Evento de dominio publicado quando uma assinatura e solicitada.
  *
- * <p>Contrato travado em {@code docs/contrato-eventos-kafka.puml}. Carrega os campos necessarios ao
- * Pagamento Service para criar a cobranca: quem solicitou, qual plano e qual valor. O {@code valor}
- * e derivado de {@link Plano#valor()} ao montar o evento, nao persistido na assinatura.
+ * <p>Contrato travado em {@code docs/contratos/contrato-eventos-kafka.puml}. Carrega os campos
+ * necessarios ao Pagamento Service para criar a cobranca: quem solicitou, qual plano e qual valor.
+ * O {@code valor} e derivado de {@link Plano#valor()} ao montar o evento, nao persistido na
+ * assinatura.
  */
 public record AssinaturaSolicitada(
     UUID eventId,

@@ -12,7 +12,7 @@ import tools.jackson.databind.json.JsonMapper;
  * Teste unitario do evento {@link PagamentoStatusAtualizado}.
  *
  * <p>Garante que o payload publicado segue o contrato travado em {@code
- * docs/contrato-eventos-kafka.puml} e e compativel com o consumer do Assinatura Service.
+ * docs/contratos/contrato-eventos-kafka.puml} e e compativel com o consumer do Assinatura Service.
  */
 class PagamentoStatusAtualizadoTest {
 

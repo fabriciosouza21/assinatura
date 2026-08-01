@@ -23,7 +23,7 @@ participant "Gateway de\nPagamento" as GATEWAY
 == Identificar ciclos vencidos ==
 
 SCHED -> AS: Executar varredura de vencimentos
-AS -> DBAS: BEGIN\nSelecionar ciclos com fim_ciclo <= now()\nFOR UPDATE SKIP LOCKED
+AS -> DBAS: Seleciona ciclos com fim_ciclo <= now(),\ncom lock
 
 note over AS, DBAS
   A condição <= permite recuperar renovações
@@ -37,7 +37,7 @@ DBAS --> AS: Lote de assinaturas bloqueadas
 
 loop Para cada assinatura vencida
     alt renovacao_automatica = false
-        AS -> DBAS: UPDATE assinatura\nstatus = CANCELADA
+        AS -> DBAS: Marca assinatura como CANCELADA
 
         note right of AS
           O cancelamento não interrompeu
@@ -45,12 +45,12 @@ loop Para cada assinatura vencida
           cobrança é criada.
         end note
     else renovacao_automatica = true
-        AS -> DBAS: INSERT renovacao\n(assinatura_id, ciclo_referencia)\nON CONFLICT DO NOTHING
+        AS -> DBAS: Grava renovação\n(assinatura_id, ciclo_referencia),\nignorando se já existente
 
         alt Renovação criada
             DBAS --> AS: renovacao_uuid
-            AS -> DBAS: UPDATE assinatura\nstatus = EM_RENOVACAO
-            AS -> DBAS: INSERT outbox\nRenovacaoSolicitada
+            AS -> DBAS: Marca assinatura como EM_RENOVACAO
+            AS -> DBAS: Grava evento RenovacaoSolicitada\nna tabela outbox
         else Renovação já existente
             DBAS --> AS: Nenhuma linha inserida
 
@@ -61,8 +61,6 @@ loop Para cada assinatura vencida
         end
     end
 end
-
-AS -> DBAS: COMMIT
 
 note over AS, DBAS
   Durante EM_RENOVACAO, o acesso permanece
@@ -77,9 +75,8 @@ DBAS --> OUTBOX_AS: RenovacaoSolicitada
 OUTBOX_AS -> KAFKA: RenovacaoSolicitada\n{renovacaoId, assinaturaId,\nplano, valor, cicloReferencia}
 KAFKA -> PS: Consumir RenovacaoSolicitada
 
-PS -> DBPS: BEGIN\nCriar pagamento da renovação\nON CONFLICT DO NOTHING
-PS -> DBPS: Criar tentativa número 1\nstatus = PENDENTE
-PS -> DBPS: COMMIT
+PS -> DBPS: Cria pagamento da renovação,\nignorando se já existente
+PS -> DBPS: Cria tentativa número 1\n(status = PENDENTE)
 
 note over PS, DBPS
   A unicidade por renovacaoId torna
@@ -122,8 +119,7 @@ loop No máximo 3 tentativas, até aprovação
         GATEWAY --> PS: {status: "APPROVED" | "REJECTED" | "PENDING"}
 
         alt status = APPROVED
-            PS -> DBPS: BEGIN\nMarcar tentativa como APROVADA
-            PS -> DBPS: COMMIT
+            PS -> DBPS: Marca tentativa como APROVADA
             PS -> KAFKA: PagamentoRenovacaoAprovado\n{eventId, renovacaoId, assinaturaId}
             KAFKA --> PS: ACK
             PS -> DBPS: Marcar eventId como processado
@@ -134,9 +130,9 @@ loop No máximo 3 tentativas, até aprovação
               as retentativas.
             end note
         else status = REJECTED e tentativa < 3
-            PS -> DBPS: BEGIN\nMarcar tentativa como RECUSADA
-            PS -> DBPS: Criar próxima tentativa\ncom proxima_tentativa_em
-            PS -> DBPS: Marcar eventId como processado\nCOMMIT
+            PS -> DBPS: Marca tentativa como RECUSADA
+            PS -> DBPS: Cria próxima tentativa\ncom proxima_tentativa_em
+            PS -> DBPS: Marcar eventId como processado
             PS --> GATEWAY: 200 OK
 
             note right of PS
@@ -144,8 +140,7 @@ loop No máximo 3 tentativas, até aprovação
               e será encontrada por scheduler.
             end note
         else status = REJECTED e tentativa = 3
-            PS -> DBPS: BEGIN\nMarcar pagamento como ESGOTADO
-            PS -> DBPS: COMMIT
+            PS -> DBPS: Marca pagamento como ESGOTADO
             PS -> KAFKA: RenovacaoTentativasEsgotadas\n{eventId, renovacaoId, assinaturaId}
             KAFKA --> PS: ACK
             PS -> DBPS: Marcar eventId como processado
@@ -166,32 +161,30 @@ end
 
 KAFKA -> AS: Consumir resultado da renovação
 
-AS -> DBAS: BEGIN\nDeduplicar eventId
+AS -> DBAS: Deduplica eventId
 
 alt eventId já processado
-    AS -> DBAS: COMMIT sem alteração
+    AS -> DBAS: Nenhuma alteração
 else eventId novo
     AS -> DBAS: Bloquear assinatura e renovação
 
     alt PagamentoRenovacaoAprovado
-        AS -> DBAS: UPDATE renovacao\nstatus = APROVADA
-        AS -> DBAS: UPDATE assinatura\nstatus = ATIVA\ninicio_ciclo = fim_ciclo_anterior\nfim_ciclo = próximo vencimento\nproxima_renovacao_em = fim_ciclo
-        AS -> DBAS: INSERT outbox\nAssinaturaRenovada
+        AS -> DBAS: Marca renovação como APROVADA
+        AS -> DBAS: Marca assinatura como ATIVA\n(inicio_ciclo = fim_ciclo_anterior,\nfim_ciclo = próximo vencimento,\nproxima_renovacao_em = fim_ciclo)
+        AS -> DBAS: Grava evento AssinaturaRenovada\nna tabela outbox
     else RenovacaoTentativasEsgotadas
-        AS -> DBAS: UPDATE renovacao\nstatus = TENTATIVAS_ESGOTADAS
-        AS -> DBAS: UPDATE assinatura\nstatus = SUSPENSA
-        AS -> DBAS: INSERT outbox\nAssinaturaSuspensa
+        AS -> DBAS: Marca renovação como TENTATIVAS_ESGOTADAS
+        AS -> DBAS: Marca assinatura como SUSPENSA
+        AS -> DBAS: Grava evento AssinaturaSuspensa\nna tabela outbox
     end
-
-    AS -> DBAS: COMMIT
 end
 
 note over AS, DBAS
   A atualização do ciclo e do evento Outbox
   ocorre na mesma transação.
 
-  Restrição recomendada:
-  UNIQUE (assinatura_id, ciclo_referencia)
+  Restrição recomendada: renovação única
+  por assinatura e ciclo de referência.
 end note
 
 == Publicar eventos da assinatura ==

@@ -7,7 +7,7 @@ hide empty description
 
 PENDENTE --> PUBLICADO : Kafka confirmou\n[ACK]
 PENDENTE --> PENDENTE : publicação falhou\n[tentativas < 3]\n/ agendar backoff + jitter
-PENDENTE --> FALHA : terceira tentativa falhou\n/ registrar erro e failed_at
+PENDENTE --> FALHA : terceira tentativa falhou\n/ registrar erro e falhou_em
 
 FALHA --> PENDENTE : causa corrigida\n/ reprocessar e zerar tentativas
 FALHA --> DESCARTADO : falha permanente\n/ encerramento operacional
@@ -24,6 +24,16 @@ end note
 note right of FALHA
   Estado de dead letter persistido.
   Não há retry automático.
+end note
+
+note right of DESCARTADO
+  Não implementado / fora de escopo:
+  OutboxStatus no código atual só tem
+  PENDENTE, PUBLICADO e FALHA. As
+  transições FALHA -> PENDENTE (reprocessar)
+  e FALHA -> DESCARTADO dependem de um
+  serviço de recuperação manual que
+  também não existe (ver PRD da outbox).
 end note
 
 note bottom of PUBLICADO

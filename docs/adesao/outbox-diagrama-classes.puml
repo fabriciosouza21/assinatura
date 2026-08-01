@@ -8,16 +8,15 @@ skinparam linetype ortho
 package "Domínio de assinatura" {
   class Assinatura <<Entity>> {
     - id: Long
-    - uuid: UUID
-    - usuarioId: UUID
+    - uuid: String
+    - usuarioId: Long
     - plano: Plano
-    - valor: BigDecimal
     - status: StatusAssinatura
     - dataInicio: LocalDate
     - dataExpiracao: LocalDate
   }
 
-  class AssinaturaSolicitadaEvent <<Domain Event>> {
+  class AssinaturaSolicitada <<Domain Event>> {
     + eventId: UUID
     + ocorridoEm: Instant
     + assinaturaId: UUID
@@ -26,12 +25,18 @@ package "Domínio de assinatura" {
     + valor: BigDecimal
   }
 
+  note right of Assinatura
+    valor não é persistido na entidade;
+    é derivado de Plano.valor() apenas
+    ao montar o evento AssinaturaSolicitada.
+  end note
+
   interface AssinaturaRepository {
-    + salvar(assinatura: Assinatura): Assinatura
+    + save(assinatura: Assinatura): Assinatura
   }
 
-  class SolicitarAssinaturaService <<Application Service>> {
-    + solicitar(comando): UUID
+  class SolicitarAssinatura <<Application Service>> {
+    + executar(usuarioUuid: String, plano: Plano): Assinatura
   }
 }
 
@@ -49,37 +54,31 @@ package "Outbox" {
     - publicadoEm: Instant
     - falhouEm: Instant
     - ultimoErro: String
-    + marcarPublicado()
-    + registrarFalha(erro, proximaTentativa)
-    + marcarComoFalha(erro)
-    + liberarParaReprocessamento()
-    + descartar()
+    + marcarPublicado(publicadoEm: Instant)
+    + registrarFalha(erro: String, proximaTentativa: Instant)
+    + marcarFalha(erro: String, falhouEm: Instant)
   }
 
   enum OutboxStatus {
     PENDENTE
     PUBLICADO
     FALHA
-    DESCARTADO
   }
 
+  note right of OutboxStatus
+    Não implementado / fora de escopo:
+    não existe 4º estado DESCARTADO no
+    código atual (ver PRD da outbox).
+  end note
+
   interface OutboxRepository {
-    + salvar(evento: OutboxEvent)
-    + buscarPublicaveis(limite: int): List<OutboxEvent>
-    + buscarPorEventId(eventId: UUID): OutboxEvent
+    + save(evento: OutboxEvent)
+    + buscarPublicaveis(agora: Instant, limite: int): List<OutboxEvent>
   }
 
   class OutboxPublisher <<Scheduled Service>> {
-    + publicarPendentes()
-  }
-
-  interface EventPublisher {
-    + publicar(evento: OutboxEvent)
-  }
-
-  class KafkaEventPublisher {
     - kafkaTemplate: KafkaTemplate
-    + publicar(evento: OutboxEvent)
+    + publicarPendentes()
   }
 
   class RetryPolicy {
@@ -88,27 +87,26 @@ package "Outbox" {
     - jitter: double
     + calcularProximoAtraso(tentativa: int): Duration
   }
-
-  class OutboxRecoveryService {
-    + consultarFalha(eventId: UUID): OutboxEvent
-    + reprocessar(eventId: UUID)
-    + descartar(eventId: UUID)
-  }
 }
 
-SolicitarAssinaturaService --> AssinaturaRepository
-SolicitarAssinaturaService --> OutboxRepository
-SolicitarAssinaturaService ..> AssinaturaSolicitadaEvent : cria
-AssinaturaSolicitadaEvent ..> OutboxEvent : serializado como
+note as RecoveryNote
+  Não implementado / fora de escopo:
+  não existe OutboxRecoveryService nem
+  reprocessamento manual no código atual.
+  Interface humana de reprocessamento de
+  eventos FALHA é Out of Scope no PRD da outbox.
+end note
+
+SolicitarAssinatura --> AssinaturaRepository
+SolicitarAssinatura --> OutboxRepository
+SolicitarAssinatura ..> AssinaturaSolicitada : cria
+AssinaturaSolicitada ..> OutboxEvent : serializado como
 OutboxEvent --> OutboxStatus
 
 OutboxPublisher --> OutboxRepository
-OutboxPublisher --> EventPublisher
 OutboxPublisher --> RetryPolicy
-KafkaEventPublisher ..|> EventPublisher
-OutboxRecoveryService --> OutboxRepository
 
-note right of SolicitarAssinaturaService
+note right of SolicitarAssinatura
   Assinatura e OutboxEvent são
   persistidos na mesma transação.
 end note

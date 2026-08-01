@@ -35,7 +35,7 @@ alt Pagamento já existe
     MOCK --> PS: 200 OK\nMesma cobrança
 else Novo pagamento
     DB --> MOCK: vazio
-    MOCK -> DB: INSERT pagamento\nstatus = PENDING
+    MOCK -> DB: Grava pagamento na tabela pagamento\n(status = PENDING)
     MOCK --> PS: 201 Created
 end
 
@@ -67,7 +67,7 @@ note over TEST, MOCK
   CANCELLED ou EXPIRED.
 end note
 
-MOCK -> DB: UPDATE pagamento\nstatus = APPROVED
+MOCK -> DB: Marca pagamento como APPROVED\nna tabela pagamento
 MOCK --> TEST: 202 Accepted
 
 note over TEST, MOCK
@@ -110,7 +110,7 @@ end note
 == Consultar status oficial ==
 
 PS -> MOCK: GET /v1/payments/pay_uuid
-MOCK -> DB: SELECT pagamento
+MOCK -> DB: Busca pagamento na tabela pagamento
 DB --> MOCK: pagamento APPROVED
 MOCK --> PS: 200 OK
 
@@ -134,7 +134,7 @@ KAFKA -> AS: PagamentoStatusAtualizado
 AS -> AS: Ativar assinatura
 
 note over MOCK, DB
-  UNIQUE(idempotency_key) evita cobranças duplicadas.
+  Idempotency-Key única evita cobranças duplicadas.
   O endpoint /v1/mock/... existe apenas em testes.
 end note
 

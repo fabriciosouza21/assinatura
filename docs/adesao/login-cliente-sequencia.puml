@@ -15,18 +15,15 @@ database "Banco de Dados" as DB
 
 Cliente -> API: POST /usuarios\n{nome, email, senha}
 API -> US: cadastrar(nome, email, senha)
-US -> DB: BEGIN
-US -> DB: INSERT usuarios (uuid, nome, email)
+US -> DB: Grava usuario na tabela usuarios\n(uuid, nome, email)
 
 alt Email ja cadastrado
     DB --> US: conflito (uq_usuarios_email)
-    US -> DB: ROLLBACK
     US --> API: conflito
     API --> Cliente: 409 Conflict
 else Email livre
-    US -> DB: INSERT users\n(username=email,\npassword=bcrypt(senha),\nrole=ROLE_CLIENT,\nusuario_id=usuarios.id)
+    US -> DB: Grava credencial na tabela users\n(username=email,\npassword=bcrypt(senha),\nrole=ROLE_CLIENT,\nusuario_id=usuarios.id)
     DB --> US: ok
-    US -> DB: COMMIT
     US --> API: usuario criado
     API --> Cliente: 201 Created\n{id: "usuario_uuid"}
 end
@@ -41,7 +38,7 @@ end note
 
 Cliente -> API: POST /auth/login\n{username: email, password: senha}
 API -> AS: login(username, password)
-AS -> DB: SELECT users WHERE username = email
+AS -> DB: Busca credencial na tabela users\npor username
 DB --> AS: User (role=ROLE_CLIENT)
 AS -> AS: passwordEncoder.matches?\njwtService.generateToken(email, ROLE_CLIENT)
 
@@ -59,11 +56,10 @@ note over Cliente, API
 end note
 
 note over DB
-  Esquema (migration V4):
-  ALTER TABLE users ALTER COLUMN username TYPE VARCHAR(255);
-  ALTER TABLE users ADD COLUMN usuario_id BIGINT REFERENCES usuarios(id);
-  CREATE UNIQUE INDEX uq_users_usuario
-    ON users (usuario_id) WHERE usuario_id IS NOT NULL;
+  Esquema (migration V4): users.username passa a
+  aceitar até 255 caracteres; nova coluna
+  users.usuario_id referencia usuarios(id), com
+  índice único parcial (somente quando não nula).
 end note
 
 @enduml
