@@ -82,7 +82,12 @@ public class OutboxPublisher {
       }
       kafkaTemplate.send(topico, evento.getAggregateId().toString(), evento.getPayload()).get();
       evento.marcarPublicado(Instant.now());
-      log.info("Evento de assinatura publicado para assinaturaId={}", evento.getAggregateId());
+      log.atDebug()
+          .addKeyValue("event", "outbox_publicado")
+          .addKeyValue("eventId", evento.getEventId())
+          .addKeyValue("assinaturaId", evento.getAggregateId())
+          .addKeyValue("topic", topico)
+          .log("Evento da outbox publicado");
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       tratarFalha(evento, e);
@@ -95,16 +100,23 @@ public class OutboxPublisher {
   }
 
   private void tratarFalha(OutboxEvent evento, Throwable erro) {
-    log.warn(
-        "Falha ao publicar evento {} (tentativa {}): {}",
-        evento.getEventId(),
-        evento.getTentativas() + 1,
-        erro.getMessage());
     int tentativas = evento.getTentativas() + 1;
     if (retryPolicy.temTentativasRestantes(tentativas)) {
+      log.atDebug()
+          .addKeyValue("event", "outbox_publicacao_falhou")
+          .addKeyValue("eventId", evento.getEventId())
+          .addKeyValue("attempt", tentativas)
+          .addKeyValue("reasonCode", mensagem(erro))
+          .log("Tentativa de publicacao da outbox falhou");
       evento.registrarFalha(
           mensagem(erro), Instant.now().plus(retryPolicy.calcularProximoAtraso(tentativas)));
     } else {
+      log.atError()
+          .addKeyValue("event", "outbox_publicacao_esgotada")
+          .addKeyValue("eventId", evento.getEventId())
+          .addKeyValue("attempt", tentativas)
+          .setCause(erro)
+          .log("Publicacao da outbox esgotou as tentativas");
       evento.marcarFalha(mensagem(erro), Instant.now());
     }
   }
