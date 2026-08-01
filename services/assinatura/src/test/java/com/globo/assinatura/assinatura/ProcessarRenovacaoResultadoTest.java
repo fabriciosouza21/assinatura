@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.globo.assinatura.messaging.event.AssinaturaRenovada;
 import com.globo.assinatura.messaging.event.PagamentoRenovacaoAprovado;
 import com.globo.assinatura.outbox.OutboxEvent;
 import com.globo.assinatura.outbox.OutboxRepository;
@@ -15,6 +16,7 @@ import com.globo.assinatura.renovacao.RenovacaoEventoProcessadoRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -229,5 +231,45 @@ class ProcessarRenovacaoResultadoTest {
     assertThat(captor.getValue().getAggregateId())
         .as("aggregateId deve ser o uuid da renovacao resolvida")
         .isEqualTo(UUID.fromString(renovacao.getUuid()));
+  }
+
+  @Test
+  @DisplayName("Deve carimbar o instante do evento de saida com o relogio injetado")
+  void deveCarimbarInstanteDoEventoDeSaidaComRelogioInjetado() throws Exception {
+    Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
+    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.iniciarRenovacao();
+    Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
+        .thenReturn(Optional.of(renovacao));
+    when(assinaturaRepository.findById(42L)).thenReturn(Optional.of(assinatura));
+    Instant instanteFixo = Instant.parse("2026-03-10T09:30:00Z");
+    Clock relogioFixo = Clock.fixed(instanteFixo, ZoneOffset.UTC);
+    ProcessarRenovacaoResultado commandComRelogio =
+        new ProcessarRenovacaoResultado(
+            renovacaoRepository,
+            assinaturaRepository,
+            renovacaoEventoProcessadoRepository,
+            outboxRepository,
+            jsonMapper,
+            relogioFixo);
+    PagamentoRenovacaoAprovado evento =
+        new PagamentoRenovacaoAprovado(
+            UUID.randomUUID(),
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString(renovacao.getUuid()),
+            UUID.randomUUID(),
+            "pay_123",
+            2);
+
+    commandComRelogio.executar(evento);
+
+    ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+    verify(outboxRepository).save(captor.capture());
+    AssinaturaRenovada eventoSaida =
+        jsonMapper.readValue(captor.getValue().getPayload(), AssinaturaRenovada.class);
+    assertThat(eventoSaida.ocorridoEm())
+        .as("ocorridoEm do evento de saida deve vir do relogio injetado")
+        .isEqualTo(instanteFixo);
   }
 }
