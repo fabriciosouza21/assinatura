@@ -12,10 +12,10 @@ import org.springframework.data.jpa.repository.Query;
 public interface TentativaCobrancaRepository extends JpaRepository<TentativaCobranca, Long> {
 
   /**
-   * Seleciona as tentativas de cobranca prontas para serem cobradas pelo scheduler.
+   * Seleciona as tentativas de cobranca ainda nao enviadas ao gateway de pagamento.
    *
-   * @return tentativas elegiveis para cobranca
+   * @return tentativas sem {@code payment_id} (nao cobradas pelo gateway)
    */
-  @Query(nativeQuery = true, value = "SELECT * FROM tentativa_cobranca")
+  @Query(nativeQuery = true, value = "SELECT * FROM tentativa_cobranca WHERE payment_id IS NULL")
   List<TentativaCobranca> buscarProntasParaCobrar();
 }
