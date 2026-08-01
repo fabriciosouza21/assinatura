@@ -72,6 +72,10 @@ public class RenovacaoScheduler {
 
   /**
    * Processa as assinaturas vencidas, criando renovacoes e eventos de outbox numa transacao unica.
+   *
+   * <p>Uma assinatura cujo processamento falhe e isolada: o erro e registrado e o lote segue para
+   * as demais, mantendo o fluxo de cobranca das assinaturas saudaveis mesmo diante de uma linha
+   * problematicas. A assinatura falha permanece vencida e sera retomada no proximo ciclo.
    */
   @Scheduled(fixedDelayString = "${app.renovacao.intervalo-ms}")
   @Transactional
@@ -79,7 +83,11 @@ public class RenovacaoScheduler {
     List<Assinatura> vencidas =
         assinaturaRepository.buscarVencidasParaRenovacao(LocalDate.now(clock), tamanhoLote);
     for (Assinatura assinatura : vencidas) {
-      processar(assinatura);
+      try {
+        processar(assinatura);
+      } catch (RuntimeException e) {
+        log.warn("Falha ao processar assinatura {}: {}", assinatura.getId(), e.getMessage());
+      }
     }
   }
 

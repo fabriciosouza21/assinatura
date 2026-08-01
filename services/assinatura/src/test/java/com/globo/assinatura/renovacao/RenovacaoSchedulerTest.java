@@ -1,11 +1,13 @@
 package com.globo.assinatura.renovacao;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -202,6 +204,26 @@ class RenovacaoSchedulerTest {
 
   private static JsonMapper jsonMapper() {
     return JsonMapper.builder().build();
+  }
+
+  @Test
+  @DisplayName("Deve processar a segunda assinatura do lote mesmo quando a primeira falha")
+  void deveProcessarDemaisAssinaturasMesmoQuandoUmaFalhar() {
+    Assinatura primeira = assinaturaAtivaVencida(true);
+    Assinatura segunda = assinaturaAtivaVencida(true);
+    setId(segunda, 2L);
+    when(assinaturaRepository.buscarVencidasParaRenovacao(any(), anyInt()))
+        .thenReturn(List.of(primeira, segunda));
+    when(renovacaoRepository.existsByAssinaturaIdAndCicloReferencia(anyLong(), any()))
+        .thenReturn(false);
+    when(renovacaoRepository.countByAssinaturaId(anyLong())).thenReturn(0L);
+    when(renovacaoRepository.save(any(Renovacao.class)))
+        .thenThrow(new RuntimeException("falha na primeira assinatura"))
+        .thenAnswer(inv -> inv.getArgument(0));
+
+    assertThatCode(() -> scheduler.varrerVencimentos()).doesNotThrowAnyException();
+
+    verify(outboxRepository, times(1)).save(any());
   }
 
   private Assinatura assinaturaAtivaVencida(boolean renovacaoAutomatica) {
