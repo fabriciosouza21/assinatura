@@ -32,7 +32,10 @@ public class KafkaConsumerConfig {
     DeadLetterPublishingRecoverer recoverer =
         new DeadLetterPublishingRecoverer(
             template,
-            (record, ex) -> new TopicPartition(record.topic() + "-dlq", record.partition()));
+            (consumerResource, ex) -> {
+              String topicoDlq = consumerResource.topic() + "-dlq";
+              return new TopicPartition(topicoDlq, consumerResource.partition());
+            });
     DefaultErrorHandler handler = new DefaultErrorHandler(recoverer, backoff());
     handler.addNotRetryableExceptions(EventoInvalidoException.class);
     return handler;
