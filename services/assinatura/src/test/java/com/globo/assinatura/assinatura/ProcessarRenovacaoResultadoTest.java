@@ -1,12 +1,14 @@
 package com.globo.assinatura.assinatura;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.globo.assinatura.messaging.event.PagamentoRenovacaoAprovado;
+import com.globo.assinatura.renovacao.RenovacaoEventoProcessado;
 import com.globo.assinatura.renovacao.RenovacaoEventoProcessadoRepository;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -105,5 +107,26 @@ class ProcessarRenovacaoResultadoTest {
     command.executar(evento);
 
     verify(renovacaoRepository, never()).buscarPorUuidParaAtualizacao(any(String.class));
+  }
+
+  @Test
+  @DisplayName("Deve ignorar evento para renovacao inexistente sem registrar idempotencia")
+  void deveIgnorarEventoParaRenovacaoInexistenteSemRegistrarIdempotencia() {
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(any(String.class)))
+        .thenReturn(Optional.empty());
+    PagamentoRenovacaoAprovado evento =
+        new PagamentoRenovacaoAprovado(
+            UUID.randomUUID(),
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString("55555555-5555-5555-5555-555555555555"),
+            UUID.randomUUID(),
+            "pay_123",
+            2);
+
+    assertThatCode(() -> command.executar(evento))
+        .as("renovacao inexistente deve ser ignorada sem lancar excecao")
+        .doesNotThrowAnyException();
+
+    verify(renovacaoEventoProcessadoRepository, never()).save(any(RenovacaoEventoProcessado.class));
   }
 }
