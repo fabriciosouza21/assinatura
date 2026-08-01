@@ -1,6 +1,7 @@
 package com.globo.pagamento.renovacao;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.verify;
@@ -73,8 +74,38 @@ class CobrancaRenovacaoSchedulerTest {
         .isNull();
   }
 
+  @Test
+  @DisplayName("Nao deve envenenar o lote quando uma tentativa orfa levanta NoSuchElementException")
+  void naoDeveEnvenenarLoteQuandoTentativaOrfaLevantaNoSuchElementException() {
+    // Orfa PRIMEIRO: findByRenovacaoId vazio dispara o orElseThrow atual; a proxima
+    // tentativa valida precisa ainda assim ser cobrada e persistida.
+    when(tentativaCobrancaRepository.buscarProntasParaCobrar())
+        .thenReturn(List.of(tentativaOrfa(), tentativaProntaSemPaymentId()));
+    when(pagamentoRenovacaoRepository.findByRenovacaoId("renov-orfa")).thenReturn(Optional.empty());
+    when(pagamentoRenovacaoRepository.findByRenovacaoId("renov-1"))
+        .thenReturn(Optional.of(pagamentoComValor()));
+    when(gateway.criarCobrancaRenovacao(any(), anyInt(), any()))
+        .thenReturn(new CobrancaCriada("pay-123"));
+
+    assertThatCode(() -> scheduler.cobrar())
+        .as("lote nao deve falhar quando uma tentativa e orfa")
+        .doesNotThrowAnyException();
+
+    verify(tentativaCobrancaRepository).save(tentativaCaptor.capture());
+    assertThat(tentativaCaptor.getValue().getRenovacaoId())
+        .as("renovacao id da tentativa valida persistida")
+        .isEqualTo("renov-1");
+    assertThat(tentativaCaptor.getValue().getPaymentId())
+        .as("payment id persistido da tentativa valida")
+        .isEqualTo("pay-123");
+  }
+
   private TentativaCobranca tentativaProntaSemPaymentId() {
     return new TentativaCobranca("renov-1", 1);
+  }
+
+  private TentativaCobranca tentativaOrfa() {
+    return new TentativaCobranca("renov-orfa", 1);
   }
 
   private PagamentoRenovacao pagamentoComValor() {

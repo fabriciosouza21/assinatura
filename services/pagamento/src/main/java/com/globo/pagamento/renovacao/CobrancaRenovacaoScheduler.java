@@ -2,6 +2,7 @@ package com.globo.pagamento.renovacao;
 
 import com.globo.pagamento.gateway.CobrancaCriada;
 import com.globo.pagamento.gateway.GatewayPagamentoClient;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -55,8 +56,9 @@ public class CobrancaRenovacaoScheduler {
    * Cobra as tentativas prontas.
    *
    * <p>Itera sobre as tentativas elegiveis, resolve o pagamento da renovacao, cria a cobranca no
-   * gateway e persiste o {@code paymentId} devolvido na tentativa correspondente. Falhas tecnicas
-   * do gateway pulam a tentativa, que permanece pendente para o proximo ciclo.
+   * gateway e persiste o {@code paymentId} devolvido na tentativa correspondente. Tentativas sem
+   * pagamento da renovacao correspondente sao puladas, pois indicam inconsistencia referencial. Já
+   * as falhas tecnicas do gateway pulam a tentativa, que permanece pendente para o proximo ciclo.
    *
    * <p>A transacao envolve todo o corpo do loop para segurar o {@code FOR UPDATE SKIP LOCKED} da
    * selecao ate o {@code save}, atravessando a chamada ao gateway. Sem isso, o lock da tentativa
@@ -67,13 +69,21 @@ public class CobrancaRenovacaoScheduler {
   @Transactional
   public void cobrar() {
     for (TentativaCobranca tentativa : tentativaCobrancaRepository.buscarProntasParaCobrar()) {
-      PagamentoRenovacao pagamento =
-          pagamentoRenovacaoRepository.findByRenovacaoId(tentativa.getRenovacaoId()).orElseThrow();
+      Optional<PagamentoRenovacao> pagamento =
+          pagamentoRenovacaoRepository.findByRenovacaoId(tentativa.getRenovacaoId());
+      if (pagamento.isEmpty()) {
+        log.warn(
+            "Pagamento da renovacao {} nao encontrado, pulando a tentativa {}",
+            tentativa.getRenovacaoId(),
+            tentativa.getNumero());
+        continue;
+      }
+      PagamentoRenovacao pagamentoRenovacao = pagamento.get();
       CobrancaCriada cobranca;
       try {
         cobranca =
             gateway.criarCobrancaRenovacao(
-                tentativa.getRenovacaoId(), tentativa.getNumero(), pagamento.getValor());
+                tentativa.getRenovacaoId(), tentativa.getNumero(), pagamentoRenovacao.getValor());
       } catch (RuntimeException e) {
         log.warn(
             "Falha tecnica ao cobrar a tentativa {} da renovacao {}: {}",
