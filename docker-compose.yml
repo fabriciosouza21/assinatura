@@ -49,6 +49,12 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       CLUSTER_ID: MiNpbDqFTc6T7jrQ7zT10A
+    volumes:
+      # /mnt/shared/config e o ponto de override oficial da imagem apache/kafka:
+      # o KafkaDockerWrapper copia estes arquivos para /opt/kafka/config no startup.
+      # Aqui silenciamos o console (docker logs) para WARN+, mantendo o server.log
+      # interno em INFO para depuracao via docker exec.
+      - ./docker/kafka/log4j.properties:/mnt/shared/config/log4j.properties:ro
     ports:
       - "9092:9092"
     healthcheck:
