@@ -48,7 +48,10 @@ public class ProblemExceptionHandler {
    */
   @ExceptionHandler(Exception.class)
   public ResponseEntity<Problem> handleNaoTratada(Exception ex) {
-    log.error("Excecao nao tratada na requisicao", ex);
+    log.atError()
+        .addKeyValue("event", "erro_nao_tratado_requisicao")
+        .setCause(ex)
+        .log("Excecao nao tratada na requisicao");
     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
         .body(new Problem(500, "Erro interno", List.of()));
   }
