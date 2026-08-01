@@ -1,0 +1,103 @@
+@startuml
+title Fluxo completo da assinatura (criação até confirmação do pagamento)
+
+autonumber
+hide footbox
+
+skinparam backgroundColor #FFFFFF
+skinparam ParticipantPadding 24
+skinparam BoxPadding 10
+skinparam maxMessageSize 110
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor "Cliente" as CLI
+participant "Assinatura\nService" as AS
+database "DB\nAssinaturas" as DBAS
+participant "Outbox Publisher\n(Assinatura)" as OUTBOX
+queue "Kafka" as KAFKA
+participant "Pagamento\nService" as PS
+database "DB\nPagamentos" as DBPS
+participant "Mock\nGateway" as GW
+
+== 1. Solicitação da assinatura ==
+
+CLI -> AS: POST /assinaturas\n{usuarioId, plano}
+AS -> DBAS: Grava assinatura (AGUARDANDO_PAGAMENTO)\ne evento AssinaturaSolicitada na tabela outbox
+AS --> CLI: 202 Accepted\n{assinaturaId, status}
+
+note over AS, DBAS
+  O insert da assinatura e o registro
+  do evento na outbox são atômicos,
+  na mesma transação.
+end note
+
+== 2. Publicação do evento de assinatura ==
+
+OUTBOX -> DBAS: Buscar eventos pendentes, com lock
+DBAS --> OUTBOX: AssinaturaSolicitada\n{eventId, assinaturaId, usuarioId, plano, valor}
+OUTBOX -> KAFKA: send "assinatura-solicitada"\nkey = assinaturaId
+
+note over OUTBOX
+  Roda em @Scheduled, desacoplado
+  da requisição HTTP. Publica e
+  marca PUBLICADO na mesma transação.
+end note
+
+== 3. Criação da cobrança ==
+
+KAFKA -> PS: Consumir AssinaturaSolicitada
+PS -> DBPS: Verificar idempotência\npor assinaturaId
+
+alt Cobrança já existe
+    DBPS --> PS: Já criada
+else Cobrança nova
+    PS -> GW: POST /v1/payments\n{externalReference: assinaturaId, valor}
+    GW --> PS: 201 Created\n{paymentId, status: PENDING}
+    PS -> DBPS: Inserir cobrança\n(paymentId, PENDING)
+end
+
+== 4. Simulação da aprovação (gatilho externo) ==
+
+CLI -> GW: POST /v1/mock/payments/{id}/status\n{status: APPROVED}
+
+note over CLI, GW
+  Em produção, a confirmação parte do
+  gateway real. No mock, é disparada por
+  um cliente de teste (Bruno).
+end note
+
+== 5. Webhook de pagamento ==
+
+GW -> GW: Transitar status e\ndisparar webhook (goroutine)
+GW -> PS: POST /webhooks/payments\nX-Mock-Event-Id, X-Mock-Signature (HMAC)
+PS -> PS: Validar HMAC\nDeduplicar por eventId
+
+alt eventId já processado
+    PS --> GW: 200 OK (ignorado)
+else eventId novo
+    PS -> GW: GET /v1/payments/{paymentId}
+    GW --> PS: {status: APPROVED}
+    PS -> DBPS: Atualizar cobrança\n(status normalizado)
+    PS -> KAFKA: send "pagamento-status-atualizado"\nkey = assinaturaId\nACK antes de confirmar
+    PS -> DBPS: Marcar eventId como processado
+    PS --> GW: 200 OK
+end
+
+note over PS, KAFKA
+  Publish-then-ACK: o eventId só é
+  gravado como processado depois que
+  o Kafka confirma a publicação.
+end note
+
+== 6. Atualização da assinatura ==
+
+KAFKA -> AS: Consumir PagamentoStatusAtualizado\n{assinaturaId, status, paymentId}
+AS -> DBAS: Atualizar status da assinatura\nAPPROVED -> ATIVA
+
+note over AS, DBAS
+  Fecha o ciclo: a assinatura aberta
+  no passo 1 transita para ATIVA.
+end note
+
+@enduml
