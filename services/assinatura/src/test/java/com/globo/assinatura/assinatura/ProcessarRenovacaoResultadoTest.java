@@ -107,6 +107,12 @@ class ProcessarRenovacaoResultadoTest {
     assertThat(assinatura.getFimCiclo())
         .as("novo fim de ciclo deve avancar um mes sobre o anterior")
         .isEqualTo(fimCicloAntes.plusMonths(1));
+    assertThat(assinatura.getInicioCiclo())
+        .as("inicio do ciclo deve assumir o fim de ciclo anterior")
+        .isEqualTo(fimCicloAntes);
+    assertThat(assinatura.getProximaRenovacaoEm())
+        .as("proxima renovacao deve seguir o novo fim de ciclo")
+        .isEqualTo(fimCicloAntes.plusMonths(1));
   }
 
   @Test
@@ -411,6 +417,44 @@ class ProcessarRenovacaoResultadoTest {
     assertThat(captor.getValue().getEventId())
         .as("evento processado com sucesso deve ser registrado pelo eventId para idempotencia")
         .isEqualTo(eventId);
+  }
+
+  @Test
+  @DisplayName("Deve ignorar redelivery de evento esgotado ja processado sem buscar a renovacao")
+  void deveIgnorarRedeliveryEsgotadoSemBuscarRenovacao() {
+    UUID eventId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+    when(renovacaoEventoProcessadoRepository.existsByEventId(eventId)).thenReturn(true);
+    RenovacaoTentativasEsgotadas evento =
+        new RenovacaoTentativasEsgotadas(
+            eventId,
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString("55555555-5555-5555-5555-555555555555"),
+            UUID.randomUUID(),
+            2);
+
+    command.executar(evento);
+
+    verify(renovacaoRepository, never()).buscarPorUuidParaAtualizacao(any(String.class));
+  }
+
+  @Test
+  @DisplayName("Deve ignorar evento esgotado para renovacao inexistente sem registrar idempotencia")
+  void deveIgnorarEventoEsgotadoParaRenovacaoInexistenteSemRegistrarIdempotencia() {
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(any(String.class)))
+        .thenReturn(Optional.empty());
+    RenovacaoTentativasEsgotadas evento =
+        new RenovacaoTentativasEsgotadas(
+            UUID.randomUUID(),
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString("55555555-5555-5555-5555-555555555555"),
+            UUID.randomUUID(),
+            2);
+
+    assertThatCode(() -> command.executar(evento))
+        .as("renovacao inexistente deve ser ignorada sem lancar excecao")
+        .doesNotThrowAnyException();
+
+    verify(renovacaoEventoProcessadoRepository, never()).save(any(RenovacaoEventoProcessado.class));
   }
 
   @Test

@@ -69,7 +69,7 @@ public class RenovacaoResultadoConsumer {
           .addKeyValue("assinaturaId", evento.assinaturaId())
           .log("Renovacao esgotada processada");
     } else {
-      throw new EventoInvalidoException("tipo desconhecido ou ausente: " + tipo);
+      throw new EventoInvalidoException("tipo desconhecido ou ausente");
     }
   }
 
@@ -77,7 +77,7 @@ public class RenovacaoResultadoConsumer {
     try {
       return objectMapper.readTree(payload);
     } catch (JacksonException e) {
-      throw new EventoInvalidoException("evento mal formado: " + e.getMessage());
+      throw new EventoInvalidoException("evento mal formado");
     }
   }
 
@@ -90,7 +90,7 @@ public class RenovacaoResultadoConsumer {
     try {
       return objectMapper.treeToValue(arvore, tipo);
     } catch (JacksonException e) {
-      throw new EventoInvalidoException("evento mal formado: " + e.getMessage());
+      throw new EventoInvalidoException("evento mal formado");
     }
   }
 

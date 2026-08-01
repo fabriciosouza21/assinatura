@@ -137,6 +137,29 @@ class RenovacaoResultadoConsumerTest {
   }
 
   @Test
+  @DisplayName("Deve rejeitar tipo desconhecido sem ecoar o valor do payload na mensagem")
+  void deveRejeitarTipoDesconhecidoSemEcoarValorDoPayload() {
+    String payload =
+        """
+        {
+          "tipo": "EVIL\\nINFO fake-log-line",
+          "eventId": "00000000-0000-0000-0000-000000000001",
+          "ocorridoEm": "2026-07-30T12:00:00Z",
+          "renovacaoId": "00000000-0000-0000-0000-000000000011",
+          "assinaturaId": "00000000-0000-0000-0000-000000000021"
+        }
+        """;
+
+    assertThatThrownBy(() -> consumer.consumir(payload))
+        .as("valor nao confiavel do tipo nao deve ser interpolado na mensagem da excecao")
+        .isInstanceOf(EventoInvalidoException.class)
+        .hasMessageNotContaining("EVIL")
+        .hasMessageNotContaining("\n");
+
+    verifyNoInteractions(processarRenovacaoResultado);
+  }
+
+  @Test
   @DisplayName("Deve lancar evento invalido quando o payload e mal formado")
   void deveLancarEventoInvalidoQuandoPayloadMalFormado() {
     String payloadMalFormado = "{isto-nao-e-json";
