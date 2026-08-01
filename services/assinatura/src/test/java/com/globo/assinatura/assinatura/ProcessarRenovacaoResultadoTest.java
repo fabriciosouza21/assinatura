@@ -298,4 +298,29 @@ class ProcessarRenovacaoResultadoTest {
         .as("assinatura em renovacao esgotada deve ir para SUSPENSA")
         .isEqualTo(StatusAssinatura.SUSPENSA);
   }
+
+  @Test
+  @DisplayName("Deve esgotar as tentativas da renovacao ao processar evento esgotado")
+  void deveEsgotarTentativasDaRenovacaoAoProcessarEventoEsgotado() {
+    Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
+    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.iniciarRenovacao();
+    Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
+        .thenReturn(Optional.of(renovacao));
+    when(assinaturaRepository.findById(42L)).thenReturn(Optional.of(assinatura));
+    RenovacaoTentativasEsgotadas evento =
+        new RenovacaoTentativasEsgotadas(
+            UUID.randomUUID(),
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString(renovacao.getUuid()),
+            UUID.randomUUID(),
+            2);
+
+    command.executar(evento);
+
+    assertThat(renovacao.getStatus())
+        .as("renovacao pendente deve ir para TENTATIVAS_ESGOTADA ao processar esgotamento")
+        .isEqualTo(StatusRenovacao.TENTATIVAS_ESGOTADA);
+  }
 }
