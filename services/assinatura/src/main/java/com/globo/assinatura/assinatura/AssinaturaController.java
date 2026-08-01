@@ -1,8 +1,6 @@
 package com.globo.assinatura.assinatura;
 
 import jakarta.validation.Valid;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,8 +14,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/assinaturas")
 public class AssinaturaController {
-
-  private static final Logger log = LoggerFactory.getLogger(AssinaturaController.class);
 
   private final SolicitarAssinatura solicitarAssinatura;
   private final ConsultarAssinatura consultarAssinatura;
@@ -43,10 +39,6 @@ public class AssinaturaController {
   @PostMapping
   public ResponseEntity<AssinaturaCriadaResponse> solicitar(
       @Valid @RequestBody AssinaturaRequest request) {
-    log.info(
-        "Solicitacao de assinatura recebida para usuarioId={} e plano={}",
-        request.usuarioId(),
-        request.plano());
     Assinatura assinatura = solicitarAssinatura.executar(request.usuarioId(), request.plano());
     return ResponseEntity.status(HttpStatus.ACCEPTED)
         .body(new AssinaturaCriadaResponse(assinatura.getUuid(), assinatura.getStatus()));

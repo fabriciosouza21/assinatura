@@ -12,4 +12,13 @@ public class CobrancaGatewayIndisponivelException extends RuntimeException {
   public CobrancaGatewayIndisponivelException() {
     super("cobranca_gateway_indisponivel");
   }
+
+  /**
+   * Constroi a excecao preservando a causa raiz da falha tecnica do gateway.
+   *
+   * @param cause causa raiz da falha tecnica
+   */
+  public CobrancaGatewayIndisponivelException(Throwable cause) {
+    super("cobranca_gateway_indisponivel", cause);
+  }
 }

@@ -3,6 +3,7 @@ package com.globo.pagamento.renovacao;
 import com.globo.pagamento.gateway.CobrancaCriada;
 import com.globo.pagamento.gateway.CobrancaGatewayIndisponivelException;
 import com.globo.pagamento.gateway.GatewayPagamentoClient;
+import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,14 +71,20 @@ public class CobrancaRenovacaoScheduler {
    */
   @Transactional
   public void cobrar() {
-    for (TentativaCobranca tentativa : tentativaCobrancaRepository.buscarProntasParaCobrar()) {
+    List<TentativaCobranca> tentativas = tentativaCobrancaRepository.buscarProntasParaCobrar();
+    log.atDebug()
+        .addKeyValue("event", "cobranca_renovacao_batch_inicio")
+        .addKeyValue("tamanhoLote", tentativas.size())
+        .log("Cobranca de renovacoes iniciada");
+    for (TentativaCobranca tentativa : tentativas) {
       Optional<PagamentoRenovacao> pagamento =
           pagamentoRenovacaoRepository.findByRenovacaoId(tentativa.getRenovacaoId());
       if (pagamento.isEmpty()) {
-        log.warn(
-            "Pagamento da renovacao {} nao encontrado, pulando a tentativa {}",
-            tentativa.getRenovacaoId(),
-            tentativa.getNumero());
+        log.atWarn()
+            .addKeyValue("event", "cobranca_renovacao_sem_pagamento")
+            .addKeyValue("renovacaoId", tentativa.getRenovacaoId())
+            .addKeyValue("numero", tentativa.getNumero())
+            .log("Pagamento da renovacao nao encontrado");
         continue;
       }
       PagamentoRenovacao pagamentoRenovacao = pagamento.get();
@@ -87,15 +94,20 @@ public class CobrancaRenovacaoScheduler {
             gateway.criarCobrancaRenovacao(
                 tentativa.getRenovacaoId(), tentativa.getNumero(), pagamentoRenovacao.getValor());
       } catch (CobrancaGatewayIndisponivelException e) {
-        log.warn(
-            "Falha tecnica ao cobrar a tentativa {} da renovacao {}: {}",
-            tentativa.getNumero(),
-            tentativa.getRenovacaoId(),
-            e.getMessage());
+        log.atWarn()
+            .addKeyValue("event", "cobranca_renovacao_falha_gateway")
+            .addKeyValue("renovacaoId", tentativa.getRenovacaoId())
+            .addKeyValue("numero", tentativa.getNumero())
+            .addKeyValue("reasonCode", "cobranca_gateway_indisponivel")
+            .log("Falha tecnica ao cobrar a renovacao");
         continue;
       }
       tentativa.registrarCobranca(cobranca.paymentId());
       tentativaCobrancaRepository.save(tentativa);
     }
+    log.atDebug()
+        .addKeyValue("event", "cobranca_renovacao_batch_fim")
+        .addKeyValue("tamanhoLote", tentativas.size())
+        .log("Cobranca de renovacoes concluida");
   }
 }

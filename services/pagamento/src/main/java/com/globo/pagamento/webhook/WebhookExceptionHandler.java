@@ -37,7 +37,10 @@ public class WebhookExceptionHandler {
    */
   @ExceptionHandler(PublicacaoIndisponivelException.class)
   public ResponseEntity<Erro> handleIndisponivel(PublicacaoIndisponivelException e) {
-    log.error("Falha de publicacao ou consulta ao gateway", e);
+    log.atError()
+        .addKeyValue("event", "webhook_publicacao_falhou")
+        .setCause(e)
+        .log("Falha de publicacao ou consulta ao gateway");
     return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new Erro(e.getMessage()));
   }
 
@@ -50,7 +53,10 @@ public class WebhookExceptionHandler {
    */
   @ExceptionHandler(Exception.class)
   public ResponseEntity<Erro> handleNaoTratada(Exception e) {
-    log.error("Excecao nao tratada no processamento do webhook", e);
+    log.atError()
+        .addKeyValue("event", "erro_nao_tratado_webhook")
+        .setCause(e)
+        .log("Excecao nao tratada no processamento do webhook");
     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new Erro("erro_interno"));
   }
 }

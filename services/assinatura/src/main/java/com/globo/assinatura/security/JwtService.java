@@ -1,6 +1,7 @@
 package com.globo.assinatura.security;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -8,6 +9,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
 import javax.crypto.SecretKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +20,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class JwtService {
+
+  private static final Logger log = LoggerFactory.getLogger(JwtService.class);
 
   private final SecretKey key;
   private final long expirationMillis;
@@ -72,7 +77,17 @@ public class JwtService {
     try {
       parse(token);
       return true;
-    } catch (JwtException | IllegalArgumentException ignored) {
+    } catch (ExpiredJwtException e) {
+      log.atDebug()
+          .addKeyValue("event", "jwt_token_rejeitado")
+          .addKeyValue("reasonCode", "jwt_expirado")
+          .log("Token JWT rejeitado");
+      return false;
+    } catch (JwtException | IllegalArgumentException e) {
+      log.atDebug()
+          .addKeyValue("event", "jwt_token_rejeitado")
+          .addKeyValue("reasonCode", "jwt_invalido")
+          .log("Token JWT rejeitado");
       return false;
     }
   }

@@ -46,10 +46,11 @@ public class PagamentoStatusConsumer {
     PagamentoStatusAtualizado evento = desserializar(payload);
     validar(evento);
     processarPagamento.executar(evento);
-    log.info(
-        "Status de pagamento processado para assinaturaId={} com statusFinal={}",
-        evento.assinaturaId(),
-        evento.status());
+    log.atInfo()
+        .addKeyValue("event", "pagamento_status_processado")
+        .addKeyValue("assinaturaId", evento.assinaturaId())
+        .addKeyValue("statusFinal", evento.status())
+        .log("Status de pagamento processado");
   }
 
   private PagamentoStatusAtualizado desserializar(String payload) {
