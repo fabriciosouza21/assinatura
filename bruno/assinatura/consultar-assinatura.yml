@@ -1,0 +1,19 @@
+info:
+  name: Consultar assinatura
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: "{{assinaturaUrl}}/assinaturas/{{assinaturaId}}"
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        expect(res.getStatus()).to.equal(200);
+        expect(res.body.id).to.equal(bru.getVar("assinaturaId"));
+        expect(res.body.status, "assinatura deve estar ATIVA").to.equal("ATIVA");
+
+settings:
+  encodeUrl: true

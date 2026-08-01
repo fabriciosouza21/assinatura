@@ -18,6 +18,18 @@ As variáveis de ambiente apontam para as portas do compose:
 > e foi versionada **intencionalmente** para facilitar os testes da collection.
 > Não há credenciais reais ou de produção envolvidas.
 
+## Fluxo sugerido (assinatura)
+
+1. **Cadastrar usuario** → captura `usuarioId` automaticamente (`after-response`).
+2. **Solicitar assinatura** → usa o `usuarioId` capturado e devolve a assinatura
+   com status `AGUARDANDO_PAGAMENTO`; captura `assinaturaId`.
+3. **Consultar assinatura** → usa o `assinaturaId` capturado para acompanhar o
+   estado da assinatura (status, vigência).
+
+> Os planos aceitos são `BASICO`, `PREMIUM` e `FAMILIA`. O status parte de
+> `AGUARDANDO_PAGAMENTO` e migra para `ATIVA` ou `PAGAMENTO_RECUSADO` conforme
+> o processamento do pagamento.
+
 ## Fluxo sugerido (mock gateway)
 
 1. **Criar pagamento** → captura `paymentId` automaticamente (`after-response`).

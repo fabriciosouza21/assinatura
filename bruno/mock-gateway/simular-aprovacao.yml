@@ -16,5 +16,12 @@ http:
         "status": "APPROVED"
       }
 
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        expect(res.getStatus(), "status do mock").to.be.oneOf([200, 202]);
+        expect(res.body.webhookScheduled).to.equal(true);
+
 settings:
   encodeUrl: true
