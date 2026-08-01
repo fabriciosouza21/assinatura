@@ -60,15 +60,30 @@ public class ProcessarPagamento {
   @Transactional
   public void executar(PagamentoStatusAtualizado evento) {
     if (evento.status() == StatusPagamento.PENDING) {
+      log.atDebug()
+          .addKeyValue("event", "evento_ignorado_status_pending")
+          .addKeyValue("eventId", evento.eventId())
+          .addKeyValue("assinaturaId", evento.assinaturaId())
+          .log("Evento de pagamento ignorado por status PENDING");
       return;
     }
     LocalDate hoje = LocalDate.now(clock);
     if (pagamentoEventoProcessadoRepository.existsByEventId(evento.eventId())) {
+      log.atDebug()
+          .addKeyValue("event", "evento_deduplicado")
+          .addKeyValue("eventId", evento.eventId())
+          .addKeyValue("assinaturaId", evento.assinaturaId())
+          .log("Evento de pagamento ja processado");
       return;
     }
     Optional<Assinatura> possivelAssinatura =
         assinaturaRepository.buscarPorUuidParaAtualizacao(evento.assinaturaId().toString());
     if (possivelAssinatura.isEmpty()) {
+      log.atDebug()
+          .addKeyValue("event", "assinatura_desconhecida")
+          .addKeyValue("eventId", evento.eventId())
+          .addKeyValue("assinaturaId", evento.assinaturaId())
+          .log("Assinatura do evento de pagamento inexistente");
       return;
     }
     Assinatura assinatura = possivelAssinatura.get();
