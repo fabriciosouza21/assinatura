@@ -2,6 +2,8 @@ package com.globo.pagamento.renovacao;
 
 import com.globo.pagamento.gateway.CobrancaCriada;
 import com.globo.pagamento.gateway.GatewayPagamentoClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -12,6 +14,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class CobrancaRenovacaoScheduler {
+
+  private static final Logger log = LoggerFactory.getLogger(CobrancaRenovacaoScheduler.class);
 
   private final TentativaCobrancaRepository tentativaCobrancaRepository;
   private final PagamentoRenovacaoRepository pagamentoRenovacaoRepository;
@@ -50,6 +54,11 @@ public class CobrancaRenovacaoScheduler {
             gateway.criarCobrancaRenovacao(
                 tentativa.getRenovacaoId(), tentativa.getNumero(), pagamento.getValor());
       } catch (RuntimeException e) {
+        log.warn(
+            "Falha tecnica ao cobrar a tentativa {} da renovacao {}: {}",
+            tentativa.getNumero(),
+            tentativa.getRenovacaoId(),
+            e.getMessage());
         continue;
       }
       tentativa.registrarCobranca(cobranca.paymentId());
