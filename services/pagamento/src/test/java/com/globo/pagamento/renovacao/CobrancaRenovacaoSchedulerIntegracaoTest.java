@@ -9,6 +9,7 @@ import com.globo.pagamento.cobranca.Plano;
 import com.globo.pagamento.gateway.CobrancaCriada;
 import com.globo.pagamento.gateway.GatewayPagamentoClient;
 import java.math.BigDecimal;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -19,6 +20,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Teste de integracao do {@link CobrancaRenovacaoScheduler} contra o Postgres real.
@@ -80,6 +82,25 @@ class CobrancaRenovacaoSchedulerIntegracaoTest {
     assertThat(tentativa.getPaymentId())
         .as("payment id persistido apos cobranca")
         .isEqualTo("pay-IT");
+  }
+
+  @Test
+  @DisplayName("Deve manter transacao ativa ao atravessar o gateway quando disparado via agendar()")
+  void deveManterTransacaoAtivaNoGatewayQuandoDisparadoViaAgendar() {
+    AtomicBoolean gatewayChamadoDentroDeTransacao = new AtomicBoolean(false);
+    when(gateway.criarCobrancaRenovacao(any(), anyInt(), any()))
+        .thenAnswer(
+            invocacao -> {
+              gatewayChamadoDentroDeTransacao.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return new CobrancaCriada("pay-IT");
+            });
+
+    scheduler.agendar();
+
+    assertThat(gatewayChamadoDentroDeTransacao.get())
+        .as("a chamada ao gateway deve ocorrer dentro da transacao do cobrar()")
+        .isTrue();
   }
 
   @AfterEach

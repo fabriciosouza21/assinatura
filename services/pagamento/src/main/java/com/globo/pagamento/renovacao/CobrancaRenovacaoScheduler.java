@@ -42,9 +42,10 @@ public class CobrancaRenovacaoScheduler {
   /**
    * Dispara a cobranca das tentativas prontas na cadencia configurada.
    *
-   * <p>Apenas delega para {@link #cobrar()}; existe como ponto de agendamento separado da logica
-   * transacional para que esta seja testavel isoladamente.
+   * <p>Ponto de entrada do agendamento: abre a transacao que envolve a cobranca das tentativas
+   * prontas e delega o loop a {@link #cobrar()}.
    */
+  @Transactional
   @Scheduled(fixedDelayString = "${app.renovacao.scheduler-intervalo-ms}")
   public void agendar() {
     cobrar();
