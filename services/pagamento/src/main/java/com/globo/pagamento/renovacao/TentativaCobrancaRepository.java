@@ -16,6 +16,8 @@ public interface TentativaCobrancaRepository extends JpaRepository<TentativaCobr
    *
    * @return tentativas sem {@code payment_id} (nao cobradas pelo gateway)
    */
-  @Query(nativeQuery = true, value = "SELECT * FROM tentativa_cobranca WHERE payment_id IS NULL")
+  @Query(
+      nativeQuery = true,
+      value = "SELECT * FROM tentativa_cobranca WHERE payment_id IS NULL FOR UPDATE SKIP LOCKED")
   List<TentativaCobranca> buscarProntasParaCobrar();
 }
