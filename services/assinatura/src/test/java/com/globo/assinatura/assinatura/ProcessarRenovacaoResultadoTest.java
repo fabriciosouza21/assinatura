@@ -356,4 +356,29 @@ class ProcessarRenovacaoResultadoTest {
         .as("aggregateId deve ser o uuid da renovacao esgotada")
         .isEqualTo(UUID.fromString(renovacao.getUuid()));
   }
+
+  @Test
+  @DisplayName("Deve tratar como no-op idempotente evento esgotado sobre renovacao ja esgotada")
+  void deveTratarComoNoOpEventoEsgotadoSobreRenovacaoJaEsgotada() {
+    Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
+    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.iniciarRenovacao();
+    Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
+    renovacao.esgotarTentativas();
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
+        .thenReturn(Optional.of(renovacao));
+    RenovacaoTentativasEsgotadas evento =
+        new RenovacaoTentativasEsgotadas(
+            UUID.randomUUID(),
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString(renovacao.getUuid()),
+            UUID.randomUUID(),
+            2);
+
+    assertThatCode(() -> command.executar(evento))
+        .as("evento tardio sobre renovacao ja esgotada nao deve lancar")
+        .doesNotThrowAnyException();
+
+    verify(renovacaoEventoProcessadoRepository, never()).save(any(RenovacaoEventoProcessado.class));
+  }
 }
