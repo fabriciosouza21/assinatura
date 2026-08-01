@@ -27,6 +27,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(MockitoExtension.class)
@@ -380,5 +381,65 @@ class ProcessarRenovacaoResultadoTest {
         .doesNotThrowAnyException();
 
     verify(renovacaoEventoProcessadoRepository, never()).save(any(RenovacaoEventoProcessado.class));
+  }
+
+  @Test
+  @DisplayName("Deve registrar o eventId processado apos aprovar a renovacao com sucesso")
+  void deveRegistrarEventIdProcessadoAoAprovarRenovacao() {
+    Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
+    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.iniciarRenovacao();
+    Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
+        .thenReturn(Optional.of(renovacao));
+    when(assinaturaRepository.findById(42L)).thenReturn(Optional.of(assinatura));
+    UUID eventId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    PagamentoRenovacaoAprovado evento =
+        new PagamentoRenovacaoAprovado(
+            eventId,
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString(renovacao.getUuid()),
+            UUID.randomUUID(),
+            "pay_123",
+            2);
+
+    command.executar(evento);
+
+    ArgumentCaptor<RenovacaoEventoProcessado> captor =
+        ArgumentCaptor.forClass(RenovacaoEventoProcessado.class);
+    verify(renovacaoEventoProcessadoRepository).save(captor.capture());
+    assertThat(captor.getValue().getEventId())
+        .as("evento processado com sucesso deve ser registrado pelo eventId para idempotencia")
+        .isEqualTo(eventId);
+  }
+
+  @Test
+  @DisplayName(
+      "Deve tratar como no-op idempotente quando save do evento processado viola indice unico"
+          + " (race de rebalance)")
+  void deveTratarComoNoOpQuandoSaveDoEventoProcessadoViolaIndiceUnico() {
+    Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
+    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.iniciarRenovacao();
+    Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
+        .thenReturn(Optional.of(renovacao));
+    when(assinaturaRepository.findById(42L)).thenReturn(Optional.of(assinatura));
+    when(renovacaoEventoProcessadoRepository.save(any(RenovacaoEventoProcessado.class)))
+        .thenThrow(new DataIntegrityViolationException("uq_renovacao_evento_processado_event_id"));
+    PagamentoRenovacaoAprovado evento =
+        new PagamentoRenovacaoAprovado(
+            UUID.randomUUID(),
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString(renovacao.getUuid()),
+            UUID.randomUUID(),
+            "pay_123",
+            2);
+
+    assertThatCode(() -> command.executar(evento))
+        .as(
+            "violacao do indice unico no save concorrente deve ser absorvida como no-op"
+                + " idempotente, sem propagar para o consumer Kafka")
+        .doesNotThrowAnyException();
   }
 }

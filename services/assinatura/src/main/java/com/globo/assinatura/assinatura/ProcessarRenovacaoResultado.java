@@ -6,11 +6,15 @@ import com.globo.assinatura.messaging.event.PagamentoRenovacaoAprovado;
 import com.globo.assinatura.messaging.event.RenovacaoTentativasEsgotadas;
 import com.globo.assinatura.outbox.OutboxEvent;
 import com.globo.assinatura.outbox.OutboxRepository;
+import com.globo.assinatura.renovacao.RenovacaoEventoProcessado;
 import com.globo.assinatura.renovacao.RenovacaoEventoProcessadoRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
@@ -25,6 +29,8 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @Service
 public class ProcessarRenovacaoResultado {
+
+  private static final Logger log = LoggerFactory.getLogger(ProcessarRenovacaoResultado.class);
 
   private static final String AGGREGATE_TYPE = "Renovacao";
   private static final String EVENT_TYPE = "AssinaturaRenovada";
@@ -94,6 +100,7 @@ public class ProcessarRenovacaoResultado {
     renovacao.aprovar();
     assinatura.renovar(assinatura.getFimCiclo().plusMonths(1));
     gravarEvento(assinatura, renovacao, evento);
+    registrarIdempotencia(evento.eventId(), renovacao.getUuid());
   }
 
   /**
@@ -127,6 +134,21 @@ public class ProcessarRenovacaoResultado {
     renovacao.esgotarTentativas();
     assinatura.suspender();
     gravarEventoSuspensao(assinatura, renovacao);
+    registrarIdempotencia(evento.eventId(), renovacao.getUuid());
+  }
+
+  private void registrarIdempotencia(UUID eventId, String renovacaoUuid) {
+    try {
+      renovacaoEventoProcessadoRepository.save(
+          new RenovacaoEventoProcessado(eventId, renovacaoUuid, Instant.now(clock)));
+    } catch (DataIntegrityViolationException e) {
+      log.warn(
+          "Evento eventId={} da renovacaoId={} ja foi registrado por uma transacao concorrente"
+              + " (provavel rebalance do consumer); tratando save como no-op idempotente",
+          eventId,
+          renovacaoUuid,
+          e);
+    }
   }
 
   private void gravarEventoSuspensao(Assinatura assinatura, Renovacao renovacao) {
