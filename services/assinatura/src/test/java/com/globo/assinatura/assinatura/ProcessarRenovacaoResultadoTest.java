@@ -323,4 +323,37 @@ class ProcessarRenovacaoResultadoTest {
         .as("renovacao pendente deve ir para TENTATIVAS_ESGOTADA ao processar esgotamento")
         .isEqualTo(StatusRenovacao.TENTATIVAS_ESGOTADA);
   }
+
+  @Test
+  @DisplayName("Deve gravar AssinaturaSuspensa na outbox ao processar evento esgotado")
+  void deveGravarAssinaturaSuspensaNaOutboxAoProcessarEventoEsgotado() {
+    Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
+    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.iniciarRenovacao();
+    Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
+        .thenReturn(Optional.of(renovacao));
+    when(assinaturaRepository.findById(42L)).thenReturn(Optional.of(assinatura));
+    RenovacaoTentativasEsgotadas evento =
+        new RenovacaoTentativasEsgotadas(
+            UUID.randomUUID(),
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString(renovacao.getUuid()),
+            UUID.randomUUID(),
+            2);
+
+    command.executar(evento);
+
+    ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+    verify(outboxRepository).save(captor.capture());
+    assertThat(captor.getValue().getEventType())
+        .as("evento de saida deve ser AssinaturaSuspensa")
+        .isEqualTo("AssinaturaSuspensa");
+    assertThat(captor.getValue().getAggregateType())
+        .as("agregado de origem deve ser Renovacao")
+        .isEqualTo("Renovacao");
+    assertThat(captor.getValue().getAggregateId())
+        .as("aggregateId deve ser o uuid da renovacao esgotada")
+        .isEqualTo(UUID.fromString(renovacao.getUuid()));
+  }
 }

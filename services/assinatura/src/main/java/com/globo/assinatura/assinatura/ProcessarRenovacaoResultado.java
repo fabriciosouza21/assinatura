@@ -1,6 +1,7 @@
 package com.globo.assinatura.assinatura;
 
 import com.globo.assinatura.messaging.event.AssinaturaRenovada;
+import com.globo.assinatura.messaging.event.AssinaturaSuspensa;
 import com.globo.assinatura.messaging.event.PagamentoRenovacaoAprovado;
 import com.globo.assinatura.messaging.event.RenovacaoTentativasEsgotadas;
 import com.globo.assinatura.outbox.OutboxEvent;
@@ -27,6 +28,7 @@ public class ProcessarRenovacaoResultado {
 
   private static final String AGGREGATE_TYPE = "Renovacao";
   private static final String EVENT_TYPE = "AssinaturaRenovada";
+  private static final String EVENT_TYPE_ESGOTADO = "AssinaturaSuspensa";
 
   private final RenovacaoRepository renovacaoRepository;
   private final AssinaturaRepository assinaturaRepository;
@@ -101,7 +103,8 @@ public class ProcessarRenovacaoResultado {
    * #executar(PagamentoRenovacaoAprovado)}: eventos ja processados sao ignorados sem acquire lock;
    * eventos para renovacao inexistente sao ignorados sem registrar idempotencia; entregas tardias
    * sobre renovacao ja resolvida sao tratadas como no-op idempotente. Caso contrario, esgota as
-   * tentativas da renovacao e suspende a assinatura dona.
+   * tentativas da renovacao, suspende a assinatura dona e grava o evento {@code AssinaturaSuspensa}
+   * na outbox na mesma transacao.
    *
    * @param evento evento de tentativas de renovacao esgotadas
    */
@@ -123,6 +126,31 @@ public class ProcessarRenovacaoResultado {
         assinaturaRepository.findById(renovacao.getAssinaturaId()).orElseThrow();
     renovacao.esgotarTentativas();
     assinatura.suspender();
+    gravarEventoSuspensao(assinatura, renovacao);
+  }
+
+  private void gravarEventoSuspensao(Assinatura assinatura, Renovacao renovacao) {
+    AssinaturaSuspensa eventoSaida =
+        new AssinaturaSuspensa(
+            UUID.randomUUID(),
+            Instant.now(clock),
+            UUID.fromString(assinatura.getUuid()),
+            UUID.fromString(renovacao.getUuid()));
+    outboxRepository.save(
+        OutboxEvent.criar(
+            eventoSaida.eventId(),
+            AGGREGATE_TYPE,
+            eventoSaida.renovacaoId(),
+            EVENT_TYPE_ESGOTADO,
+            serializarSuspensao(eventoSaida)));
+  }
+
+  private String serializarSuspensao(AssinaturaSuspensa evento) {
+    try {
+      return jsonMapper.writeValueAsString(evento);
+    } catch (JacksonException e) {
+      throw new IllegalStateException("Falha ao serializar evento AssinaturaSuspensa", e);
+    }
   }
 
   private void gravarEvento(
