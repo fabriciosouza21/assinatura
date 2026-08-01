@@ -38,6 +38,14 @@ public class Assinatura {
   @Enumerated(EnumType.STRING)
   private StatusAssinatura status;
 
+  private LocalDate inicioCiclo;
+
+  private LocalDate fimCiclo;
+
+  private LocalDate proximaRenovacaoEm;
+
+  private boolean renovacaoAutomatica = true;
+
   /** Construtor sem argumentos exigido pelo provedor JPA. */
   protected Assinatura() {}
 
@@ -121,6 +129,42 @@ public class Assinatura {
   }
 
   /**
+   * Retorna o inicio do ciclo de renovacao corrente.
+   *
+   * @return data de inicio do ciclo, ou {@code null} antes da primeira ativacao
+   */
+  public LocalDate getInicioCiclo() {
+    return inicioCiclo;
+  }
+
+  /**
+   * Retorna o fim do ciclo de renovacao corrente.
+   *
+   * @return data de fim do ciclo, ou {@code null} antes da primeira ativacao
+   */
+  public LocalDate getFimCiclo() {
+    return fimCiclo;
+  }
+
+  /**
+   * Retorna a data da proxima renovacao.
+   *
+   * @return data da proxima renovacao, ou {@code null} antes da primeira ativacao
+   */
+  public LocalDate getProximaRenovacaoEm() {
+    return proximaRenovacaoEm;
+  }
+
+  /**
+   * Indica se a renovacao automatica esta habilitada.
+   *
+   * @return {@code true} se a renovacao automatica estiver habilitada
+   */
+  public boolean isRenovacaoAutomatica() {
+    return renovacaoAutomatica;
+  }
+
+  /**
    * Transita o ciclo de vida para ativa apos a aprovacao do pagamento.
    *
    * <p>Apenas assinaturas aguardando pagamento podem ser ativadas. Eventos de aprovacao tardios ou
@@ -137,6 +181,10 @@ public class Assinatura {
     this.status = StatusAssinatura.ATIVA;
     this.dataInicio = dataInicio;
     this.dataExpiracao = dataExpiracao;
+    this.inicioCiclo = dataInicio;
+    this.fimCiclo = dataExpiracao;
+    this.proximaRenovacaoEm = dataExpiracao;
+    this.renovacaoAutomatica = true;
   }
 
   /** Transita o ciclo de vida para pagamento recusado apos a reprovacao do pagamento. */
@@ -145,5 +193,34 @@ public class Assinatura {
       return;
     }
     this.status = StatusAssinatura.PAGAMENTO_RECUSADO;
+  }
+
+  /**
+   * Avanca o ciclo de renovacao para o proximo periodo.
+   *
+   * @param novoFimCiclo data de fim do novo ciclo
+   */
+  public void renovar(LocalDate novoFimCiclo) {
+    this.inicioCiclo = this.fimCiclo;
+    this.fimCiclo = novoFimCiclo;
+    this.proximaRenovacaoEm = novoFimCiclo;
+    this.status = StatusAssinatura.ATIVA;
+  }
+
+  /** Inicia o processo de renovacao, sinalizando que o ciclo vencido esta em cobranca. */
+  public void iniciarRenovacao() {
+    this.status = StatusAssinatura.EM_RENOVACAO;
+  }
+
+  /**
+   * Suspende a assinatura apos o esgotamento das tentativas de cobranca da renovacao.
+   *
+   * @throws IllegalStateException se a assinatura estiver ativa
+   */
+  public void suspender() {
+    if (this.status == StatusAssinatura.ATIVA) {
+      throw new IllegalStateException("nao e possivel suspender uma assinatura ativa");
+    }
+    this.status = StatusAssinatura.SUSPENSA;
   }
 }

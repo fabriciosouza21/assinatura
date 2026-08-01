@@ -2,6 +2,7 @@ package com.globo.assinatura.assinatura;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
 import java.util.UUID;
@@ -85,5 +86,127 @@ class AssinaturaTest {
     assertThat(assinatura.getDataExpiracao())
         .as("Data de expiracao da primeira ativacao preservada")
         .isEqualTo(LocalDate.of(2026, 2, 1));
+  }
+
+  @Test
+  @DisplayName("Deve nascer com renovacao automatica habilitada por padrao (opt-out)")
+  void deveNascerComRenovacaoAutomaticaHabilitada() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+
+    assertThat(assinatura.isRenovacaoAutomatica())
+        .as("Renovacao automatica nasce habilitada (opt-out, decisao O-R2)")
+        .isTrue();
+  }
+
+  @Test
+  @DisplayName("Deve estabelecer o primeiro ciclo de renovacao ao ativar")
+  void deveEstabelecerPrimeiroCicloAoAtivar() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+
+    assertThat(assinatura.getInicioCiclo())
+        .as("Inicio do ciclo coincide com a data de inicio")
+        .isEqualTo(LocalDate.of(2026, 1, 1));
+    assertThat(assinatura.getFimCiclo())
+        .as("Fim do ciclo coincide com a data de expiracao")
+        .isEqualTo(LocalDate.of(2026, 2, 1));
+    assertThat(assinatura.getProximaRenovacaoEm())
+        .as("Proxima renovacao coincide com o fim do primeiro ciclo")
+        .isEqualTo(LocalDate.of(2026, 2, 1));
+    assertThat(assinatura.isRenovacaoAutomatica())
+        .as("Renovacao automatica habilitada no primeiro ciclo")
+        .isTrue();
+  }
+
+  @Test
+  @DisplayName("Deve voltar para ativa ao renovar a partir de em renovacao")
+  void deveVoltarParaAtivaAoRenovar() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.iniciarRenovacao();
+
+    assinatura.renovar(LocalDate.of(2026, 3, 1));
+
+    assertThat(assinatura.getStatus())
+        .as("Status volta para ativa apos renovar")
+        .isEqualTo(StatusAssinatura.ATIVA);
+  }
+
+  @Test
+  @DisplayName("Deve avancar o inicio do ciclo para o fim anterior ao renovar")
+  void deveAvancarInicioDoCicloAoRenovar() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+
+    assinatura.renovar(LocalDate.of(2026, 3, 1));
+
+    assertThat(assinatura.getInicioCiclo())
+        .as("Inicio do ciclo avanca para o fim anterior")
+        .isEqualTo(LocalDate.of(2026, 2, 1));
+  }
+
+  @Test
+  @DisplayName("Deve definir o fim do ciclo com o novo vencimento ao renovar")
+  void deveDefinirFimDoCicloAoRenovar() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+
+    assinatura.renovar(LocalDate.of(2026, 3, 1));
+
+    assertThat(assinatura.getFimCiclo())
+        .as("Fim do ciclo assume o novo vencimento")
+        .isEqualTo(LocalDate.of(2026, 3, 1));
+  }
+
+  @Test
+  @DisplayName("Deve agendar a proxima renovacao para o novo fim do ciclo")
+  void deveAgendarProximaRenovacaoAoRenovar() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+
+    assinatura.renovar(LocalDate.of(2026, 3, 1));
+
+    assertThat(assinatura.getProximaRenovacaoEm())
+        .as("Proxima renovacao coincide com o novo fim do ciclo")
+        .isEqualTo(LocalDate.of(2026, 3, 1));
+  }
+
+  @Test
+  @DisplayName("Deve transitar para em renovacao ao iniciar a renovacao")
+  void deveTransitarParaEmRenovacaoAoIniciarRenovacao() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+
+    assinatura.iniciarRenovacao();
+
+    assertThat(assinatura.getStatus())
+        .as("Status transita para em renovacao")
+        .isEqualTo(StatusAssinatura.EM_RENOVACAO);
+  }
+
+  @Test
+  @DisplayName("Deve transitar para suspensa ao suspender a assinatura em renovacao")
+  void deveTransitarParaSuspensaAoSuspender() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.iniciarRenovacao();
+
+    assinatura.suspender();
+
+    assertThat(assinatura.getStatus())
+        .as("Status transita para suspensa")
+        .isEqualTo(StatusAssinatura.SUSPENSA);
+  }
+
+  @Test
+  @DisplayName("Deve lancar excecao ao suspender assinatura ativa")
+  void deveLancarExcecaoAoSuspenderAtiva() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+
+    assertThatThrownBy(assinatura::suspender)
+        .as("Suspender assinatura ativa e transicao invalida")
+        .isInstanceOf(IllegalStateException.class);
   }
 }
