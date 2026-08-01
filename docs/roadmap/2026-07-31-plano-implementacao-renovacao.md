@@ -72,7 +72,7 @@ do Gate 0 (§4). Até lá, esta tabela é a fonte da verdade.
 - **Erros de consumer:** `DefaultErrorHandler` + `DeadLetterPublishingRecoverer` → tópico `<topico>-dlq`. A DLQ de consumer é **independente** do `outbox.status = FALHA` (D-R4).
 - **Commits:** Conventional Commits PT-BR, lowercase, sem acento no assunto. Um commit = uma mudança lógica.
 - **Coordenação de migrations (importante):** a numeração precisa ser combinada para não colidir entre tracks do mesmo serviço.
-  - Assinatura termina em `V6`. BE-8 cria `V7` (tabela `renovacao` + colunas de ciclo em `assinatura`). BE-10 cria `V8` (tabela de dedup `renovacao_evento_processado`). BE-7 não cria migration.
+  - Assinatura termina em `V6`. BE-8 cria `V7` (tabela `renovacao` + colunas de ciclo em `assinatura`). BE-9 cria `V8` (`uuid` e `numero_ciclo` na tabela `renovacao`, exigidos pelo contrato `RenovacaoSolicitada`). BE-10 cria `V9` (tabela de dedup `renovacao_evento_processado`). BE-7 não cria migration.
   - Pagamento termina em `V3`. BE-11 cria `V4` (`pagamento_renovacao` + `tentativa_cobranca`). BE-13 cria `V5` (dedup de `eventId` de webhook de renovação).
 - **Verificação mínima antes de PR:** `make verify` verde no serviço alterado.
 
@@ -132,9 +132,9 @@ do Gate 0 (§4). Até lá, esta tabela é a fonte da verdade.
 - **Consome:** design `docs/renovacao/renovacao-automatica-assinatura.puml` (linhas 165-195) e `docs/renovacao/renovacao-automatica-retry-dlq.puml` (linhas 203-224).
 - **Definition of Done:**
   - `@KafkaListener(topico = "renovacao-resultado", groupId = "assinatura")` desserializa `PagamentoRenovacaoAprovado`/`RenovacaoTentativasEsgotadas` (dispatch interno por tipo, ambos no mesmo tópico, D-R3).
-  - Sob lock pessimista + dedup de `eventId` (migration `V8`, tabela `renovacao_evento_processado`): `Aprovado` → `renovacao.status = APROVADA`, `assinatura.renovar(...)` (→ `ATIVA` com novo ciclo) + outbox `AssinaturaRenovada`. `Esgotado` → `renovacao.status = TENTATIVAS_ESGOTADA`, `assinatura.suspender()` + outbox `AssinaturaSuspensa`.
+  - Sob lock pessimista + dedup de `eventId` (migration `V9`, tabela `renovacao_evento_processado`): `Aprovado` → `renovacao.status = APROVADA`, `assinatura.renovar(...)` (→ `ATIVA` com novo ciclo) + outbox `AssinaturaRenovada`. `Esgotado` → `renovacao.status = TENTATIVAS_ESGOTADA`, `assinatura.suspender()` + outbox `AssinaturaSuspensa`.
   - `DefaultErrorHandler` → `renovacao-resultado-dlq`.
-- **Arquivos previstos:** `RenovacaoResultadoConsumer`, handlers, `V8__*.sql` (dedup), gravação na outbox.
+- **Arquivos previstos:** `RenovacaoResultadoConsumer`, handlers, `V9__*.sql` (dedup), gravação na outbox.
 - **Verificação:** injetar `PagamentoRenovacaoAprovado` sintético e afirmar novo ciclo + `ATIVA` + outbox; injetar `RenovacaoTentativasEsgotadas` e afirmar `SUSPENSA`; redelivery do `eventId` não reaplica.
 - **Paralelizável com:** BE-9, BE-11, BE-12, BE-13. Contenção de domínio com BE-9 → ver §6.
 
@@ -207,9 +207,9 @@ Gate 0: contratos renovação travados (doc)
    │                                                  │
    │   BE-7: outbox roteia por eventType              │
    │   BE-8: domínio ciclo + Renovacao + V7 (fnd)     │
-   │     ├──> BE-9: scheduler vencimento              │
+   │     ├──> BE-9: scheduler vencimento (V8)         │
    │     │      (depende tb de BE-7 p/ publicar)      │
-   │     └──> BE-10: consumer resultado (V8)          │
+   │     └──> BE-10: consumer resultado (V9)          │
    │                                                  │
    ├──────── STREAM PAGAMENTO ────────────────────────┐
    │                                                  │
