@@ -414,6 +414,53 @@ class ProcessarRenovacaoResultadoTest {
   }
 
   @Test
+  @DisplayName("Deve tratar como no-op assinatura dona inexistente ao esgotar tentativas")
+  void deveTratarComoNoOpAssinaturaInexistenteAoEsgotarTentativas() {
+    Renovacao renovacao = new Renovacao(42L, LocalDate.of(2026, 2, 15), 2);
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
+        .thenReturn(Optional.of(renovacao));
+    when(assinaturaRepository.findById(42L)).thenReturn(Optional.empty());
+    RenovacaoTentativasEsgotadas evento =
+        new RenovacaoTentativasEsgotadas(
+            UUID.randomUUID(),
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString(renovacao.getUuid()),
+            UUID.randomUUID(),
+            2);
+
+    assertThatCode(() -> command.executar(evento))
+        .as("assinatura dona inexistente deve ser ignorada sem lancar excecao")
+        .doesNotThrowAnyException();
+
+    verify(outboxRepository, never()).save(any(OutboxEvent.class));
+    verify(renovacaoEventoProcessadoRepository, never()).save(any(RenovacaoEventoProcessado.class));
+  }
+
+  @Test
+  @DisplayName("Deve tratar como no-op assinatura dona inexistente ao aprovar a renovacao")
+  void deveTratarComoNoOpAssinaturaInexistenteAoAprovarRenovacao() {
+    Renovacao renovacao = new Renovacao(42L, LocalDate.of(2026, 2, 15), 2);
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
+        .thenReturn(Optional.of(renovacao));
+    when(assinaturaRepository.findById(42L)).thenReturn(Optional.empty());
+    PagamentoRenovacaoAprovado evento =
+        new PagamentoRenovacaoAprovado(
+            UUID.randomUUID(),
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString(renovacao.getUuid()),
+            UUID.randomUUID(),
+            "pay_123",
+            2);
+
+    assertThatCode(() -> command.executar(evento))
+        .as("assinatura dona inexistente deve ser ignorada sem lancar excecao")
+        .doesNotThrowAnyException();
+
+    verify(outboxRepository, never()).save(any(OutboxEvent.class));
+    verify(renovacaoEventoProcessadoRepository, never()).save(any(RenovacaoEventoProcessado.class));
+  }
+
+  @Test
   @DisplayName(
       "Deve tratar como no-op idempotente quando save do evento processado viola indice unico"
           + " (race de rebalance)")

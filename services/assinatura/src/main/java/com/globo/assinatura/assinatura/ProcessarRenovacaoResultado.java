@@ -75,9 +75,11 @@ public class ProcessarRenovacaoResultado {
    * renovacao. Eventos cuja renovacao ainda nao existe tambem sao ignorados, sem registrar
    * idempotencia, permitindo que o redelivery processe o evento quando a renovacao surgir. Entregas
    * tardias sobre uma renovacao ja resolvida (status diferente de PENDENTE) sao tratadas como no-op
-   * idempotente. Caso contrario, carrega a renovacao sob lock pessimista pelo uuid publico, resolve
-   * a assinatura dona pelo identificador interno, confirma a renovacao do ciclo e grava o evento
-   * {@code AssinaturaRenovada} na outbox na mesma transacao.
+   * idempotente. Se a assinatura dona da renovacao nao existir, o evento e descartado com alerta,
+   * sem registrar idempotencia, pois se trata de quebra de integridade referencial irrecuperavel.
+   * Caso contrario, carrega a renovacao sob lock pessimista pelo uuid publico, resolve a assinatura
+   * dona pelo identificador interno, confirma a renovacao do ciclo e grava o evento {@code
+   * AssinaturaRenovada} na outbox na mesma transacao.
    *
    * @param evento evento de pagamento de renovacao aprovado
    */
@@ -111,8 +113,18 @@ public class ProcessarRenovacaoResultado {
           .log("Evento de renovacao aprovada descartado por renovacao ja resolvida");
       return;
     }
-    Assinatura assinatura =
-        assinaturaRepository.findById(renovacao.getAssinaturaId()).orElseThrow();
+    Optional<Assinatura> possivelAssinatura =
+        assinaturaRepository.findById(renovacao.getAssinaturaId());
+    if (possivelAssinatura.isEmpty()) {
+      log.atWarn()
+          .addKeyValue("event", "assinatura_desconhecida")
+          .addKeyValue("eventId", evento.eventId())
+          .addKeyValue("renovacaoId", evento.renovacaoId())
+          .addKeyValue("assinaturaId", renovacao.getAssinaturaId())
+          .log("Assinatura dona da renovacao aprovada inexistente");
+      return;
+    }
+    Assinatura assinatura = possivelAssinatura.get();
     renovacao.aprovar();
     assinatura.renovar(assinatura.getFimCiclo().plusMonths(1));
     gravarEvento(assinatura, renovacao, evento);
@@ -125,9 +137,9 @@ public class ProcessarRenovacaoResultado {
    * <p>Segue o mesmo contrato de idempotencia e lock de {@link
    * #executar(PagamentoRenovacaoAprovado)}: eventos ja processados sao ignorados sem acquire lock;
    * eventos para renovacao inexistente sao ignorados sem registrar idempotencia; entregas tardias
-   * sobre renovacao ja resolvida sao tratadas como no-op idempotente. Caso contrario, esgota as
-   * tentativas da renovacao, suspende a assinatura dona e grava o evento {@code AssinaturaSuspensa}
-   * na outbox na mesma transacao.
+   * sobre renovacao ja resolvida sao tratadas como no-op idempotente; assinatura dona inexistente e
+   * descartada com alerta. Caso contrario, esgota as tentativas da renovacao, suspende a assinatura
+   * dona e grava o evento {@code AssinaturaSuspensa} na outbox na mesma transacao.
    *
    * @param evento evento de tentativas de renovacao esgotadas
    */
@@ -161,8 +173,18 @@ public class ProcessarRenovacaoResultado {
           .log("Evento de renovacao esgotada descartado por renovacao ja resolvida");
       return;
     }
-    Assinatura assinatura =
-        assinaturaRepository.findById(renovacao.getAssinaturaId()).orElseThrow();
+    Optional<Assinatura> possivelAssinatura =
+        assinaturaRepository.findById(renovacao.getAssinaturaId());
+    if (possivelAssinatura.isEmpty()) {
+      log.atWarn()
+          .addKeyValue("event", "assinatura_desconhecida")
+          .addKeyValue("eventId", evento.eventId())
+          .addKeyValue("renovacaoId", evento.renovacaoId())
+          .addKeyValue("assinaturaId", renovacao.getAssinaturaId())
+          .log("Assinatura dona da renovacao esgotada inexistente");
+      return;
+    }
+    Assinatura assinatura = possivelAssinatura.get();
     renovacao.esgotarTentativas();
     assinatura.suspender();
     gravarEventoSuspensao(assinatura, renovacao);
