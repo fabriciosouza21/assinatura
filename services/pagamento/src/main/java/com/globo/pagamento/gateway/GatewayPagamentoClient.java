@@ -49,10 +49,11 @@ public class GatewayPagamentoClient {
             .retrieve()
             .toEntity(CreatePaymentResponse.class)
             .block();
-    log.info(
-        "Cobranca criada no gateway para assinaturaId={} com httpStatus={}",
-        assinaturaId,
-        response.getStatusCode().value());
+    log.atInfo()
+        .addKeyValue("event", "cobranca_criada_gateway")
+        .addKeyValue("assinaturaId", assinaturaId)
+        .addKeyValue("httpStatus", response.getStatusCode().value())
+        .log("Cobranca criada no gateway");
     return new CobrancaCriada(response.getBody().id());
   }
 

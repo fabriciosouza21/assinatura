@@ -45,8 +45,10 @@ public class AssinaturaSolicitadaConsumer {
   public void consumir(String payload) {
     AssinaturaSolicitada evento = desserializar(payload);
     validar(evento);
-    log.info(
-        "Evento de assinatura solicitada consumido para assinaturaId={}", evento.assinaturaId());
+    log.atDebug()
+        .addKeyValue("event", "assinatura_solicitada_recebida")
+        .addKeyValue("assinaturaId", evento.assinaturaId())
+        .log("Evento de assinatura solicitada recebido");
     criarCobrancaService.processar(evento);
   }
 
