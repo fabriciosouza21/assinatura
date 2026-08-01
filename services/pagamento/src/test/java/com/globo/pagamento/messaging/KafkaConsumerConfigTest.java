@@ -14,7 +14,7 @@ import org.springframework.util.backoff.FixedBackOff;
  * Teste unitario do {@link KafkaConsumerConfig}.
  *
  * <p>Garante que o backoff do error handler aplica jitter (exponencial), atendendo ao requisito do
- * contrato {@code docs/contrato-eventos-kafka.puml} de "3 tentativas + backoff + jitter".
+ * contrato {@code docs/contratos/contrato-eventos-kafka.puml} de "3 tentativas + backoff + jitter".
  */
 class KafkaConsumerConfigTest {
 

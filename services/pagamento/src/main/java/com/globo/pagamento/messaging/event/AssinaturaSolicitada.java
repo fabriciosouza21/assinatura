@@ -8,8 +8,8 @@ import java.util.UUID;
 /**
  * Evento de assinatura solicitada, consumido do topico {@code assinatura-solicitada}.
  *
- * <p>Espelha o contrato {@code docs/contrato-eventos-kafka.puml}: campos e tipos exatos, sem modulo
- * compartilhado entre servicos.
+ * <p>Espelha o contrato {@code docs/contratos/contrato-eventos-kafka.puml}: campos e tipos exatos,
+ * sem modulo compartilhado entre servicos.
  *
  * @param eventId identificador unico do evento, usado na deduplicacao
  * @param ocorridoEm instante em que o evento ocorreu

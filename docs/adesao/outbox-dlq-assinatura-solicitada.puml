@@ -8,27 +8,27 @@ skinparam responseMessageBelowArrow true
 control "Outbox Publisher" as OP
 database "Banco de Dados" as DB
 queue "Kafka" as KAFKA
-control "Monitoramento" as MON
+control "Monitoramento\n(não implementado)" as MON
 actor "Operação" as OPS
-control "Recuperação Outbox" as REC
+control "Recuperação Outbox\n(não implementado)" as REC
 
 == Tentativa de publicação ==
 
-OP -> DB: SELECT próximo evento PENDENTE\nWHERE proxima_tentativa_em <= now()\nFOR UPDATE SKIP LOCKED
+OP -> DB: Busca próximo evento PENDENTE vencido\nna tabela outbox, com lock
 DB --> OP: AssinaturaSolicitada
 OP -> KAFKA: Publicar evento\nkey = assinaturaId
 
 alt Kafka confirmou a publicação
   KAFKA --> OP: ACK
-  OP -> DB: UPDATE outbox\nstatus = PUBLICADO\npublished_at = now()
+  OP -> DB: Marca evento como PUBLICADO\nna tabela outbox
 else Erro ou timeout
   KAFKA --> OP: falha
-  OP -> DB: UPDATE outbox\ntentativas = tentativas + 1\nultimo_erro = mensagem
+  OP -> DB: Incrementa tentativas e registra\nerro na tabela outbox
 
   alt tentativas < 3
-    OP -> DB: UPDATE outbox\nstatus = PENDENTE\nproxima_tentativa_em = now()\n+ backoff exponencial + jitter
+    OP -> DB: Mantém PENDENTE e agenda\npróxima tentativa (backoff + jitter)
   else tentativas = 3
-    OP -> DB: UPDATE outbox\nstatus = FALHA\nfailed_at = now()
+    OP -> DB: Marca evento como FALHA\nna tabela outbox
   end
 end
 
@@ -40,22 +40,29 @@ end note
 
 == DLQ persistida ==
 
-MON -> DB: Consultar eventos\nstatus = FALHA
+note over MON, REC
+  Não implementado / fora de escopo no código atual.
+  Não existem Monitoramento nem Recuperação Outbox;
+  o PRD da outbox lista a interface humana de
+  reprocessamento de eventos FALHA como Out of Scope.
+end note
+
+MON -> DB: Consulta eventos com status FALHA\nna tabela outbox
 DB --> MON: eventos que esgotaram as tentativas
 MON --> OPS: Gerar alerta\n{eventId, tipo, ultimoErro}
 
 OPS -> REC: Consultar evento com falha
-REC -> DB: SELECT outbox WHERE event_id = eventId
+REC -> DB: Busca evento por eventId\nna tabela outbox
 DB --> REC: payload, tentativas e último erro
 REC --> OPS: detalhes para diagnóstico
 
 alt Causa corrigida
   OPS -> REC: Reprocessar eventId
-  REC -> DB: UPDATE outbox\nstatus = PENDENTE\ntentativas = 0\nproxima_tentativa_em = now()\nultimo_erro = null\nfailed_at = null
+  REC -> DB: Volta evento para PENDENTE,\nzera tentativas e erro\nna tabela outbox
   REC --> OPS: evento liberado para reprocessamento
 else Falha permanente
   OPS -> REC: Encerrar eventId
-  REC -> DB: UPDATE outbox\nstatus = DESCARTADO
+  REC -> DB: Marca evento como DESCARTADO\nna tabela outbox
   REC --> OPS: evento encerrado
 end
 

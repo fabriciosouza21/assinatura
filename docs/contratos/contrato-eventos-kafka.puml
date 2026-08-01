@@ -55,11 +55,12 @@ note right of AssinaturaSolicitada
   Consumidor: Pagamento Service
 
   Entrega: OUTBOX (transacional). O evento é
-  gravado na mesma transação do INSERT da
-  assinatura; publicado sse ela foi commitada.
+  gravado na mesma transação que grava a
+  assinatura; publicado sse ela foi confirmada.
   At-least-once. Sem evento fantasma, sem perda.
 
-  Publisher: SELECT FOR UPDATE SKIP LOCKED,
+  Publisher: busca eventos pendentes com lock
+  (evita duplicar entre instâncias),
   3 tentativas + backoff + jitter,
   status FALHA = DLQ persistida.
 

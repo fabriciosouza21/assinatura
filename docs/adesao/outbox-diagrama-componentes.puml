@@ -14,8 +14,8 @@ package "Assinatura Service" {
   [API REST] as API
   [Caso de uso\nSolicitar Assinatura] as USECASE
   [Outbox Publisher] as PUBLISHER
-  [Recuperação Outbox] as RECOVERY
-  [Monitoramento] as MONITOR
+  [Recuperação Outbox] as RECOVERY <<não implementado>>
+  [Monitoramento] as MONITOR <<não implementado>>
   database "PostgreSQL\nassinatura + outbox" as DB
 }
 
@@ -39,6 +39,7 @@ legend bottom
   |= Publisher |= Até 3 tentativas, backoff exponencial com jitter |
   |= PostgreSQL |= Linha FALHA funciona como DLQ persistida |
   |= DLQ consumidores |= Independente: trata falhas após publicação com sucesso |
+  |= Recuperação Outbox / Monitoramento |= Não implementado / fora de escopo no código atual (ver PRD da outbox) |
 endlegend
 
 @enduml

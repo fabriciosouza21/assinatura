@@ -15,14 +15,12 @@ entity usuario {
 entity assinatura {
   * id: BIGINT <<PK>>
   --
-  * uuid: UUID <<UK>>
+  * uuid: VARCHAR(36) <<UK>>
   * usuario_id: BIGINT <<FK>>
   * plano: VARCHAR
-  * valor: NUMERIC(19,2)
   * status: VARCHAR
   data_inicio: DATE
   data_expiracao: DATE
-  * criado_em: TIMESTAMPTZ
 }
 
 entity outbox {
@@ -60,8 +58,11 @@ note right of outbox
 end note
 
 note bottom of outbox
-  event_id permanece o mesmo durante
-  retries e reprocessamento manual.
+  event_id permanece o mesmo durante os
+  retries automáticos.
+
+  Reprocessamento manual: não implementado /
+  fora de escopo no código atual.
 end note
 
 @enduml

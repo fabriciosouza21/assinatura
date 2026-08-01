@@ -42,7 +42,7 @@ package "3. Retentativa de cobranca (negocio)" as P3 <<cobranca>> {
 ' Encadeamento: o evento flui da publicacao ao consumo. A cobranca
 ' e um ciclo paralelo disparado pelo consumer, nao encadeado nos retries.
 
-OB_SCHED -down-> OB_DB : SELECT ... FOR UPDATE SKIP LOCKED\nonde status = PENDENTE
+OB_SCHED -down-> OB_DB : busca eventos PENDENTES, com lock
 OB_SCHED -down-> OB_KAFKA : kafkaTemplate.send
 OB_KAFKA --> OB_SCHED : ACK => status PUBLICADO
 OB_SCHED -down-> OB_DB : falha: tentativas++\nreagendar com backoff
