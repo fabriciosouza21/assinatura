@@ -1,6 +1,7 @@
 package com.globo.pagamento.gateway;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import okhttp3.mockwebserver.MockResponse;
@@ -111,6 +112,16 @@ class GatewayPagamentoClientTest {
     assertThat(resultado.paymentId())
         .as("payment id retornado pelo gateway")
         .isEqualTo("pay_renov");
+  }
+
+  @Test
+  @DisplayName("Deve envolver falha tecnica do gateway em CobrancaGatewayIndisponivelException")
+  void deveEnvolverFalhaTecnicaDoGatewayEmExcecaoDeDominio() {
+    server.enqueue(new MockResponse().setResponseCode(500));
+
+    assertThatThrownBy(() -> client.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90")))
+        .as("falha tecnica do gateway deve virar excecao de dominio")
+        .isInstanceOf(CobrancaGatewayIndisponivelException.class);
   }
 
   @Test

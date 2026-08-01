@@ -1,6 +1,7 @@
 package com.globo.pagamento.renovacao;
 
 import com.globo.pagamento.gateway.CobrancaCriada;
+import com.globo.pagamento.gateway.CobrancaGatewayIndisponivelException;
 import com.globo.pagamento.gateway.GatewayPagamentoClient;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -57,8 +58,9 @@ public class CobrancaRenovacaoScheduler {
    *
    * <p>Itera sobre as tentativas elegiveis, resolve o pagamento da renovacao, cria a cobranca no
    * gateway e persiste o {@code paymentId} devolvido na tentativa correspondente. Tentativas sem
-   * pagamento da renovacao correspondente sao puladas, pois indicam inconsistencia referencial. Já
-   * as falhas tecnicas do gateway pulam a tentativa, que permanece pendente para o proximo ciclo.
+   * pagamento da renovacao correspondente sao puladas, pois indicam inconsistencia referencial.
+   * Falhas tecnicas do gateway ({@link CobrancaGatewayIndisponivelException}) pulam a tentativa,
+   * que permanece pendente para o proximo ciclo; demais excecoes propagam, pois indicam bug.
    *
    * <p>A transacao envolve todo o corpo do loop para segurar o {@code FOR UPDATE SKIP LOCKED} da
    * selecao ate o {@code save}, atravessando a chamada ao gateway. Sem isso, o lock da tentativa
@@ -84,7 +86,7 @@ public class CobrancaRenovacaoScheduler {
         cobranca =
             gateway.criarCobrancaRenovacao(
                 tentativa.getRenovacaoId(), tentativa.getNumero(), pagamentoRenovacao.getValor());
-      } catch (RuntimeException e) {
+      } catch (CobrancaGatewayIndisponivelException e) {
         log.warn(
             "Falha tecnica ao cobrar a tentativa {} da renovacao {}: {}",
             tentativa.getNumero(),

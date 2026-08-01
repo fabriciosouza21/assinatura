@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientException;
 
 /**
  * Client do gateway de pagamento. Encapsula a chamada {@code POST /v1/payments} com a chave de
@@ -67,16 +68,20 @@ public class GatewayPagamentoClient {
   public CobrancaCriada criarCobrancaRenovacao(String renovacaoId, int numero, BigDecimal valor) {
     CreatePaymentRequest request =
         new CreatePaymentRequest(renovacaoId, valor, "BRL", "PIX", notificationUrl);
-    CreatePaymentResponse response =
-        webClient
-            .post()
-            .uri("/v1/payments")
-            .header("Idempotency-Key", renovacaoId + ":" + numero)
-            .bodyValue(request)
-            .retrieve()
-            .bodyToMono(CreatePaymentResponse.class)
-            .block();
-    return new CobrancaCriada(response.id());
+    try {
+      CreatePaymentResponse response =
+          webClient
+              .post()
+              .uri("/v1/payments")
+              .header("Idempotency-Key", renovacaoId + ":" + numero)
+              .bodyValue(request)
+              .retrieve()
+              .bodyToMono(CreatePaymentResponse.class)
+              .block();
+      return new CobrancaCriada(response.id());
+    } catch (WebClientException e) {
+      throw new CobrancaGatewayIndisponivelException();
+    }
   }
 
   /**

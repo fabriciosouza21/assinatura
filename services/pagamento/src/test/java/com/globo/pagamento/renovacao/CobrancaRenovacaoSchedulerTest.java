@@ -2,6 +2,7 @@ package com.globo.pagamento.renovacao;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.verify;
@@ -9,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.globo.pagamento.cobranca.Plano;
 import com.globo.pagamento.gateway.CobrancaCriada;
+import com.globo.pagamento.gateway.CobrancaGatewayIndisponivelException;
 import com.globo.pagamento.gateway.GatewayPagamentoClient;
 import java.math.BigDecimal;
 import java.util.List;
@@ -65,13 +67,28 @@ class CobrancaRenovacaoSchedulerTest {
     when(pagamentoRenovacaoRepository.findByRenovacaoId("renov-1"))
         .thenReturn(Optional.of(pagamentoComValor()));
     when(gateway.criarCobrancaRenovacao(any(), anyInt(), any()))
-        .thenThrow(new RuntimeException("timeout"));
+        .thenThrow(new CobrancaGatewayIndisponivelException());
 
     scheduler.cobrar();
 
     assertThat(tentativa.getPaymentId())
         .as("paymentId deve permanecer null quando o gateway falha")
         .isNull();
+  }
+
+  @Test
+  @DisplayName("Nao deve engolir bug de programacao como se fosse falha tecnica")
+  void naoDeveEngolirBugDeProgramacaoComoFalhaTecnica() {
+    when(tentativaCobrancaRepository.buscarProntasParaCobrar())
+        .thenReturn(List.of(tentativaProntaSemPaymentId()));
+    when(pagamentoRenovacaoRepository.findByRenovacaoId("renov-1"))
+        .thenReturn(Optional.of(pagamentoComValor()));
+    when(gateway.criarCobrancaRenovacao(any(), anyInt(), any()))
+        .thenThrow(new NullPointerException("mapeamento nulo"));
+
+    assertThatThrownBy(() -> scheduler.cobrar())
+        .as("bugs de programacao devem propagar, nao ser engolidos como falha tecnica")
+        .isInstanceOf(NullPointerException.class);
   }
 
   @Test
