@@ -46,3 +46,4 @@ docker/mock-pagamento/mock-pagamento
 
 ### Worktrees ###
 .worktrees/
+.claude/worktrees/
