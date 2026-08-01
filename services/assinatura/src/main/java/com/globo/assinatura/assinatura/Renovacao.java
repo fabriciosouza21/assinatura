@@ -83,7 +83,11 @@ public class Renovacao {
     return status;
   }
 
-  /** Marca a renovacao como aprovada apos a confirmacao da cobranca. */
+  /**
+   * Marca a renovacao como aprovada apos a confirmacao da cobranca.
+   *
+   * @throws IllegalStateException se a renovacao ja estiver aprovada
+   */
   public void aprovar() {
     if (this.status == StatusRenovacao.APROVADA) {
       throw new IllegalStateException("renovacao ja aprovada");
@@ -91,7 +95,11 @@ public class Renovacao {
     this.status = StatusRenovacao.APROVADA;
   }
 
-  /** Marca a renovacao com tentativas de cobranca esgotadas. */
+  /**
+   * Marca a renovacao com tentativas de cobranca esgotadas.
+   *
+   * @throws IllegalStateException se a renovacao ja estiver com tentativas esgotadas
+   */
   public void esgotarTentativas() {
     if (this.status == StatusRenovacao.TENTATIVAS_ESGOTADA) {
       throw new IllegalStateException("renovacao ja com tentativas esgotadas");

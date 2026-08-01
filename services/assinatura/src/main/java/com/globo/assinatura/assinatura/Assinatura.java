@@ -212,7 +212,11 @@ public class Assinatura {
     this.status = StatusAssinatura.EM_RENOVACAO;
   }
 
-  /** Suspende a assinatura apos o esgotamento das tentativas de cobranca da renovacao. */
+  /**
+   * Suspende a assinatura apos o esgotamento das tentativas de cobranca da renovacao.
+   *
+   * @throws IllegalStateException se a assinatura estiver ativa
+   */
   public void suspender() {
     if (this.status == StatusAssinatura.ATIVA) {
       throw new IllegalStateException("nao e possivel suspender uma assinatura ativa");
