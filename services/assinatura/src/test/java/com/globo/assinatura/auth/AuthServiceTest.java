@@ -6,6 +6,8 @@ import static org.mockito.Mockito.when;
 import com.globo.assinatura.security.JwtService;
 import com.globo.assinatura.user.User;
 import com.globo.assinatura.user.UserRepository;
+import com.globo.assinatura.usuario.Usuario;
+import com.globo.assinatura.usuario.UsuarioRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -22,7 +24,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
  * Testes do {@link AuthService} focados no login de cliente: emitem o token real via {@link
- * JwtService} e verificam as claims decodificadas (subject = email, role = ROLE_CLIENT).
+ * JwtService} e verificam as claims decodificadas (subject = email, role = ROLE_CLIENT, usuarioId =
+ * uuid publico do usuario de dominio).
  */
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -30,6 +33,7 @@ class AuthServiceTest {
   private static final String SECRET = "segredo-suficientemente-longo-para-hs256-aaaa-bbbb";
 
   @Mock private UserRepository userRepository;
+  @Mock private UsuarioRepository usuarioRepository;
   @Mock private PasswordEncoder passwordEncoder;
 
   private AuthService authService;
@@ -38,24 +42,52 @@ class AuthServiceTest {
   void setUp() {
     authService =
         new AuthService(
-            userRepository, passwordEncoder, new JwtService(SECRET, 3600000L), 3600000L);
+            userRepository,
+            usuarioRepository,
+            passwordEncoder,
+            new JwtService(SECRET, 3600000L),
+            3600000L);
+  }
+
+  private Claims claimsDoToken(String token) {
+    SecretKey chave = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
+    return Jwts.parser().verifyWith(chave).build().parseSignedClaims(token).getPayload();
   }
 
   @Test
-  @DisplayName("Deve emitir JWT com subject=email e role=ROLE_CLIENT ao logar cliente")
-  void loginDeClienteEmiteTokenComRoleCliente() {
+  @DisplayName("Deve emitir JWT com subject=email, role=ROLE_CLIENT e usuarioId ao logar cliente")
+  void loginDeClienteEmiteTokenComClaimsDeIdentidade() {
     User cliente = new User("cliente@example.com", "hash-bcrypt", "ROLE_CLIENT", 1L);
+    Usuario usuario = new Usuario("Fulano", "cliente@example.com");
     when(userRepository.findByUsername("cliente@example.com")).thenReturn(Optional.of(cliente));
     when(passwordEncoder.matches("SenhaForte1", "hash-bcrypt")).thenReturn(true);
+    when(usuarioRepository.findById(1L)).thenReturn(Optional.of(usuario));
 
     LoginResponse resposta =
         authService.login(new LoginRequest("cliente@example.com", "SenhaForte1"));
 
-    SecretKey chave = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
-    Claims claims =
-        Jwts.parser().verifyWith(chave).build().parseSignedClaims(resposta.token()).getPayload();
+    Claims claims = claimsDoToken(resposta.token());
     assertThat(claims.getSubject()).as("Subject do JWT e o email").isEqualTo("cliente@example.com");
     assertThat(claims).as("Claim role do cliente").containsEntry("role", "ROLE_CLIENT");
+    assertThat(claims)
+        .as("Claim usuarioId com o uuid publico do usuario de dominio")
+        .containsEntry("usuarioId", usuario.getUuid());
     assertThat(resposta.tokenType()).as("Tipo do token").isEqualTo("Bearer");
+  }
+
+  @Test
+  @DisplayName("Deve emitir JWT sem claim usuarioId ao logar credencial sem usuario ligado")
+  void loginDeAdminEmiteTokenSemUsuarioId() {
+    User admin = new User("admin", "hash-bcrypt", "ROLE_ADMIN", null);
+    when(userRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
+    when(passwordEncoder.matches("admin123", "hash-bcrypt")).thenReturn(true);
+
+    LoginResponse resposta = authService.login(new LoginRequest("admin", "admin123"));
+
+    Claims claims = claimsDoToken(resposta.token());
+    assertThat(claims).as("Claim role do admin").containsEntry("role", "ROLE_ADMIN");
+    assertThat(claims)
+        .as("Admin nao possui usuario de dominio ligado")
+        .doesNotContainKey("usuarioId");
   }
 }

@@ -9,11 +9,12 @@ http:
   headers:
     - name: Content-Type
       value: application/json
+    - name: Authorization
+      value: "Bearer {{token}}"
   body:
     type: json
     data: |-
       {
-        "usuarioId": "{{usuarioId}}",
         "plano": "PREMIUM"
       }
 

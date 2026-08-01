@@ -16,6 +16,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * Filtro que extrai o token JWT do cabeçalho {@code Authorization} e popula o contexto de segurança
  * quando o token é válido.
+ *
+ * <p>O principal publicado é o {@link UsuarioAutenticado} do token, e a authority vem da claim
+ * {@code role}, preservando a distinção entre cliente e administrador ao longo da requisição.
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -42,14 +45,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     String header = request.getHeader(HEADER);
     if (header != null && header.startsWith(PREFIX)) {
       String token = header.substring(PREFIX.length());
-      if (jwtService.isValid(token)) {
-        String username = jwtService.extractUsername(token);
-        var auth =
-            new UsernamePasswordAuthenticationToken(
-                username, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
-        SecurityContextHolder.getContext().setAuthentication(auth);
-      }
+      jwtService.extrairPrincipal(token).ifPresent(this::autenticar);
     }
     chain.doFilter(request, response);
+  }
+
+  private void autenticar(UsuarioAutenticado principal) {
+    if (principal.role() == null) {
+      return;
+    }
+    var auth =
+        new UsernamePasswordAuthenticationToken(
+            principal, null, List.of(new SimpleGrantedAuthority(principal.role())));
+    SecurityContextHolder.getContext().setAuthentication(auth);
   }
 }

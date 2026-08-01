@@ -16,15 +16,24 @@ As variáveis de ambiente apontam para as portas do compose:
 > (variável marcada como `secret`). Essa senha é o seed de desenvolvimento
 > definido em `services/assinatura/src/main/resources/db/migration/V1__init.sql`
 > e foi versionada **intencionalmente** para facilitar os testes da collection.
-> Não há credenciais reais ou de produção envolvidas.
+> A mesma senha é reaproveitada no cadastro do cliente de teste. Não há
+> credenciais reais ou de produção envolvidas.
 
 ## Fluxo sugerido (assinatura)
 
-1. **Cadastrar usuario** → captura `usuarioId` automaticamente (`after-response`).
-2. **Solicitar assinatura** → usa o `usuarioId` capturado e devolve a assinatura
-   com status `AGUARDANDO_PAGAMENTO`; captura `assinaturaId`.
-3. **Consultar assinatura** → usa o `assinaturaId` capturado para acompanhar o
-   estado da assinatura (status, vigência).
+1. **Cadastrar usuario** → cria o cliente de teste e captura `usuarioId`
+   automaticamente (`after-response`).
+2. **Login** → autentica **como o cliente cadastrado** e captura `token`.
+3. **Solicitar assinatura** → envia `Bearer {{token}}` e apenas o `plano`;
+   devolve a assinatura com status `AGUARDANDO_PAGAMENTO` e captura
+   `assinaturaId`.
+4. **Consultar assinatura** → usa o `assinaturaId` capturado, também com
+   `Bearer {{token}}`, para acompanhar o estado da assinatura.
+
+> As rotas de assinatura exigem JWT (ADR 0003): sem o passo de **Login** elas
+> respondem `401`. O dono vem do token, então `usuarioId` não é mais enviado no
+> corpo da solicitação. O `admin` do seed não serve para assinar — não tem
+> usuário de domínio ligado e recebe `403` no `POST /assinaturas`.
 
 > Os planos aceitos são `BASICO`, `PREMIUM` e `FAMILIA`. O status parte de
 > `AGUARDANDO_PAGAMENTO` e migra para `ATIVA` ou `PAGAMENTO_RECUSADO` conforme
@@ -44,15 +53,16 @@ variáveis manualmente entre os passos. Cada request captura automaticamente o
 id do passo seguinte via `after-response`.
 
 1. **Cadastrar usuário** → captura `usuarioId`.
-2. **Solicitar assinatura** → usa o `usuarioId` capturado e devolve a assinatura
-   com status `AGUARDANDO_PAGAMENTO`; captura `assinaturaId`.
-3. **Consultar cobrança** (`pagamento/consultar-cobranca`) → usa o `assinaturaId`
+2. **Login** → autentica como o cliente cadastrado e captura `token`.
+3. **Solicitar assinatura** → envia `Bearer {{token}}` e o `plano`; devolve a
+   assinatura com status `AGUARDANDO_PAGAMENTO` e captura `assinaturaId`.
+4. **Consultar cobrança** (`pagamento/consultar-cobranca`) → usa o `assinaturaId`
    capturado e devolve o `paymentId` gerado no gateway; captura `paymentId`.
-4. **Simular aprovação** (`mock-gateway/simular-aprovacao`) → usa o `paymentId`
+5. **Simular aprovação** (`mock-gateway/simular-aprovacao`) → usa o `paymentId`
    capturado, força `APPROVED` e dispara o webhook que leva a assinatura a
    `ATIVA`.
-5. **Consultar assinatura** → usa o `assinaturaId` capturado para confirmar o
-   status `ATIVA`.
+6. **Consultar assinatura** → usa o `assinaturaId` capturado, com o mesmo token,
+   para confirmar o status `ATIVA`.
 
 > O passo **Consultar cobrança** é a ponte entre os dois serviços: sem ele, o
 > `paymentId` fica preso no Pagamento Service e não há como aprovar a cobrança

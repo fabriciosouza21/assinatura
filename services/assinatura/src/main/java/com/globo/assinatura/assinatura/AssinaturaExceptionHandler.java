@@ -46,4 +46,15 @@ public class AssinaturaExceptionHandler {
   public ResponseEntity<Void> tratarAssinaturaAberta(AssinaturaAbertaException ex) {
     return ResponseEntity.status(HttpStatus.CONFLICT).build();
   }
+
+  /**
+   * Mapeia {@link AcessoNegadoException} para {@code 403 Forbidden}.
+   *
+   * @param ex excecao lancada quando o usuario autenticado nao tem permissao sobre a assinatura
+   * @return resposta com status {@code 403} e corpo vazio
+   */
+  @ExceptionHandler(AcessoNegadoException.class)
+  public ResponseEntity<Void> tratarAcessoNegado(AcessoNegadoException ex) {
+    return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+  }
 }

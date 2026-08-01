@@ -25,7 +25,8 @@ assinatura  ──AssinaturaSolicitada──▶  kafka  ──▶  pagamento  �
 ## O que está pronto
 
 - **Infraestrutura completa** sobe com um comando via `docker compose up`.
-- **Assinatura Service**: autenticação JWT, cadastro de usuário, persistência com
+- **Assinatura Service**: autenticação JWT obrigatória nas rotas de assinatura
+  (o dono vem do token, ver ADR 0003), cadastro de usuário, persistência com
   Postgres + Flyway, healthcheck via Actuator.
 - **Pagamento Service**: scaffold (entry point + security + config).
 - **Mock do gateway**: cria pagamento (idempotente), consulta status, simula
@@ -85,9 +86,9 @@ variável de ambiente (`.env` lido pelo `docker-compose.yml`, ou export direto).
   `APP_JWT_SECRET` em produção. O `docker-compose.yml` não o repete, fazendo a
   app recorrer a esse default; defina a variável para usar um segredo real.
 - **Credenciais do Bruno** (`bruno/environments/local.yml`):
-  o usuário administrador seedado (`admin` / `admin123`) é o mesmo da migration
-  inicial e existe só para emitir o JWT de teste durante o desafio. Não é uma
-  credencial de produção.
+  a senha `admin123` é a do usuário administrador seedado na migration inicial,
+  reaproveitada no cadastro do cliente de teste da collection — que é quem emite
+  o JWT usado no fluxo de assinatura. Não é uma credencial de produção.
 
 > Nenhum `.env` real é versionado. Veja `.env.example` para a lista completa de
 > variáveis externalizáveis.

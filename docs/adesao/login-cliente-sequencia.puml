@@ -39,8 +39,10 @@ end note
 Cliente -> API: POST /auth/login\n{username: email, password: senha}
 API -> AS: login(username, password)
 AS -> DB: Busca credencial na tabela users\npor username
-DB --> AS: User (role=ROLE_CLIENT)
-AS -> AS: passwordEncoder.matches?\njwtService.generateToken(email, ROLE_CLIENT)
+DB --> AS: User (role=ROLE_CLIENT, usuario_id)
+AS -> DB: Resolve uuid publico do usuario\npor users.usuario_id
+DB --> AS: usuario_uuid
+AS -> AS: passwordEncoder.matches?\njwtService.generateToken(email, ROLE_CLIENT,\nusuario_uuid)
 
 alt Credenciais invalidas
     AS --> API: BadCredentialsException
@@ -51,8 +53,16 @@ else Credenciais validas
 end
 
 note over Cliente, API
-  JWT: subject=email, claim role=ROLE_CLIENT.
+  JWT: subject=email, claim role=ROLE_CLIENT e
+  claim usuarioId=uuid publico do usuario.
+
+  A claim usuarioId identifica o dono nas rotas
+  de assinatura, sem consultar o banco a cada
+  requisicao.
+
   O admin continua logando com username="admin".
+  Sem usuario de dominio ligado, seu token nao
+  traz usuarioId e ele nao pode assinar.
 end note
 
 note over DB

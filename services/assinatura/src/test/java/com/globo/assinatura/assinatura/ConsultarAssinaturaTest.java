@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import com.globo.assinatura.security.UsuarioAutenticado;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
 import java.util.Optional;
@@ -23,15 +24,19 @@ class ConsultarAssinaturaTest {
 
   @InjectMocks private ConsultarAssinatura query;
 
+  private static UsuarioAutenticado dono(Usuario usuario) {
+    return new UsuarioAutenticado(usuario.getEmail(), usuario.getUuid(), "ROLE_CLIENT");
+  }
+
   @Test
-  @DisplayName("Deve consultar assinatura existente retornando o uuid do usuario")
-  void deveConsultarAssinaturaExistenteRetornandoUuidDoUsuario() {
+  @DisplayName("Deve consultar assinatura do proprio usuario retornando o uuid do usuario")
+  void deveConsultarAssinaturaDoProprioUsuarioRetornandoUuidDoUsuario() {
     Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
     Usuario usuario = new Usuario("Fulano", "fulano@example.com");
     when(assinaturaRepository.findByUuid(assinatura.getUuid())).thenReturn(Optional.of(assinatura));
     when(usuarioRepository.findById(42L)).thenReturn(Optional.of(usuario));
 
-    AssinaturaResponse resposta = query.executar(assinatura.getUuid());
+    AssinaturaResponse resposta = query.executar(assinatura.getUuid(), dono(usuario));
 
     assertThat(resposta.id()).as("Uuid da assinatura").isEqualTo(assinatura.getUuid());
     assertThat(resposta.usuarioId()).as("Uuid publico do usuario").isEqualTo(usuario.getUuid());
@@ -45,9 +50,42 @@ class ConsultarAssinaturaTest {
   @DisplayName("Deve lancar nao encontrado ao consultar assinatura inexistente")
   void deveLancarNaoEncontradoAoConsultarAssinaturaInexistente() {
     when(assinaturaRepository.findByUuid("uuid-inexistente")).thenReturn(Optional.empty());
+    UsuarioAutenticado principal =
+        new UsuarioAutenticado("fulano@example.com", "usuario-uuid", "ROLE_CLIENT");
 
-    assertThatThrownBy(() -> query.executar("uuid-inexistente"))
+    assertThatThrownBy(() -> query.executar("uuid-inexistente", principal))
         .as("Assinatura inexistente deve gerar nao encontrado")
         .isInstanceOf(AssinaturaNaoEncontradaException.class);
+  }
+
+  @Test
+  @DisplayName("Deve lancar acesso negado ao consultar assinatura de outro usuario")
+  void deveLancarAcessoNegadoAoConsultarAssinaturaDeOutroUsuario() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    Usuario dono = new Usuario("Fulano", "fulano@example.com");
+    when(assinaturaRepository.findByUuid(assinatura.getUuid())).thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.of(dono));
+    UsuarioAutenticado intruso =
+        new UsuarioAutenticado("sicrano@example.com", "outro-uuid", "ROLE_CLIENT");
+
+    assertThatThrownBy(() -> query.executar(assinatura.getUuid(), intruso))
+        .as("Assinatura de terceiro deve gerar acesso negado")
+        .isInstanceOf(AcessoNegadoException.class);
+  }
+
+  @Test
+  @DisplayName("Deve permitir que administrador consulte assinatura de qualquer usuario")
+  void devePermitirAdministradorConsultarAssinaturaDeQualquerUsuario() {
+    Assinatura assinatura = new Assinatura(42L, Plano.FAMILIA);
+    Usuario dono = new Usuario("Fulano", "fulano@example.com");
+    when(assinaturaRepository.findByUuid(assinatura.getUuid())).thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.of(dono));
+    UsuarioAutenticado admin = new UsuarioAutenticado("admin", null, UsuarioAutenticado.ROLE_ADMIN);
+
+    AssinaturaResponse resposta = query.executar(assinatura.getUuid(), admin);
+
+    assertThat(resposta.usuarioId())
+        .as("Administrador enxerga a assinatura do dono")
+        .isEqualTo(dono.getUuid());
   }
 }

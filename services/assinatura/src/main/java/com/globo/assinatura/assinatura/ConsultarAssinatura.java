@@ -1,5 +1,6 @@
 package com.globo.assinatura.assinatura;
 
+import com.globo.assinatura.security.UsuarioAutenticado;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
 import org.springframework.stereotype.Service;
@@ -9,7 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
  * Query de consulta de assinatura.
  *
  * <p>Recupera a representacao completa de uma assinatura pelo uuid publico, resolvendo o uuid do
- * usuario dono a partir do identificador interno. Responsavel apenas por leitura.
+ * usuario dono a partir do identificador interno. So devolve a assinatura ao proprio dono ou a um
+ * administrador. Responsavel apenas por leitura.
  */
 @Service
 public class ConsultarAssinatura {
@@ -33,14 +35,20 @@ public class ConsultarAssinatura {
    * Consulta uma assinatura pelo uuid publico.
    *
    * @param uuid uuid publico da assinatura
+   * @param principal identidade extraida do token JWT
    * @return a representacao completa da assinatura, com o uuid publico do usuario dono
    * @throws AssinaturaNaoEncontradaException se o uuid nao corresponder a uma assinatura
+   * @throws AcessoNegadoException se a assinatura pertencer a outro usuario e o solicitante nao for
+   *     administrador
    */
   @Transactional(readOnly = true)
-  public AssinaturaResponse executar(String uuid) {
+  public AssinaturaResponse executar(String uuid, UsuarioAutenticado principal) {
     Assinatura assinatura =
         assinaturaRepository.findByUuid(uuid).orElseThrow(AssinaturaNaoEncontradaException::new);
     Usuario usuario = usuarioRepository.findById(assinatura.getUsuarioId()).orElseThrow();
+    if (!podeConsultar(usuario, principal)) {
+      throw new AcessoNegadoException();
+    }
     return new AssinaturaResponse(
         assinatura.getUuid(),
         usuario.getUuid(),
@@ -48,5 +56,9 @@ public class ConsultarAssinatura {
         assinatura.getDataInicio(),
         assinatura.getDataExpiracao(),
         assinatura.getStatus());
+  }
+
+  private boolean podeConsultar(Usuario dono, UsuarioAutenticado principal) {
+    return principal.isAdmin() || dono.getUuid().equals(principal.usuarioId());
   }
 }

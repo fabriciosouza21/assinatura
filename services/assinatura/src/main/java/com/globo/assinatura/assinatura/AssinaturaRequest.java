@@ -1,14 +1,13 @@
 package com.globo.assinatura.assinatura;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import org.hibernate.validator.constraints.UUID;
 
 /**
  * Dados enviados na solicitacao de uma assinatura.
  *
- * @param usuarioId uuid publico do usuario que solicita a assinatura; nao pode ser vazio nem ter
- *     formato invalido
+ * <p>O dono da assinatura nao vem no corpo: e derivado do token JWT da requisicao, impedindo que um
+ * usuario autenticado assine em nome de outro.
+ *
  * @param plano plano contratado; nao pode ser nulo
  */
-public record AssinaturaRequest(@NotBlank @UUID String usuarioId, @NotNull Plano plano) {}
+public record AssinaturaRequest(@NotNull Plano plano) {}
