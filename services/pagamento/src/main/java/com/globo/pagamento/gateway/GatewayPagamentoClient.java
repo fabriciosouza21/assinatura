@@ -59,6 +59,9 @@ public class GatewayPagamentoClient {
   /**
    * Cria uma cobranca no gateway para uma tentativa de renovacao da assinatura.
    *
+   * <p>Falhas tecnicas de WebClient sao envolvidas em {@link CobrancaGatewayIndisponivelException};
+   * demais excecoes propagam, distinguindo falha tecnica de bug.
+   *
    * @param renovacaoId identificador da renovacao, usado como referencia externa
    * @param numero numero da tentativa de cobranca, combinado com {@code renovacaoId} para formar a
    *     chave de idempotencia

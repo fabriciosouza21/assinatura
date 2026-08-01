@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,6 +53,7 @@ class CobrancaRenovacaoSchedulerTest {
 
     scheduler.cobrar();
 
+    verify(gateway).criarCobrancaRenovacao(eq("renov-1"), eq(1), eq(new BigDecimal("19.90")));
     verify(tentativaCobrancaRepository).save(tentativaCaptor.capture());
     assertThat(tentativaCaptor.getValue().getPaymentId())
         .as("payment id persistido")

@@ -15,7 +15,7 @@ import java.time.Instant;
  *
  * <p>Uma linha por tentativa, identificada por {@code (renovacaoId, numero)}. A tentativa inicial
  * nasce {@link StatusTentativa#PENDENTE}, sem {@code paymentId} e sem {@code proximaTentativaEm}: o
- * scheduler que efetivamente chama o gateway (BE-12) preenche esses campos quando a cobra.
+ * scheduler que cobra a tentativa no gateway preenche esses campos.
  */
 @Entity
 @Table(name = "tentativa_cobranca")
