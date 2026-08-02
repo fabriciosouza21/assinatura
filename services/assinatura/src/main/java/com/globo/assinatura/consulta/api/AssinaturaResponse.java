@@ -2,6 +2,7 @@ package com.globo.assinatura.consulta.api;
 
 import com.globo.assinatura.assinatura.Plano;
 import com.globo.assinatura.assinatura.StatusAssinatura;
+import java.time.Instant;
 import java.time.LocalDate;
 
 /**
@@ -16,7 +17,8 @@ import java.time.LocalDate;
  * @param inicioCiclo inicio do ciclo de renovacao corrente, ou {@code null} antes da primeira
  *     ativacao
  * @param fimCiclo fim do ciclo de renovacao corrente, ou {@code null} antes da primeira ativacao
- * @param proximaRenovacaoEm data da proxima renovacao, ou {@code null} antes da primeira ativacao
+ * @param proximaRenovacaoEm instante da proxima renovacao, ou {@code null} antes da primeira
+ *     ativacao
  * @param renovacaoAutomatica indica se a renovacao automatica esta habilitada
  */
 public record AssinaturaResponse(
@@ -28,5 +30,5 @@ public record AssinaturaResponse(
     StatusAssinatura status,
     LocalDate inicioCiclo,
     LocalDate fimCiclo,
-    LocalDate proximaRenovacaoEm,
+    Instant proximaRenovacaoEm,
     boolean renovacaoAutomatica) {}
