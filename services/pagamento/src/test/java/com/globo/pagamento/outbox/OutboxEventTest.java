@@ -47,4 +47,18 @@ class OutboxEventTest {
         .as("Instante de publicacao registrado")
         .isEqualTo(publicadoEm);
   }
+
+  @Test
+  @DisplayName("Deve registrar falha incrementando tentativas")
+  void deveRegistrarFalhaIncrementandoTentativas() {
+    OutboxEvent evento =
+        OutboxEvent.criar(
+            UUID.randomUUID(), "Cobranca", UUID.randomUUID(), "PagamentoStatusAtualizado", "{}");
+
+    evento.registrarFalha("erro", Instant.parse("2026-08-01T12:05:00Z"));
+
+    assertThat(evento.getTentativas())
+        .as("Contador de tentativas apos registrar falha")
+        .isEqualTo(1);
+  }
 }

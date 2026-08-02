@@ -33,6 +33,8 @@ public class OutboxEvent {
   @Enumerated(EnumType.STRING)
   private OutboxStatus status;
 
+  private short tentativas;
+
   private Instant proximaTentativaEm;
   private Instant criadoEm;
   private Instant publicadoEm;
@@ -83,6 +85,16 @@ public class OutboxEvent {
   }
 
   /**
+   * Registra uma falha de publicacao mantendo o evento pendente para a proxima tentativa.
+   *
+   * @param erro mensagem do erro ocorrido
+   * @param proximaTentativa instante agendado para a proxima tentativa
+   */
+  public void registrarFalha(String erro, Instant proximaTentativa) {
+    this.tentativas++;
+  }
+
+  /**
    * Retorna a situacao atual do evento.
    *
    * @return situacao do evento
@@ -98,5 +110,14 @@ public class OutboxEvent {
    */
   public Instant getPublicadoEm() {
     return publicadoEm;
+  }
+
+  /**
+   * Retorna o numero de tentativas de publicacao realizadas.
+   *
+   * @return contador de tentativas
+   */
+  public int getTentativas() {
+    return tentativas;
   }
 }
