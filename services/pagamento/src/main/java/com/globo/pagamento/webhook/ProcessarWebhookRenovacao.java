@@ -3,6 +3,8 @@ package com.globo.pagamento.webhook;
 import com.globo.pagamento.messaging.event.PagamentoRenovacaoAprovado;
 import com.globo.pagamento.messaging.event.RenovacaoTentativasEsgotadas;
 import com.globo.pagamento.messaging.event.StatusPagamento;
+import com.globo.pagamento.outbox.OutboxEvent;
+import com.globo.pagamento.outbox.OutboxRepository;
 import com.globo.pagamento.renovacao.PagamentoRenovacao;
 import com.globo.pagamento.renovacao.TentativaCobranca;
 import com.globo.pagamento.renovacao.TentativaCobrancaRepository;
@@ -11,10 +13,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -23,15 +23,15 @@ import tools.jackson.databind.ObjectMapper;
  * gateway.
  *
  * <p>Ancora a decisao na {@link TentativaCobranca} cobrada sob o {@code paymentId} notificado.
- * Aprovacao encerra o ciclo e publica {@link PagamentoRenovacaoAprovado}; recusa com tentativas
- * restantes agenda a proxima cobranca sem publicar nada; recusa na ultima tentativa esgota o ciclo
- * e publica {@link RenovacaoTentativasEsgotadas}. Um status ainda pendente no gateway nao consome a
- * tentativa.
+ * Aprovacao encerra o ciclo e grava {@link PagamentoRenovacaoAprovado} na outbox; recusa com
+ * tentativas restantes agenda a proxima cobranca sem gravar nada; recusa na ultima tentativa esgota
+ * o ciclo e grava {@link RenovacaoTentativasEsgotadas}. Um status ainda pendente no gateway nao
+ * consome a tentativa.
  *
- * <p>A decisao e a publicacao acontecem na mesma transacao: se o Kafka nao confirmar, a mudanca de
- * status e o agendamento da proxima tentativa voltam atras, e o gateway reenvia a notificacao. Uma
- * tentativa ja decidida e ignorada, o que absorve o reprocesso de um webhook cuja decisao anterior
- * ja tinha sido persistida.
+ * <p>A decisao e a gravacao na outbox acontecem na mesma transacao: se a transacao voltar, o evento
+ * nao existe. O ack do Kafka sai do caminho do cliente e fica com o {@link
+ * com.globo.pagamento.outbox.OutboxPublisher}. Uma tentativa ja decidida e ignorada, o que absorve
+ * o reprocesso de um webhook cuja decisao anterior ja tinha sido persistida.
  */
 public class ProcessarWebhookRenovacao {
 
@@ -39,17 +39,15 @@ public class ProcessarWebhookRenovacao {
 
   private final TentativaCobrancaRepository tentativaRepository;
   private final ObjectMapper objectMapper;
-  private final KafkaTemplate<String, String> kafkaTemplate;
-  private final String topico;
+  private final OutboxRepository outboxRepository;
   private final List<Integer> backoffDias;
 
   /**
    * Cria o command com suas dependencias.
    *
    * @param tentativaRepository repositorio das tentativas de cobranca
-   * @param objectMapper mapeador JSON para serializar o evento publicado
-   * @param kafkaTemplate template de publicacao no Kafka
-   * @param topico topico de {@code renovacao-resultado}
+   * @param objectMapper mapeador JSON para serializar o evento gravado na outbox
+   * @param outboxRepository repositorio da outbox
    * @param backoffDias uma entrada por <em>espera</em> entre tentativas: o valor de indice {@code
    *     numero - 1} e a espera, em dias, entre a recusa da tentativa {@code numero} e a tentativa
    *     seguinte. Como a ultima tentativa nao agenda nada, o ciclo tem uma tentativa a mais que o
@@ -60,8 +58,7 @@ public class ProcessarWebhookRenovacao {
   public ProcessarWebhookRenovacao(
       TentativaCobrancaRepository tentativaRepository,
       ObjectMapper objectMapper,
-      KafkaTemplate<String, String> kafkaTemplate,
-      String topico,
+      OutboxRepository outboxRepository,
       List<Integer> backoffDias) {
     if (backoffDias == null || backoffDias.isEmpty()) {
       throw new IllegalArgumentException("backoffDias deve ter ao menos uma entrada");
@@ -71,8 +68,7 @@ public class ProcessarWebhookRenovacao {
     }
     this.tentativaRepository = tentativaRepository;
     this.objectMapper = objectMapper;
-    this.kafkaTemplate = kafkaTemplate;
-    this.topico = topico;
+    this.outboxRepository = outboxRepository;
     this.backoffDias = List.copyOf(backoffDias);
   }
 
@@ -89,7 +85,6 @@ public class ProcessarWebhookRenovacao {
    * @param status status oficial do gateway ja normalizado
    * @throws DecisaoRenovacaoIndisponivelException se nenhuma tentativa tiver sido cobrada sob o
    *     {@code paymentId} notificado, ou se a tentativa pertencer a outra renovacao
-   * @throws PublicacaoIndisponivelException se a publicacao do resultado no Kafka falhar
    */
   @Transactional
   public void decidir(
@@ -143,8 +138,10 @@ public class ProcessarWebhookRenovacao {
       PagamentoRenovacao pagamento, TentativaCobranca tentativa, UUID eventId, String paymentId) {
     tentativa.aprovar();
     tentativaRepository.save(tentativa);
-    publicar(
+    gravarOutbox(
+        eventId,
         pagamento,
+        "PagamentoRenovacaoAprovado",
         new PagamentoRenovacaoAprovado(
             eventId,
             Instant.now(),
@@ -166,8 +163,10 @@ public class ProcessarWebhookRenovacao {
     if (tentativa.getNumero() > backoffDias.size()) {
       tentativa.esgotar();
       tentativaRepository.save(tentativa);
-      publicar(
+      gravarOutbox(
+          eventId,
           pagamento,
+          "RenovacaoTentativasEsgotadas",
           new RenovacaoTentativasEsgotadas(
               eventId,
               Instant.now(),
@@ -199,15 +198,15 @@ public class ProcessarWebhookRenovacao {
         .log("Cobranca da renovacao recusada, proxima tentativa agendada");
   }
 
-  private void publicar(PagamentoRenovacao pagamento, Object evento) {
+  private void gravarOutbox(
+      UUID eventId, PagamentoRenovacao pagamento, String eventType, Object evento) {
     String payload = objectMapper.writeValueAsString(evento);
-    try {
-      kafkaTemplate.send(topico, pagamento.getAssinaturaId(), payload).get();
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new PublicacaoIndisponivelException();
-    } catch (ExecutionException | RuntimeException e) {
-      throw new PublicacaoIndisponivelException();
-    }
+    outboxRepository.save(
+        OutboxEvent.criar(
+            eventId,
+            "Renovacao",
+            UUID.fromString(pagamento.getAssinaturaId()),
+            eventType,
+            payload));
   }
 }

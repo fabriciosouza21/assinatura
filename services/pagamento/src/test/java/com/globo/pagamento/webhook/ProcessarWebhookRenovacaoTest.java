@@ -3,13 +3,14 @@ package com.globo.pagamento.webhook;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.globo.pagamento.cobranca.Plano;
 import com.globo.pagamento.messaging.event.StatusPagamento;
+import com.globo.pagamento.outbox.OutboxEvent;
+import com.globo.pagamento.outbox.OutboxRepository;
 import com.globo.pagamento.renovacao.PagamentoRenovacao;
 import com.globo.pagamento.renovacao.StatusTentativa;
 import com.globo.pagamento.renovacao.TentativaCobranca;
@@ -20,8 +21,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,8 +29,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.SendResult;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -43,23 +40,18 @@ import tools.jackson.databind.json.JsonMapper;
 @ExtendWith(MockitoExtension.class)
 class ProcessarWebhookRenovacaoTest {
 
-  private static final String TOPICO = "renovacao-resultado";
   private static final String RENOVACAO_ID = "00000000-0000-0000-0000-000000000031";
   private static final String ASSINATURA_ID = "00000000-0000-0000-0000-000000000011";
   private static final String PAYMENT_ID = "pay-123";
   private static final UUID EVENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000099");
   private static final List<Integer> BACKOFF_DIAS = List.of(1, 3);
 
-  @SuppressWarnings("NullAway")
-  private static final CompletableFuture<SendResult<String, String>> PUBLICADO =
-      CompletableFuture.completedFuture(null);
-
   private final JsonMapper jsonMapper = JsonMapper.builder().findAndAddModules().build();
 
   @Mock private TentativaCobrancaRepository tentativaRepository;
-  @Mock private KafkaTemplate<String, String> kafkaTemplate;
+  @Mock private OutboxRepository outboxRepository;
   @Captor private ArgumentCaptor<TentativaCobranca> tentativaCaptor;
-  @Captor private ArgumentCaptor<String> payloadCaptor;
+  @Captor private ArgumentCaptor<OutboxEvent> outboxCaptor;
 
   private ProcessarWebhookRenovacao command;
 
@@ -67,17 +59,16 @@ class ProcessarWebhookRenovacaoTest {
   void setUp() {
     command =
         new ProcessarWebhookRenovacao(
-            tentativaRepository, jsonMapper, kafkaTemplate, TOPICO, BACKOFF_DIAS);
+            tentativaRepository, jsonMapper, outboxRepository, BACKOFF_DIAS);
   }
 
   @Test
-  @DisplayName("Deve aprovar a tentativa e publicar o resultado aprovado sem criar nova tentativa")
-  void devePublicarResultadoAprovadoQuandoGatewayAprova() {
+  @DisplayName("Deve aprovar a tentativa e gravar o resultado aprovado na outbox")
+  void deveGravarResultadoAprovadoQuandoGatewayAprova() {
     PagamentoRenovacao pagamento = pagamento();
     TentativaCobranca tentativa = tentativaCobrada(pagamento, 1);
     when(tentativaRepository.buscarPorPaymentIdParaAtualizacao(PAYMENT_ID))
         .thenReturn(Optional.of(tentativa));
-    when(kafkaTemplate.send(any(), any(), any())).thenReturn(PUBLICADO);
 
     command.decidir(pagamento, EVENT_ID, PAYMENT_ID, StatusPagamento.APPROVED);
 
@@ -88,16 +79,26 @@ class ProcessarWebhookRenovacaoTest {
     assertThat(tentativaCaptor.getAllValues())
         .as("Aprovacao nao cria nova tentativa")
         .containsExactly(tentativa);
-    verify(kafkaTemplate).send(eq(TOPICO), eq(ASSINATURA_ID), payloadCaptor.capture());
-    assertThat(payloadCaptor.getValue())
-        .as("Evento de aprovacao com renovacao, pagamento e ciclo")
+    OutboxEvent evento = gravarOutbox();
+    assertThat(evento.getEventId())
+        .as("Evento da outbox carrega o eventId do webhook para dedup do consumidor")
+        .isEqualTo(EVENT_ID);
+    assertThat(evento.getAggregateType()).as("Tipo do agregado").isEqualTo("Renovacao");
+    assertThat(evento.getAggregateId())
+        .as("Key do Kafka preservada: assinaturaId")
+        .isEqualTo(UUID.fromString(ASSINATURA_ID));
+    assertThat(evento.getEventType())
+        .as("Evento de aprovacao")
+        .isEqualTo("PagamentoRenovacaoAprovado");
+    assertThat(evento.getPayload())
+        .as("Payload com renovacao, pagamento e ciclo")
         .contains("\"renovacaoId\":\"" + RENOVACAO_ID + "\"")
         .contains("\"paymentId\":\"" + PAYMENT_ID + "\"")
         .contains("\"cicloReferencia\":2");
   }
 
   @Test
-  @DisplayName("Deve recusar a tentativa 1 e agendar a tentativa 2 sem publicar resultado")
+  @DisplayName("Deve recusar a tentativa 1 e agendar a tentativa 2 sem gravar resultado")
   void deveAgendarSegundaTentativaQuandoPrimeiraRecusada() {
     PagamentoRenovacao pagamento = pagamento();
     TentativaCobranca tentativa = tentativaCobrada(pagamento, 1);
@@ -120,7 +121,7 @@ class ProcessarWebhookRenovacaoTest {
     assertThat(proxima.getProximaTentativaEm())
         .as("Retry agendado um dia a frente, conforme o backoff")
         .isBetween(antes.plus(1, ChronoUnit.DAYS), Instant.now().plus(1, ChronoUnit.DAYS));
-    verify(kafkaTemplate, never()).send(any(), any(), any());
+    verify(outboxRepository, never()).save(any());
   }
 
   @Test
@@ -143,13 +144,12 @@ class ProcessarWebhookRenovacaoTest {
   }
 
   @Test
-  @DisplayName("Deve esgotar o ciclo e publicar o terminal na recusa da ultima tentativa")
-  void devePublicarTerminalQuandoUltimaTentativaRecusada() {
+  @DisplayName("Deve esgotar o ciclo e gravar o terminal na outbox na recusa da ultima tentativa")
+  void deveGravarTerminalQuandoUltimaTentativaRecusada() {
     PagamentoRenovacao pagamento = pagamento();
     TentativaCobranca tentativa = tentativaCobrada(pagamento, 3);
     when(tentativaRepository.buscarPorPaymentIdParaAtualizacao(PAYMENT_ID))
         .thenReturn(Optional.of(tentativa));
-    when(kafkaTemplate.send(any(), any(), any())).thenReturn(PUBLICADO);
 
     command.decidir(pagamento, EVENT_ID, PAYMENT_ID, StatusPagamento.REJECTED);
 
@@ -160,8 +160,11 @@ class ProcessarWebhookRenovacaoTest {
     assertThat(tentativaCaptor.getAllValues())
         .as("Esgotamento nao cria nova tentativa")
         .containsExactly(tentativa);
-    verify(kafkaTemplate).send(eq(TOPICO), eq(ASSINATURA_ID), payloadCaptor.capture());
-    assertThat(payloadCaptor.getValue())
+    OutboxEvent evento = gravarOutbox();
+    assertThat(evento.getEventType())
+        .as("Evento terminal")
+        .isEqualTo("RenovacaoTentativasEsgotadas");
+    assertThat(evento.getPayload())
         .as("Evento terminal sem paymentId, conforme o contrato")
         .contains("\"renovacaoId\":\"" + RENOVACAO_ID + "\"")
         .doesNotContain("paymentId");
@@ -181,7 +184,7 @@ class ProcessarWebhookRenovacaoTest {
         .as("Tentativa segue aguardando decisao")
         .isEqualTo(StatusTentativa.PENDENTE);
     verify(tentativaRepository, never()).save(any());
-    verify(kafkaTemplate, never()).send(any(), any(), any());
+    verify(outboxRepository, never()).save(any());
   }
 
   @Test
@@ -196,7 +199,7 @@ class ProcessarWebhookRenovacaoTest {
     command.decidir(pagamento, EVENT_ID, PAYMENT_ID, StatusPagamento.APPROVED);
 
     verify(tentativaRepository, never()).save(any());
-    verify(kafkaTemplate, never()).send(any(), any(), any());
+    verify(outboxRepository, never()).save(any());
   }
 
   @Test
@@ -219,7 +222,7 @@ class ProcessarWebhookRenovacaoTest {
         .as("Decisao cruzada entre renovacoes distintas rejeitada")
         .isInstanceOf(DecisaoRenovacaoIndisponivelException.class);
     verify(tentativaRepository, never()).save(any());
-    verify(kafkaTemplate, never()).send(any(), any(), any());
+    verify(outboxRepository, never()).save(any());
   }
 
   @Test
@@ -229,7 +232,6 @@ class ProcessarWebhookRenovacaoTest {
     TentativaCobranca tentativa = tentativaCobrada(pagamento, 1);
     when(tentativaRepository.buscarPorPaymentIdParaAtualizacao(PAYMENT_ID))
         .thenReturn(Optional.of(tentativa));
-    when(kafkaTemplate.send(any(), any(), any())).thenReturn(PUBLICADO);
 
     command.decidir(pagamento, EVENT_ID, PAYMENT_ID, StatusPagamento.APPROVED);
 
@@ -248,53 +250,7 @@ class ProcessarWebhookRenovacaoTest {
         .as("Absorver a notificacao perderia a decisao: o gateway precisa reenviar")
         .isInstanceOf(DecisaoRenovacaoIndisponivelException.class);
     verify(tentativaRepository, never()).save(any());
-    verify(kafkaTemplate, never()).send(any(), any(), any());
-  }
-
-  @Test
-  @DisplayName("Deve sinalizar publicacao indisponivel quando o Kafka falha")
-  void deveSinalizarPublicacaoIndisponivelQuandoKafkaFalha() {
-    PagamentoRenovacao pagamento = pagamento();
-    TentativaCobranca tentativa = tentativaCobrada(pagamento, 1);
-    when(tentativaRepository.buscarPorPaymentIdParaAtualizacao(PAYMENT_ID))
-        .thenReturn(Optional.of(tentativa));
-    CompletableFuture<SendResult<String, String>> falha = new CompletableFuture<>();
-    falha.completeExceptionally(new ExecutionException(new RuntimeException("kafka fora do ar")));
-    when(kafkaTemplate.send(any(), any(), any())).thenReturn(falha);
-
-    assertThatThrownBy(
-            () -> command.decidir(pagamento, EVENT_ID, PAYMENT_ID, StatusPagamento.APPROVED))
-        .as("Falha de publicacao sinalizada para o gateway reenviar")
-        .isInstanceOf(PublicacaoIndisponivelException.class);
-  }
-
-  @Test
-  @DisplayName("Deve restaurar o flag de interrupcao quando o publish e interrompido")
-  void deveRestaurarFlagDeInterrupcaoQuandoPublishInterrompido() {
-    PagamentoRenovacao pagamento = pagamento();
-    TentativaCobranca tentativa = tentativaCobrada(pagamento, 1);
-    when(tentativaRepository.buscarPorPaymentIdParaAtualizacao(PAYMENT_ID))
-        .thenReturn(Optional.of(tentativa));
-    when(kafkaTemplate.send(any(), any(), any())).thenReturn(new FuturoInterrompido());
-
-    try {
-      assertThatThrownBy(
-              () -> command.decidir(pagamento, EVENT_ID, PAYMENT_ID, StatusPagamento.APPROVED))
-          .as("Publish interrompido sinalizado como publicacao indisponivel")
-          .isInstanceOf(PublicacaoIndisponivelException.class);
-      assertThat(Thread.currentThread().isInterrupted())
-          .as("Flag de interrupcao restaurado para o chamador")
-          .isTrue();
-    } finally {
-      Thread.interrupted();
-    }
-  }
-
-  private static class FuturoInterrompido extends CompletableFuture<SendResult<String, String>> {
-    @Override
-    public SendResult<String, String> get() throws InterruptedException {
-      throw new InterruptedException();
-    }
+    verify(outboxRepository, never()).save(any());
   }
 
   @Test
@@ -303,7 +259,7 @@ class ProcessarWebhookRenovacaoTest {
     assertThatThrownBy(
             () ->
                 new ProcessarWebhookRenovacao(
-                    tentativaRepository, jsonMapper, kafkaTemplate, TOPICO, List.of()))
+                    tentativaRepository, jsonMapper, outboxRepository, List.of()))
         .as("Sem janela de backoff nao ha ciclo de tentativas")
         .isInstanceOf(IllegalArgumentException.class);
   }
@@ -314,7 +270,7 @@ class ProcessarWebhookRenovacaoTest {
     assertThatThrownBy(
             () ->
                 new ProcessarWebhookRenovacao(
-                    tentativaRepository, jsonMapper, kafkaTemplate, TOPICO, null))
+                    tentativaRepository, jsonMapper, outboxRepository, null))
         .as("Janela de backoff nula rejeitada")
         .isInstanceOf(IllegalArgumentException.class);
   }
@@ -325,9 +281,14 @@ class ProcessarWebhookRenovacaoTest {
     assertThatThrownBy(
             () ->
                 new ProcessarWebhookRenovacao(
-                    tentativaRepository, jsonMapper, kafkaTemplate, TOPICO, List.of(-1)))
+                    tentativaRepository, jsonMapper, outboxRepository, List.of(-1)))
         .as("Janela de backoff negativa rejeitada")
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  private OutboxEvent gravarOutbox() {
+    verify(outboxRepository).save(outboxCaptor.capture());
+    return outboxCaptor.getValue();
   }
 
   private PagamentoRenovacao pagamento() {
