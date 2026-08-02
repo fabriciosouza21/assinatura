@@ -167,6 +167,16 @@ public class TentativaCobranca {
   }
 
   /**
+   * Cancela a tentativa antes de uma decisao do gateway.
+   *
+   * @throws IllegalStateException se a tentativa ja tiver sido decidida
+   */
+  public void cancelar() {
+    exigirPendente();
+    this.status = StatusTentativa.CANCELADA;
+  }
+
+  /**
    * Marca a tentativa como a recusa que esgota o ciclo, sem nova tentativa.
    *
    * @throws IllegalStateException se a tentativa ja tiver sido decidida

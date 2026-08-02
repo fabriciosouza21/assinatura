@@ -57,4 +57,17 @@ class TentativaCobrancaTest {
         .as("Agendamento nulo rejeitado")
         .isInstanceOf(IllegalArgumentException.class);
   }
+
+  @Test
+  @DisplayName("Deve cancelar tentativa pendente")
+  void deveCancelarTentativaPendente() {
+    TentativaCobranca tentativa = new TentativaCobranca("renov-uuid", 1);
+
+    tentativa.cancelar();
+
+    assertThat(tentativa.getStatus())
+        .as("Status da tentativa cancelada")
+        .isEqualTo(StatusTentativa.CANCELADA);
+    assertThat(tentativa.estaPendente()).as("Tentativa cancelada nao permanece pendente").isFalse();
+  }
 }
