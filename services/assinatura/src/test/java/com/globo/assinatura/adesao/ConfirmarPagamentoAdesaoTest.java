@@ -180,6 +180,35 @@ class ConfirmarPagamentoAdesaoTest {
   }
 
   @Test
+  @DisplayName("Deve agendar a proxima renovacao no instante do processamento mais o ciclo")
+  void deveAgendarProximaRenovacaoNoInstanteDoProcessamentoMaisCiclo() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    Instant instanteFixo = Instant.parse("2026-01-15T10:00:00Z");
+    relogio = Clock.fixed(instanteFixo, ZoneOffset.UTC);
+    command =
+        new ConfirmarPagamentoAdesao(
+            assinaturaRepository, pagamentoEventoProcessadoRepository, relogio, 60_000L);
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            UUID.randomUUID(),
+            instanteFixo,
+            UUID.fromString(assinatura.getUuid()),
+            StatusPagamento.APPROVED,
+            UUID.randomUUID());
+
+    command.executar(evento);
+
+    assertThat(assinatura.getProximaRenovacaoEm())
+        .as("proxima renovacao deve ser o instante do processamento mais o ciclo sub-diario")
+        .isEqualTo(instanteFixo.plusMillis(60_000L));
+    assertThat(assinatura.getProximaRenovacaoEm())
+        .as("renovacao com ciclo sub-diario nao vence imediatamente apos a ativacao")
+        .isAfter(instanteFixo);
+  }
+
+  @Test
   @DisplayName("Deve transitar para pagamento recusado quando o pagamento e rejeitado")
   void deveTransitarParaPagamentoRecusadoQuandoRejeitado() {
     Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);

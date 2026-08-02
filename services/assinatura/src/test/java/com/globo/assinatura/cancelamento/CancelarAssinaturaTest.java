@@ -169,6 +169,9 @@ class CancelarAssinaturaTest {
         .as("Status apos o cancelamento imediato")
         .isEqualTo(StatusAssinatura.CANCELADA);
     assertThat(resposta.acessoAte()).as("Sem acesso a preservar no cancelamento imediato").isNull();
+    assertThat(assinatura.getProximaRenovacaoEm())
+        .as("Instante da proxima renovacao limpo no cancelamento imediato")
+        .isNull();
 
     ArgumentCaptor<OutboxEvent> capturado = ArgumentCaptor.forClass(OutboxEvent.class);
     verify(outboxRepository).save(capturado.capture());

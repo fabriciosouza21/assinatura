@@ -99,8 +99,7 @@ public class ConfirmarPagamentoAdesao {
       assinatura.recusarPagamento();
     } else {
       LocalDate dataExpiracao = hoje.plusDays(Duration.ofMillis(cicloMs).toDays());
-      assinatura.ativar(
-          hoje, dataExpiracao, dataExpiracao.atStartOfDay(clock.getZone()).toInstant());
+      assinatura.ativar(hoje, dataExpiracao, Instant.now(clock).plusMillis(cicloMs));
     }
     try {
       pagamentoEventoProcessadoRepository.save(
