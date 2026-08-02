@@ -2,7 +2,13 @@ package com.globo.assinatura.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.FilterChain;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Date;
+import javax.crypto.SecretKey;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -80,6 +86,34 @@ class JwtAuthenticationFilterTest {
   void deveSeguirSemAutenticarComTokenInvalido() throws Exception {
     assertThat(autenticarCom("Bearer nao-e-um-jwt"))
         .as("Token invalido nao deve autenticar")
+        .isNull();
+  }
+
+  @Test
+  @DisplayName("Deve seguir a cadeia sem autenticar quando o token esta expirado")
+  void deveSeguirSemAutenticarComTokenExpirado() throws Exception {
+    String token =
+        new JwtService(SECRET, -1000L)
+            .generateToken("cliente@example.com", "ROLE_CLIENT", USUARIO_UUID);
+
+    assertThat(autenticarCom("Bearer " + token)).as("Token expirado nao deve autenticar").isNull();
+  }
+
+  @Test
+  @DisplayName("Deve seguir a cadeia sem autenticar quando o token nao carrega claim role")
+  void deveSeguirSemAutenticarComTokenSemClaimRole() throws Exception {
+    SecretKey chave = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
+    Instant agora = Instant.now();
+    String token =
+        Jwts.builder()
+            .subject("cliente@example.com")
+            .issuedAt(Date.from(agora))
+            .expiration(Date.from(agora.plusSeconds(3600)))
+            .signWith(chave)
+            .compact();
+
+    assertThat(autenticarCom("Bearer " + token))
+        .as("Token sem claim role nao deve autenticar")
         .isNull();
   }
 }
