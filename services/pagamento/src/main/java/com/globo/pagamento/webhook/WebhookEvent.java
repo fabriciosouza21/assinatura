@@ -12,11 +12,14 @@ import java.util.UUID;
 record WebhookEvent(UUID id, String type, WebhookData data) {
 
   /**
-   * Extrai o identificador da assinatura alvo da notificacao.
+   * Extrai a referencia externa correlacionada a cobranca.
    *
-   * @return uuid da assinatura (= {@code externalReference})
+   * <p>E o {@code renovacaoId} quando a cobranca pertence a uma renovacao e o {@code assinaturaId}
+   * quando pertence a uma adesao: e por ele que o webhook decide qual fluxo seguir.
+   *
+   * @return uuid da referencia externa
    */
-  UUID assinaturaId() {
+  UUID externalReference() {
     return data.externalReference();
   }
 
