@@ -39,10 +39,7 @@ import org.springframework.test.web.servlet.MockMvc;
     excludeFilters =
         @ComponentScan.Filter(
             type = FilterType.REGEX,
-            pattern = {
-              "com\\.globo\\.assinatura\\.security\\..*",
-              "com\\.globo\\.assinatura\\.assinatura\\.AssinaturaExceptionHandler"
-            }))
+            pattern = {"com\\.globo\\.assinatura\\.security\\..*"}))
 @Import(ProblemExceptionHandler.class)
 class CancelamentoControllerTest {
 
