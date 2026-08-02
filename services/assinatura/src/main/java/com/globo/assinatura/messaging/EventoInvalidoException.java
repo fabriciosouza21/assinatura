@@ -1,7 +1,8 @@
 package com.globo.assinatura.messaging;
 
 /**
- * Sinaliza que um evento {@code PagamentoStatusAtualizado} possui campos obrigatorios ausentes.
+ * Sinaliza que um evento consumido possui payload mal formado, tipo desconhecido ou campos
+ * obrigatorios ausentes.
  *
  * <p>Tratada como nao retentavel pelo {@code DefaultErrorHandler}: vai direto para a DLQ, sem retry
  * e sem processamento de dominio, pois payload invalido sempre sera invalido.

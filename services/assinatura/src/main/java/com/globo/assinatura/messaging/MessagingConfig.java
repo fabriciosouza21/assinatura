@@ -21,8 +21,9 @@ import tools.jackson.core.JacksonException;
  * Configuracao de mensageria do Assinatura Service.
  *
  * <p>Agrupa tres responsabilidades: a publicacao da outbox (topicos declarados pelas rotas {@code
- * eventType -> topico} e politica de retry do publisher), a escuta do topico de status de pagamento
- * (seus topicos e DLQ) e a fabrica de containers do consumer com tratamento de erros.
+ * eventType -> topico} e politica de retry do publisher), a escuta dos topicos de status de
+ * pagamento e de resultado de renovacao (seus topicos e DLQs) e a fabrica de containers do consumer
+ * com tratamento de erros.
  */
 @Configuration
 @EnableScheduling
@@ -52,6 +53,28 @@ public class MessagingConfig {
   }
 
   /**
+   * Declara o topico de eventos {@code AssinaturaRenovada}.
+   *
+   * @param rotas rotas de eventos da outbox para topicos Kafka
+   * @return topico Kafka a ser criado pelo KafkaAdmin
+   */
+  @Bean
+  public NewTopic topicoAssinaturaRenovada(RotasEventoTopicoProperties rotas) {
+    return new NewTopic(rotas.rotasEventoTopico().get("AssinaturaRenovada"), 1, (short) 1);
+  }
+
+  /**
+   * Declara o topico de eventos {@code AssinaturaSuspensa}.
+   *
+   * @param rotas rotas de eventos da outbox para topicos Kafka
+   * @return topico Kafka a ser criado pelo KafkaAdmin
+   */
+  @Bean
+  public NewTopic topicoAssinaturaSuspensa(RotasEventoTopicoProperties rotas) {
+    return new NewTopic(rotas.rotasEventoTopico().get("AssinaturaSuspensa"), 1, (short) 1);
+  }
+
+  /**
    * Cria o topico de status de pagamento atualizado.
    *
    * @param nome nome do topico definido em {@code app.kafka.topico-pagamento-status-atualizado}
@@ -72,6 +95,30 @@ public class MessagingConfig {
   @Bean
   public NewTopic topicoPagamentoStatusAtualizadoDlq(
       @Value("${app.kafka.topico-pagamento-status-atualizado-dlq}") String nome) {
+    return new NewTopic(nome, 1, (short) 1);
+  }
+
+  /**
+   * Cria o topico de resultado de renovacao consumido pelo Assinatura Service.
+   *
+   * @param nome nome do topico definido em {@code app.kafka.topico-renovacao-resultado}
+   * @return topico com 1 particao e fator de replicacao 1
+   */
+  @Bean
+  public NewTopic topicoRenovacaoResultado(
+      @Value("${app.kafka.topico-renovacao-resultado}") String nome) {
+    return new NewTopic(nome, 1, (short) 1);
+  }
+
+  /**
+   * Cria o topico DLQ de resultado de renovacao.
+   *
+   * @param nome nome do topico definido em {@code app.kafka.topico-renovacao-resultado-dlq}
+   * @return topico com 1 particao e fator de replicacao 1
+   */
+  @Bean
+  public NewTopic topicoRenovacaoResultadoDlq(
+      @Value("${app.kafka.topico-renovacao-resultado-dlq}") String nome) {
     return new NewTopic(nome, 1, (short) 1);
   }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Teste de integracao INT-1: valida que servicos conversam pela network do
+# Teste de integracao: valida que servicos conversam pela network do
 # compose por nome de host. Um container efemero resolve "mock-pagamento" e
 # chama POST /v1/payments, esperando 201 com status PENDING.
 #
@@ -41,7 +41,7 @@ echo "HTTP: ${status}"
 echo "Body: ${payload}"
 
 if [ "${status}" = "201" ] && echo "${payload}" | grep -q '"status":"PENDING"'; then
-  echo "PASS: integracao INT-1 OK (mock-pagamento alcancavel por nome de host, resposta 201 PENDING)"
+  echo "PASS: integracao OK (mock-pagamento alcancavel por nome de host, resposta 201 PENDING)"
   exit 0
 fi
 

@@ -18,6 +18,7 @@ class RenovacaoSolicitada <<event>> {
 }
 
 class PagamentoRenovacaoAprovado <<event>> {
+  + tipo : "APROVADO"
   + eventId : UUID
   + ocorridoEm : Instant
   + renovacaoId : UUID
@@ -27,6 +28,7 @@ class PagamentoRenovacaoAprovado <<event>> {
 }
 
 class RenovacaoTentativasEsgotadas <<event>> {
+  + tipo : "ESGOTADO"
   + eventId : UUID
   + ocorridoEm : Instant
   + renovacaoId : UUID
@@ -102,6 +104,16 @@ note bottom of RenovacaoSolicitada
   renovacao-solicitada (Assinatura) e renovacao-resultado
   + renovacao-resultado-dlq (Pagamento). Os -dlq de consumer
   seguem o padrão do 0.2.0.
+
+  **Discriminador tipo:** o tópico renovacao-resultado carrega
+  os dois eventos no mesmo envelope JSON, discriminados pelo
+  campo "tipo" (APROVADO/ESGOTADO) no mesmo nível dos demais
+  campos. O consumidor lê o tipo para escolher o record de
+  destino; o campo extra é ignorado na desserialização.
+
+  **Saída do Assinatura:** ao consumir o resultado, o Assinatura
+  Service publica assinatura-renovada (APROVADO) e
+  assinatura-suspensa (ESGOTADO) via outbox.
 end note
 
 @enduml

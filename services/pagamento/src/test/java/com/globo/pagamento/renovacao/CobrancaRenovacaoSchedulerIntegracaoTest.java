@@ -31,6 +31,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * admin sao desligados ({@code auto-startup=false}) para nao depender de broker. Usa o Postgres do
  * docker-compose (porta 5433, banco {@code pagamento}).
  *
+ * <p>O delay inicial do scheduler e empurrado para uma hora porque {@code fixedDelay} dispara uma
+ * vez na subida do contexto: sem isso a execucao agendada corre com a do teste e vence o {@code FOR
+ * UPDATE SKIP LOCKED}, deixando o lote do teste vazio.
+ *
  * <p>Este e um teste de regressao do caminho feliz. Ele nao exercita a concorrencia multi-instancia
  * (que depende da atomicidade do lock entre o {@code SELECT ... FOR UPDATE} e o {@code save}); essa
  * atomicidade e garantida pelo {@code @Transactional} no {@code cobrar()}, justificado por design e
@@ -46,6 +50,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
       "spring.kafka.listener.auto-startup=false",
       "spring.kafka.admin.auto-startup=false",
       "app.renovacao.scheduler-intervalo-ms=3600000",
+      "app.renovacao.scheduler-delay-inicial-ms=3600000",
     })
 class CobrancaRenovacaoSchedulerIntegracaoTest {
 

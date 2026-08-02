@@ -2,16 +2,19 @@ openapi: 3.0.3
 info:
   title: Auth API (cadastro + login de cliente)
   description: |
-    Cadastro de cliente com credencial e login por JWT (FF-1 / Track C).
+    Cadastro de cliente com credencial e login por JWT.
 
-    O `POST /usuarios` passa a exigir `senha` e cria, alem do `Usuario` de
-    dominio, um `User` de auth (`username = email`, `role = ROLE_CLIENT`) na
-    mesma transacao. O `POST /auth/login` passa a atender clientes.
+    O `POST /usuarios` exige `senha` e cria, alem do `Usuario` de dominio, um
+    `User` de auth (`username = email`, `role = ROLE_CLIENT`) na mesma
+    transacao. O `POST /auth/login` atende clientes e administrador.
 
-    Escopo do FF-1: habilitar login de cliente. Exigir auth nos endpoints de
-    assinatura e follow-up (a divida do ADR 0001 persiste ate la). Ver
-    `docs/prd/2026-07-30-login-cliente.md`.
-  version: 0.2.0
+    O token emitido carrega a claim `usuarioId` com o uuid publico do `Usuario`
+    ligado a credencial. E essa claim que identifica o dono nas rotas de
+    assinatura, que exigem JWT desde o ADR 0003.
+
+    Referencias: `docs/prd/2026-07-30-login-cliente.md`,
+    `docs/adr/0003-endpoints-assinatura-exigem-jwt-do-dono.md`.
+  version: 0.3.0
 servers:
   - url: http://localhost:18080
     description: Local (docker-compose)
@@ -69,7 +72,10 @@ paths:
       description: |
         Valida credenciais contra a tabela `users` e devolve um JWT. Para
         clientes, `username` e o email de cadastro e o token traz
-        `role=ROLE_CLIENT`. O `admin` continua logando com `username="admin"`.
+        `role=ROLE_CLIENT` e `usuarioId` com o uuid publico do usuario de
+        dominio. O `admin` continua logando com `username="admin"`; por nao ter
+        usuario de dominio ligado, seu token nao traz a claim `usuarioId` e ele
+        nao pode solicitar assinatura.
       operationId: login
       requestBody:
         required: true
@@ -157,7 +163,9 @@ components:
       properties:
         token:
           type: string
-          description: Token JWT compactado (HS256). Subject = username; claim `role`.
+          description: |
+            Token JWT compactado (HS256). Subject = username; claims `role` e,
+            para clientes, `usuarioId` (uuid publico do usuario de dominio).
         tokenType:
           type: string
           description: Tipo do token. Sempre "Bearer".

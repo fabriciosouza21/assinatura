@@ -6,6 +6,9 @@ info:
 http:
   method: GET
   url: "{{assinaturaUrl}}/assinaturas/{{assinaturaId}}"
+  headers:
+    - name: Authorization
+      value: "Bearer {{token}}"
 
 runtime:
   scripts:

@@ -5,7 +5,7 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
 
-  # Metricas via OTLP estao fora do escopo desta track (PRD: apenas traces).
+  # Desabilita o exportador de metricas OTLP para evitar tentativas de conexao locais; o servico exporta apenas traces.
   # Sem isso, o OtlpMeterRegistry tenta publicar em localhost:4318 dentro do container
   # e gera WARNs de conexao recusada a cada minuto.
   autoconfigure:
@@ -62,8 +62,12 @@ app:
     rotas-evento-topico:
       AssinaturaSolicitada: ${APP_KAFKA_ROTAS_ASSINATURA_SOLICITADA:assinatura-solicitada}
       RenovacaoSolicitada: ${APP_KAFKA_ROTAS_RENOVACAO_SOLICITADA:renovacao-solicitada}
+      AssinaturaRenovada: ${APP_KAFKA_ROTAS_ASSINATURA_RENOVADA:assinatura-renovada}
+      AssinaturaSuspensa: ${APP_KAFKA_ROTAS_ASSINATURA_SUSPENSA:assinatura-suspensa}
     topico-pagamento-status-atualizado: ${APP_KAFKA_TOPICO_PAGAMENTO_STATUS_ATUALIZADO:pagamento-status-atualizado}
     topico-pagamento-status-atualizado-dlq: ${APP_KAFKA_TOPICO_PAGAMENTO_STATUS_ATUALIZADO_DLQ:pagamento-status-atualizado-dlq}
+    topico-renovacao-resultado: ${APP_KAFKA_TOPICO_RENOVACAO_RESULTADO:renovacao-resultado}
+    topico-renovacao-resultado-dlq: ${APP_KAFKA_TOPICO_RENOVACAO_RESULTADO_DLQ:renovacao-resultado-dlq}
   outbox:
     intervalo-ms: ${APP_OUTBOX_INTERVALO_MS:5000}
     tamanho-lote: ${APP_OUTBOX_TAMANHO_LOTE:100}

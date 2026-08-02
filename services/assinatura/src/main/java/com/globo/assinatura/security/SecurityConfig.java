@@ -3,6 +3,7 @@ package com.globo.assinatura.security;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -11,6 +12,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
@@ -34,9 +36,10 @@ public class SecurityConfig {
   /**
    * Constrói a cadeia de filtros de segurança.
    *
-   * <p>Libera {@code POST /usuarios} (auto-cadastro publico), {@code POST /assinaturas} e {@code
-   * GET /assinaturas/**} (solicitacao e consulta publicas ate o login de cliente), {@code
-   * /auth/login} e {@code /actuator/health}; todas as demais rotas exigem autenticacao.
+   * <p>Libera apenas {@code POST /usuarios} (auto-cadastro publico), {@code /auth/login} e {@code
+   * /actuator/health}; todas as demais rotas exigem autenticacao, inclusive as de assinatura. Sem
+   * token, ou com token invalido, a resposta e {@code 401}; o {@code 403} fica reservado a quem
+   * esta autenticado mas nao e dono do recurso.
    *
    * @param http o builder de segurança do Spring
    * @return a cadeia de filtros configurada
@@ -47,19 +50,23 @@ public class SecurityConfig {
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             auth ->
-                auth.requestMatchers(HttpMethod.POST, "/usuarios", "/assinaturas")
-                    .permitAll()
-                    .requestMatchers(HttpMethod.GET, "/assinaturas/**")
+                auth.requestMatchers(HttpMethod.POST, "/usuarios")
                     .permitAll()
                     .requestMatchers("/auth/login", "/actuator/health")
                     .permitAll()
                     .anyRequest()
                     .authenticated())
+        .exceptionHandling(
+            ex -> ex.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
         .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
     return http.build();
   }
 
-  /** Retorna o codificador de senhas baseado em BCrypt. */
+  /**
+   * Retorna o codificador de senhas baseado em BCrypt.
+   *
+   * @return codificador de senhas
+   */
   @Bean
   public PasswordEncoder passwordEncoder() {
     return new BCryptPasswordEncoder();

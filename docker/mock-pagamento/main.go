@@ -263,6 +263,8 @@ func (s *store) updateStatus(webhookSecret string) http.HandlerFunc {
 // dispatchWebhook envia o evento de pagamento atualizado para a notificationUrl.
 // Headers: X-Mock-Event-Id e X-Mock-Signature (HMAC SHA256 do corpo).
 //
+// Um destino indisponivel (503) faz o webhook reenviar a notificacao com o MESMO event id, como
+// faria um gateway real: a deduplicacao do destino so funciona se o reenvio repetir a chave.
 // Recebe o contexto da requisicao de origem para que o trace propagado pelo otelhttp chegue ao
 // envio do webhook, evitando que ele apareca como um trace orfao no backend.
 func dispatchWebhook(ctx context.Context, notificationURL, secret, paymentID, externalReference string) {
@@ -292,14 +294,25 @@ func dispatchWebhook(ctx context.Context, notificationURL, secret, paymentID, ex
 		Timeout:   5 * time.Second,
 		Transport: otelhttp.NewTransport(http.DefaultTransport),
 	}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("webhook: falha ao enviar para %s: %v", notificationURL, err)
-		return
+	const maxTentativas = 3
+	for tentativa := 1; ; tentativa++ {
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("webhook: falha ao enviar para %s: %v", notificationURL, err)
+			return
+		}
+		io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+		resp.Body.Close()
+		log.Printf("webhook enviado para %s: evento=%s status=%d", notificationURL, event.ID, resp.StatusCode)
+		if resp.StatusCode != http.StatusServiceUnavailable || tentativa == maxTentativas {
+			return
+		}
+		select {
+		case <-time.After(time.Duration(tentativa) * time.Second):
+		case <-ctx.Done():
+			return
+		}
 	}
-	defer resp.Body.Close()
-	io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
-	log.Printf("webhook enviado para %s: evento=%s status=%d", notificationURL, event.ID, resp.StatusCode)
 }
 
 func decodeJSON(r *http.Request, dst any) error {
