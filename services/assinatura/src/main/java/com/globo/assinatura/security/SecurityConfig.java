@@ -62,7 +62,11 @@ public class SecurityConfig {
     return http.build();
   }
 
-  /** Retorna o codificador de senhas baseado em BCrypt. */
+  /**
+   * Retorna o codificador de senhas baseado em BCrypt.
+   *
+   * @return codificador de senhas
+   */
   @Bean
   public PasswordEncoder passwordEncoder() {
     return new BCryptPasswordEncoder();

@@ -57,37 +57,65 @@ public class User {
     this.usuarioId = usuarioId;
   }
 
-  /** Retorna o identificador do usuário. */
+  /**
+   * Retorna o identificador do usuário.
+   *
+   * @return identificador técnico do usuário
+   */
   public Long getId() {
     return id;
   }
 
-  /** Retorna o nome de login do usuário. */
+  /**
+   * Retorna o nome de login do usuário.
+   *
+   * @return nome de login
+   */
   public String getUsername() {
     return username;
   }
 
-  /** Retorna a senha hasheada do usuário. */
+  /**
+   * Retorna a senha hasheada do usuário.
+   *
+   * @return senha hasheada
+   */
   public String getPassword() {
     return password;
   }
 
-  /** Retorna o papel do usuário, como {@code "ROLE_USER"}. */
+  /**
+   * Retorna o papel do usuário.
+   *
+   * @return papel do usuário, como {@code "ROLE_USER"}
+   */
   public String getRole() {
     return role;
   }
 
-  /** Retorna o id do {@code Usuario} de domínio ligado, ou {@code null} para o admin. */
+  /**
+   * Retorna o id do {@code Usuario} de domínio ligado.
+   *
+   * @return id do usuário de domínio, ou {@code null} para o admin
+   */
   public Long getUsuarioId() {
     return usuarioId;
   }
 
-  /** Retorna o instante de criação do registro. */
+  /**
+   * Retorna o instante de criação do registro.
+   *
+   * @return instante de criação
+   */
   public Instant getCreatedAt() {
     return createdAt;
   }
 
-  /** Retorna o instante da última atualização do registro. */
+  /**
+   * Retorna o instante da última atualização do registro.
+   *
+   * @return instante da última atualização
+   */
   public Instant getUpdatedAt() {
     return updatedAt;
   }

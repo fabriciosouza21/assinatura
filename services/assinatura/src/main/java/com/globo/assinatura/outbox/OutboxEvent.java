@@ -123,46 +123,101 @@ public class OutboxEvent {
     this.falhouEm = falhouEm;
   }
 
+  /**
+   * Retorna o identificador unico do evento.
+   *
+   * @return identificador do evento
+   */
   public UUID getEventId() {
     return eventId;
   }
 
+  /**
+   * Retorna o tipo do agregado relacionado ao evento.
+   *
+   * @return tipo do agregado
+   */
   public String getAggregateType() {
     return aggregateType;
   }
 
+  /**
+   * Retorna o identificador do agregado relacionado ao evento.
+   *
+   * @return identificador do agregado
+   */
   public UUID getAggregateId() {
     return aggregateId;
   }
 
+  /**
+   * Retorna o tipo do evento.
+   *
+   * @return tipo do evento
+   */
   public String getEventType() {
     return eventType;
   }
 
+  /**
+   * Retorna o payload serializado do evento.
+   *
+   * @return payload do evento
+   */
   public String getPayload() {
     return payload;
   }
 
+  /**
+   * Retorna o status atual do evento na outbox.
+   *
+   * @return status do evento
+   */
   public OutboxStatus getStatus() {
     return status;
   }
 
+  /**
+   * Retorna o instante previsto para a proxima tentativa de publicacao.
+   *
+   * @return instante da proxima tentativa
+   */
   public Instant getProximaTentativaEm() {
     return proximaTentativaEm;
   }
 
+  /**
+   * Retorna o instante de criacao do evento.
+   *
+   * @return instante de criacao
+   */
   public Instant getCriadoEm() {
     return criadoEm;
   }
 
+  /**
+   * Retorna o instante em que o evento foi publicado.
+   *
+   * @return instante de publicacao, ou {@code null} enquanto nao publicado
+   */
   public Instant getPublicadoEm() {
     return publicadoEm;
   }
 
+  /**
+   * Retorna o instante em que a publicacao falhou definitivamente.
+   *
+   * @return instante da falha definitiva, ou {@code null} enquanto nao esgotada
+   */
   public Instant getFalhouEm() {
     return falhouEm;
   }
 
+  /**
+   * Retorna a mensagem do ultimo erro de publicacao.
+   *
+   * @return mensagem do ultimo erro, ou {@code null} enquanto nao houver falha
+   */
   public String getUltimoErro() {
     return ultimoErro;
   }

@@ -27,9 +27,9 @@ import org.springframework.test.web.servlet.MockMvc;
  * {@code com.globo.assinatura.security}) seja carregado no slice. Porem, a autoconfiguracao padrao
  * de seguranca servlet do Spring Boot ({@link ServletWebSecurityAutoConfiguration}) ainda instala
  * uma cadeia de filtros default com protecao CSRF, que rejeita o POST com 403. Excluir apenas essa
- * autoconfiguracao remove a cadeia default e deixa a requisicao chegar ao controller. A prova de
- * que {@code /usuarios} e acessivel anonimamente num contexto completo e feita num ciclo posterior
- * com {@code @SpringBootTest}.
+ * autoconfiguracao remove a cadeia default e deixa a requisicao chegar ao controller. A
+ * acessibilidade anonima de {@code /usuarios} no contexto completo e validada por {@link
+ * CadastraUsuarioAnonimoTest}.
  */
 @WebMvcTest(
     controllers = UsuarioController.class,
