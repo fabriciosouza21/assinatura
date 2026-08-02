@@ -245,4 +245,19 @@ class AssinaturaTest {
         .as("Status transita para cancelada imediatamente")
         .isEqualTo(StatusAssinatura.CANCELADA);
   }
+
+  @Test
+  @DisplayName("Deve cancelar imediatamente ao solicitar em assinatura aguardando pagamento")
+  void deveCancelarImediatamenteAoSolicitarCancelamentoEmAssinaturaAguardandoPagamento() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+
+    EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
+
+    assertThat(efeito)
+        .as("Efeito do cancelamento em assinatura aguardando pagamento")
+        .isEqualTo(EfeitoCancelamento.IMEDIATO);
+    assertThat(assinatura.getStatus())
+        .as("Status transita para cancelada imediatamente")
+        .isEqualTo(StatusAssinatura.CANCELADA);
+  }
 }
