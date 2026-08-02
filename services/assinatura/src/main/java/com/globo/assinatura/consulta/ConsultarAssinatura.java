@@ -64,7 +64,11 @@ public class ConsultarAssinatura {
         assinatura.getPlano(),
         assinatura.getDataInicio(),
         assinatura.getDataExpiracao(),
-        assinatura.getStatus());
+        assinatura.getStatus(),
+        assinatura.getInicioCiclo(),
+        assinatura.getFimCiclo(),
+        assinatura.getProximaRenovacaoEm(),
+        assinatura.isRenovacaoAutomatica());
   }
 
   private boolean podeConsultar(Usuario dono, UsuarioAutenticado principal) {

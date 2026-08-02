@@ -60,7 +60,11 @@ class ConsultaAssinaturaControllerTest {
                 Plano.PREMIUM,
                 null,
                 null,
-                StatusAssinatura.AGUARDANDO_PAGAMENTO));
+                StatusAssinatura.AGUARDANDO_PAGAMENTO,
+                null,
+                null,
+                null,
+                false));
 
     mockMvc
         .perform(get("/assinaturas/assinatura-uuid").with(authentication(cliente())))

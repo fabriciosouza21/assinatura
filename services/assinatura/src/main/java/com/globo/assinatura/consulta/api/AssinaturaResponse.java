@@ -13,6 +13,11 @@ import java.time.LocalDate;
  * @param dataInicio data de inicio da vigencia, ou {@code null} enquanto aguarda pagamento
  * @param dataExpiracao data de expiracao da vigencia, ou {@code null} enquanto aguarda pagamento
  * @param status status do ciclo de vida da assinatura
+ * @param inicioCiclo inicio do ciclo de renovacao corrente, ou {@code null} antes da primeira
+ *     ativacao
+ * @param fimCiclo fim do ciclo de renovacao corrente, ou {@code null} antes da primeira ativacao
+ * @param proximaRenovacaoEm data da proxima renovacao, ou {@code null} antes da primeira ativacao
+ * @param renovacaoAutomatica indica se a renovacao automatica esta habilitada
  */
 public record AssinaturaResponse(
     String id,
@@ -20,4 +25,8 @@ public record AssinaturaResponse(
     Plano plano,
     LocalDate dataInicio,
     LocalDate dataExpiracao,
-    StatusAssinatura status) {}
+    StatusAssinatura status,
+    LocalDate inicioCiclo,
+    LocalDate fimCiclo,
+    LocalDate proximaRenovacaoEm,
+    boolean renovacaoAutomatica) {}
