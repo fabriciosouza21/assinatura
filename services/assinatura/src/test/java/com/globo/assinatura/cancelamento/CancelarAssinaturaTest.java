@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.globo.assinatura.assinatura.Assinatura;
 import com.globo.assinatura.assinatura.AssinaturaRepository;
 import com.globo.assinatura.assinatura.Plano;
@@ -27,6 +31,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(MockitoExtension.class)
@@ -122,6 +127,77 @@ class CancelarAssinaturaTest {
     AssinaturaCancelada evento =
         jsonMapper.readValue(outboxEvent.getPayload(), AssinaturaCancelada.class);
     assertThat(evento.fimCiclo()).as("Sem fim de ciclo no evento").isNull();
+  }
+
+  @Test
+  @DisplayName("Deve registrar log do cancelamento agendado")
+  void deveRegistrarLogDoCancelamentoAgendado() {
+    Assinatura assinatura = new Assinatura(42L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    Usuario dono = new Usuario("Fulano", "fulano@example.com");
+    dono.setId(42L);
+    dono.setUuid("11111111-1111-1111-1111-111111111111");
+    UsuarioAutenticado principal =
+        new UsuarioAutenticado("fulano@example.com", dono.getUuid(), "ROLE_USUARIO");
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.of(dono));
+    Logger logger = (Logger) LoggerFactory.getLogger(CancelarAssinatura.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      command.executar(assinatura.getUuid(), principal);
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .as("log do cancelamento agendado")
+        .anyMatch(
+            evento ->
+                evento.getLevel() == Level.INFO
+                    && evento.getKeyValuePairs().stream()
+                        .anyMatch(
+                            par ->
+                                "event".equals(par.key)
+                                    && "cancelamento_agendado".equals(par.value)));
+  }
+
+  @Test
+  @DisplayName("Deve registrar log do cancelamento idempotente")
+  void deveRegistrarLogDoCancelamentoIdempotente() {
+    Assinatura assinatura = new Assinatura(42L, Plano.BASICO);
+    assinatura.solicitarCancelamento();
+    Usuario dono = new Usuario("Fulano", "fulano@example.com");
+    dono.setId(42L);
+    dono.setUuid("11111111-1111-1111-1111-111111111111");
+    UsuarioAutenticado principal =
+        new UsuarioAutenticado("fulano@example.com", dono.getUuid(), "ROLE_USUARIO");
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.of(dono));
+    Logger logger = (Logger) LoggerFactory.getLogger(CancelarAssinatura.class);
+    logger.setLevel(Level.DEBUG);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      command.executar(assinatura.getUuid(), principal);
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .as("log do cancelamento idempotente")
+        .anyMatch(
+            evento ->
+                evento.getLevel() == Level.DEBUG
+                    && evento.getKeyValuePairs().stream()
+                        .anyMatch(
+                            par ->
+                                "event".equals(par.key)
+                                    && "cancelamento_idempotente".equals(par.value)));
   }
 
   @Test

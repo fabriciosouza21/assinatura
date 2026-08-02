@@ -7,6 +7,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.globo.pagamento.cancelamento.CancelarTentativasPendentes;
 import com.globo.pagamento.cancelamento.idempotencia.CancelamentoEventoProcessadoRepository;
 import com.globo.pagamento.messaging.EventoInvalidoException;
@@ -24,6 +28,7 @@ import org.mockito.Captor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Teste unitario do {@link CancelamentoConsumer}. */
@@ -110,6 +115,83 @@ class CancelamentoConsumerTest {
 
     verifyNoInteractions(cancelarTentativasPendentes);
     verificarEventoProcessado(eventId, assinaturaId);
+  }
+
+  @Test
+  @DisplayName("Deve registrar log de deduplicacao ao receber evento duplicado")
+  void deveRegistrarLogDeDeduplicacao() {
+    UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    UUID assinaturaId = UUID.fromString("00000000-0000-0000-0000-000000000012");
+    String payload =
+        """
+        {
+          "eventId": "00000000-0000-0000-0000-000000000002",
+          "ocorridoEm": "2026-08-02T13:00:00Z",
+          "assinaturaId": "00000000-0000-0000-0000-000000000012",
+          "status": "CANCELADA",
+          "fimCiclo": null
+        }
+        """;
+    when(eventoProcessadoRepository.registrarSeNovo(eventId, assinaturaId)).thenReturn(0);
+    Logger logger = (Logger) LoggerFactory.getLogger(CancelamentoConsumer.class);
+    logger.setLevel(Level.DEBUG);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      consumer.consumirAssinaturaCancelada(payload);
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .as("log de deduplicacao do cancelamento")
+        .anyMatch(
+            evento ->
+                evento.getLevel() == Level.DEBUG
+                    && evento.getKeyValuePairs().stream()
+                        .anyMatch(
+                            par ->
+                                "event".equals(par.key)
+                                    && "cancelamento_evento_deduplicado".equals(par.value)));
+  }
+
+  @Test
+  @DisplayName("Deve registrar log de cancelamento ao delegar tentativas pendentes")
+  void deveRegistrarLogDeCancelamento() {
+    UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    UUID assinaturaId = UUID.fromString("00000000-0000-0000-0000-000000000012");
+    String payload =
+        """
+        {
+          "eventId": "00000000-0000-0000-0000-000000000002",
+          "ocorridoEm": "2026-08-02T13:00:00Z",
+          "assinaturaId": "00000000-0000-0000-0000-000000000012",
+          "status": "CANCELADA",
+          "fimCiclo": null
+        }
+        """;
+    when(eventoProcessadoRepository.registrarSeNovo(eventId, assinaturaId)).thenReturn(1);
+    Logger logger = (Logger) LoggerFactory.getLogger(CancelamentoConsumer.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      consumer.consumirAssinaturaCancelada(payload);
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .as("log de cancelamento das tentativas")
+        .anyMatch(
+            evento ->
+                evento.getLevel() == Level.INFO
+                    && evento.getKeyValuePairs().stream()
+                        .anyMatch(
+                            par ->
+                                "event".equals(par.key)
+                                    && "tentativas_canceladas".equals(par.value)));
   }
 
   @ParameterizedTest(name = "Campo obrigatorio ausente: {0}")

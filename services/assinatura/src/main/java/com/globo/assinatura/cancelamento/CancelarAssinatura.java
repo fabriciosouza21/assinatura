@@ -15,6 +15,8 @@ import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
 import java.time.Instant;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
@@ -24,6 +26,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 public class CancelarAssinatura {
 
+  private static final Logger log = LoggerFactory.getLogger(CancelarAssinatura.class);
   private static final String AGGREGATE_TYPE = "Assinatura";
   private static final String EVENT_TYPE_CANCELAMENTO_AGENDADO = "CancelamentoAgendado";
   private static final String EVENT_TYPE_ASSINATURA_CANCELADA = "AssinaturaCancelada";
@@ -78,9 +81,21 @@ public class CancelarAssinatura {
     EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
     if (efeito == EfeitoCancelamento.AGENDADO) {
       gravarEventoCancelamentoAgendado(assinatura);
-    }
-    if (efeito == EfeitoCancelamento.IMEDIATO) {
+      log.atInfo()
+          .addKeyValue("event", "cancelamento_agendado")
+          .addKeyValue("assinaturaId", assinatura.getUuid())
+          .log("Cancelamento agendado para o fim do ciclo");
+    } else if (efeito == EfeitoCancelamento.IMEDIATO) {
       gravarEventoAssinaturaCancelada(assinatura);
+      log.atInfo()
+          .addKeyValue("event", "cancelamento_efetivado")
+          .addKeyValue("assinaturaId", assinatura.getUuid())
+          .log("Cancelamento efetivado");
+    } else {
+      log.atDebug()
+          .addKeyValue("event", "cancelamento_idempotente")
+          .addKeyValue("assinaturaId", assinatura.getUuid())
+          .log("Cancelamento ja solicitado, sem alteracoes");
     }
 
     return new CancelamentoResponse(

@@ -5,6 +5,8 @@ import com.globo.pagamento.cancelamento.idempotencia.CancelamentoEventoProcessad
 import com.globo.pagamento.messaging.EventoInvalidoException;
 import com.globo.pagamento.shared.contrato.AssinaturaCancelada;
 import com.globo.pagamento.shared.contrato.CancelamentoAgendado;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +23,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Component
 public class CancelamentoConsumer {
+
+  private static final Logger log = LoggerFactory.getLogger(CancelamentoConsumer.class);
 
   private final ObjectMapper objectMapper;
   private final CancelarTentativasPendentes cancelarTentativasPendentes;
@@ -53,7 +57,12 @@ public class CancelamentoConsumer {
    */
   @KafkaListener(topics = "cancelamento-agendado", groupId = "pagamento")
   public void consumirCancelamentoAgendado(String payload) {
-    validar(desserializar(payload));
+    CancelamentoAgendado evento = desserializar(payload);
+    validar(evento);
+    log.atDebug()
+        .addKeyValue("event", "cancelamento_agendado_recebido")
+        .addKeyValue("assinaturaId", evento.assinaturaId())
+        .log("Cancelamento agendado recebido sem acao no pagamento");
   }
 
   /**
@@ -71,6 +80,15 @@ public class CancelamentoConsumer {
     validar(evento);
     if (eventoProcessadoRepository.registrarSeNovo(evento.eventId(), evento.assinaturaId()) == 1) {
       cancelarTentativasPendentes.executar(evento.assinaturaId().toString());
+      log.atInfo()
+          .addKeyValue("event", "tentativas_canceladas")
+          .addKeyValue("assinaturaId", evento.assinaturaId())
+          .log("Tentativas pendentes canceladas");
+    } else {
+      log.atDebug()
+          .addKeyValue("event", "cancelamento_evento_deduplicado")
+          .addKeyValue("assinaturaId", evento.assinaturaId())
+          .log("Cancelamento ja processado, evento ignorado");
     }
   }
 
