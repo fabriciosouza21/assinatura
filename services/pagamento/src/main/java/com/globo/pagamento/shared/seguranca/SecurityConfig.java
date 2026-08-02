@@ -13,7 +13,8 @@ import org.springframework.security.web.SecurityFilterChain;
  *
  * <p>Libera o healthcheck e o endpoint de webhook. O webhook ({@code /webhooks/payments}) e
  * autenticado por assinatura HMAC, validada no proprio endpoint, por isso fica publico na cadeia do
- * Spring Security.
+ * Spring Security. As consultas {@code GET} de {@code /cobrancas} e {@code /renovacoes} sao
+ * publicas para o cliente acompanhar a cobranca corrente sem token.
  */
 @Configuration
 public class SecurityConfig {
@@ -36,7 +37,7 @@ public class SecurityConfig {
             auth ->
                 auth.requestMatchers("/actuator/health", "/webhooks/payments")
                     .permitAll()
-                    .requestMatchers(HttpMethod.GET, "/cobrancas/**")
+                    .requestMatchers(HttpMethod.GET, "/cobrancas/**", "/renovacoes/**")
                     .permitAll()
                     .anyRequest()
                     .authenticated());

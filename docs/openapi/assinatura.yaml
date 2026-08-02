@@ -156,8 +156,8 @@ paths:
       description: |
         Devolve a representacao completa da assinatura ao proprio dono.
         Assinatura de outro usuario retorna 403; ROLE_ADMIN consulta qualquer
-        uma. dataInicio e dataExpiracao sao nulas enquanto a assinatura aguarda
-        pagamento.
+        uma. dataInicio, dataExpiracao e os campos de ciclo sao nulos enquanto
+        a assinatura aguarda pagamento.
       operationId: consultarAssinatura
       parameters:
         - name: uuid
@@ -185,6 +185,10 @@ paths:
                     dataInicio: null
                     dataExpiracao: null
                     status: AGUARDANDO_PAGAMENTO
+                    inicioCiclo: null
+                    fimCiclo: null
+                    proximaRenovacaoEm: null
+                    renovacaoAutomatica: true
                 ativa:
                   summary: Assinatura ativa
                   value:
@@ -194,6 +198,10 @@ paths:
                     dataInicio: "2025-03-10"
                     dataExpiracao: "2025-04-10"
                     status: ATIVA
+                    inicioCiclo: "2025-03-10"
+                    fimCiclo: "2025-04-09"
+                    proximaRenovacaoEm: "2025-04-10"
+                    renovacaoAutomatica: true
         '401':
           description: Token ausente, expirado ou invalido. Corpo vazio.
         '403':
@@ -272,7 +280,7 @@ components:
     Assinatura:
       type: object
       description: Representacao completa da assinatura (GET).
-      required: [id, usuarioId, plano, status]
+      required: [id, usuarioId, plano, status, renovacaoAutomatica]
       properties:
         id:
           type: string
@@ -296,6 +304,26 @@ components:
           description: Definida na ativacao. Nula enquanto aguarda pagamento.
         status:
           $ref: '#/components/schemas/StatusAssinatura'
+        inicioCiclo:
+          type: string
+          format: date
+          nullable: true
+          description: Inicio do ciclo de renovacao corrente. Nulo antes da ativacao.
+        fimCiclo:
+          type: string
+          format: date
+          nullable: true
+          description: Fim do ciclo de renovacao corrente. Nulo antes da ativacao.
+        proximaRenovacaoEm:
+          type: string
+          format: date
+          nullable: true
+          description: Data da proxima renovacao. Nula antes da ativacao.
+        renovacaoAutomatica:
+          type: boolean
+          description: |
+            Indica se a renovacao automatica esta habilitada. Fica `false` apos
+            o cancelamento agendado ou o opt-out no vencimento.
     AssinaturaLista:
       type: object
       description: Pagina da listagem de assinaturas do usuario autenticado.

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -38,7 +39,7 @@ class AssinaturaTest {
   @DisplayName("Deve transitar para ativa ao receber o pagamento aprovado")
   void deveTransitarParaAtivaAoReceberPagamentoAprovado() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
-    assinatura.ativar((LocalDate) null, (LocalDate) null);
+    assinatura.ativar(null, null, null);
     assertThat(assinatura.getStatus()).as("Status apos ativacao").isEqualTo(StatusAssinatura.ATIVA);
   }
 
@@ -46,7 +47,8 @@ class AssinaturaTest {
   @DisplayName("Deve atribuir a data de inicio ao ativar a assinatura")
   void deveAtribuirDataInicioAoAtivar() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:00:00Z"));
     assertThat(assinatura.getDataInicio())
         .as("Data inicio atribuida na ativacao")
         .isEqualTo(LocalDate.of(2026, 1, 1));
@@ -56,7 +58,8 @@ class AssinaturaTest {
   @DisplayName("Deve atribuir a data de expiracao ao ativar a assinatura")
   void deveAtribuirDataExpiracaoAoAtivar() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:00:00Z"));
     assertThat(assinatura.getDataExpiracao())
         .as("Data expiracao atribuida na ativacao")
         .isEqualTo(LocalDate.of(2026, 2, 1));
@@ -76,9 +79,11 @@ class AssinaturaTest {
   @DisplayName("Deve permanecer ativa ao receber nova ativacao")
   void devePermanecerAtivaAoReceberNovaAtivacao() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:00:00Z"));
 
-    assinatura.ativar(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 7, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 6, 1), LocalDate.of(2026, 7, 1), Instant.parse("2026-07-01T12:00:00Z"));
 
     assertThat(assinatura.getDataInicio())
         .as("Data de inicio da primeira ativacao preservada")
@@ -103,7 +108,8 @@ class AssinaturaTest {
   void deveEstabelecerPrimeiroCicloAoAtivar() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
 
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:00:00Z"));
 
     assertThat(assinatura.getInicioCiclo())
         .as("Inicio do ciclo coincide com a data de inicio")
@@ -112,21 +118,39 @@ class AssinaturaTest {
         .as("Fim do ciclo coincide com a data de expiracao")
         .isEqualTo(LocalDate.of(2026, 2, 1));
     assertThat(assinatura.getProximaRenovacaoEm())
-        .as("Proxima renovacao coincide com o fim do primeiro ciclo")
-        .isEqualTo(LocalDate.of(2026, 2, 1));
+        .as("Proxima renovacao assume o instante informado na ativacao")
+        .isEqualTo(Instant.parse("2026-02-01T12:00:00Z"));
     assertThat(assinatura.isRenovacaoAutomatica())
         .as("Renovacao automatica habilitada no primeiro ciclo")
         .isTrue();
   }
 
   @Test
+  @DisplayName("Deve agendar a renovacao no instante futuro com ciclo que vence no proprio dia")
+  void deveAgendarRenovacaoNoFuturoComCicloSubDiario() {
+    Instant ativacao = Instant.parse("2026-08-02T12:00:00Z");
+    Instant proximaRenovacao = ativacao.plusSeconds(60);
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+
+    assinatura.ativar(LocalDate.of(2026, 8, 2), LocalDate.of(2026, 8, 2), proximaRenovacao);
+
+    assertThat(assinatura.getProximaRenovacaoEm())
+        .as("Instante da proxima renovacao preserva o horario do ciclo sub-diario")
+        .isEqualTo(proximaRenovacao);
+    assertThat(assinatura.getProximaRenovacaoEm())
+        .as("Renovacao nao vence no dia enquanto o instante ainda esta no futuro")
+        .isAfter(ativacao);
+  }
+
+  @Test
   @DisplayName("Deve voltar para ativa ao renovar a partir de em renovacao")
   void deveVoltarParaAtivaAoRenovar() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:00:00Z"));
     assinatura.iniciarRenovacao();
 
-    assinatura.renovar(LocalDate.of(2026, 3, 1));
+    assinatura.renovar(LocalDate.of(2026, 3, 1), Instant.parse("2026-03-01T12:00:00Z"));
 
     assertThat(assinatura.getStatus())
         .as("Status volta para ativa apos renovar")
@@ -137,9 +161,10 @@ class AssinaturaTest {
   @DisplayName("Deve avancar o inicio do ciclo para o fim anterior ao renovar")
   void deveAvancarInicioDoCicloAoRenovar() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:00:00Z"));
 
-    assinatura.renovar(LocalDate.of(2026, 3, 1));
+    assinatura.renovar(LocalDate.of(2026, 3, 1), Instant.parse("2026-03-01T12:00:00Z"));
 
     assertThat(assinatura.getInicioCiclo())
         .as("Inicio do ciclo avanca para o fim anterior")
@@ -150,9 +175,10 @@ class AssinaturaTest {
   @DisplayName("Deve definir o fim do ciclo com o novo vencimento ao renovar")
   void deveDefinirFimDoCicloAoRenovar() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:00:00Z"));
 
-    assinatura.renovar(LocalDate.of(2026, 3, 1));
+    assinatura.renovar(LocalDate.of(2026, 3, 1), Instant.parse("2026-03-01T12:00:00Z"));
 
     assertThat(assinatura.getFimCiclo())
         .as("Fim do ciclo assume o novo vencimento")
@@ -163,20 +189,22 @@ class AssinaturaTest {
   @DisplayName("Deve agendar a proxima renovacao para o novo fim do ciclo")
   void deveAgendarProximaRenovacaoAoRenovar() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:00:00Z"));
 
-    assinatura.renovar(LocalDate.of(2026, 3, 1));
+    assinatura.renovar(LocalDate.of(2026, 3, 1), Instant.parse("2026-03-01T12:00:00Z"));
 
     assertThat(assinatura.getProximaRenovacaoEm())
-        .as("Proxima renovacao coincide com o novo fim do ciclo")
-        .isEqualTo(LocalDate.of(2026, 3, 1));
+        .as("Proxima renovacao assume o instante informado na renovacao")
+        .isEqualTo(Instant.parse("2026-03-01T12:00:00Z"));
   }
 
   @Test
   @DisplayName("Deve transitar para em renovacao ao iniciar a renovacao")
   void deveTransitarParaEmRenovacaoAoIniciarRenovacao() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:00:00Z"));
 
     assinatura.iniciarRenovacao();
 
@@ -189,7 +217,8 @@ class AssinaturaTest {
   @DisplayName("Deve transitar para suspensa ao suspender a assinatura em renovacao")
   void deveTransitarParaSuspensaAoSuspender() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:00:00Z"));
     assinatura.iniciarRenovacao();
 
     assinatura.suspender();
@@ -203,7 +232,8 @@ class AssinaturaTest {
   @DisplayName("Deve lancar excecao ao suspender assinatura ativa")
   void deveLancarExcecaoAoSuspenderAtiva() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:00:00Z"));
 
     assertThatThrownBy(assinatura::suspender)
         .as("Suspender assinatura ativa e transicao invalida")
@@ -214,7 +244,8 @@ class AssinaturaTest {
   @DisplayName("Deve agendar o cancelamento ao solicitar em assinatura ativa")
   void deveAgendarCancelamentoAoSolicitarCancelamento() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:00:00Z"));
     EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
 
     assertThat(efeito)
@@ -232,7 +263,8 @@ class AssinaturaTest {
   @DisplayName("Deve cancelar imediatamente ao solicitar em assinatura suspensa")
   void deveCancelarImediatamenteAoSolicitarCancelamentoEmAssinaturaSuspensa() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:00:00Z"));
     assinatura.iniciarRenovacao();
     assinatura.suspender();
 
@@ -250,7 +282,8 @@ class AssinaturaTest {
   @DisplayName("Deve limpar o fim do ciclo ao cancelar imediatamente assinatura suspensa")
   void deveLimparFimDoCicloAoCancelarImediatamenteAssinaturaSuspensa() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:00:00Z"));
     assinatura.iniciarRenovacao();
     assinatura.suspender();
 
@@ -297,7 +330,8 @@ class AssinaturaTest {
   @DisplayName("Deve agendar cancelamento ao solicitar em assinatura em renovacao")
   void deveAgendarCancelamentoAoSolicitarCancelamentoEmAssinaturaEmRenovacao() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:00:00Z"));
     assinatura.iniciarRenovacao();
 
     EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
@@ -333,7 +367,8 @@ class AssinaturaTest {
   @DisplayName("Deve manter cancelamento agendado ao solicitar novamente em assinatura ativa")
   void deveManterCancelamentoAgendadoAoSolicitarNovamenteEmAssinaturaAtiva() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:00:00Z"));
     assinatura.solicitarCancelamento();
 
     EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
@@ -353,7 +388,8 @@ class AssinaturaTest {
   @DisplayName("Deve manter o cancelamento agendado em assinatura em renovacao")
   void deveManterCancelamentoAgendadoAoSolicitarNovamenteEmAssinaturaEmRenovacao() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:00:00Z"));
     assinatura.iniciarRenovacao();
     assinatura.solicitarCancelamento();
 

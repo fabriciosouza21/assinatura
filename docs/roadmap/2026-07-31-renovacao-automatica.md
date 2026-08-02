@@ -75,14 +75,14 @@ por não renovar e suspende o acesso após três recusas seguidas.
 
 | # | Entregavel | Depende de | Status |
 |---|-----------|-----------|--------|
-| 0 | Travar contratos de evento de renovação | — | [ ] |
-| 1 | Publica eventos pelo tipo (BE-7) | 0 | [ ] |
-| 2 | Modelo de ciclo e renovação (BE-8) | 0 | [ ] |
+| 0 | Travar contratos de evento de renovação | — | [x] |
+| 1 | Publica eventos pelo tipo (BE-7) | 0 | [x] |
+| 2 | Modelo de ciclo e renovação (BE-8) | 0 | [x] |
 | 3 | Cria a cobrança da renovação (BE-11) | 0 | [x] (#10) |
-| 4 | Varredura de assinaturas vencidas (BE-9) | 1, 2 | [ ] |
-| 5 | Atualiza assinatura pelo resultado (BE-10) | 2, 0 | [ ] |
-| 6 | Repete a cobrança após recusa (BE-12) | 3 | [ ] |
-| 7 | Webhook decide a renovação (BE-13) | 3 | [ ] |
+| 4 | Varredura de assinaturas vencidas (BE-9) | 1, 2 | [x] |
+| 5 | Atualiza assinatura pelo resultado (BE-10) | 2, 0 | [x] |
+| 6 | Repete a cobrança após recusa (BE-12) | 3 | [x] |
+| 7 | Webhook decide a renovação (BE-13) | 3 | [x] |
 | 8 | Changelog + bump versão 0.3.0 (DOCS-2) | 1-7 | [ ] |
 
 **Paralelismo:** os itens 1, 2 e 3 abrem juntos após travar os contratos.

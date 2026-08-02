@@ -13,6 +13,7 @@ import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
 import java.lang.reflect.Field;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -120,7 +121,7 @@ class RenovacaoSchedulerIntegracaoTest {
     Assinatura assinatura = new Assinatura(usuario.getId(), Plano.PREMIUM);
     LocalDate inicio = LocalDate.now().minusDays(60);
     LocalDate vencimento = LocalDate.now().minusDays(30);
-    assinatura.ativar(inicio, vencimento);
+    assinatura.ativar(inicio, vencimento, vencimento.atStartOfDay(ZoneOffset.UTC).toInstant());
     if (!renovacaoAutomatica) {
       desabilitarRenovacaoAutomatica(assinatura);
     }

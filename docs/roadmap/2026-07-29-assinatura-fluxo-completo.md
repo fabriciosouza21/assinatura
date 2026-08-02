@@ -102,7 +102,7 @@
 | 3 | Outbox + publicação de `AssinaturaSolicitada` no Kafka | 2 | [x] |
 | 4 | Consumer de `PagamentoStatusAtualizado` (ativa/recusa) | 2 | [x] |
 | 5 | Pagamento: consumer `AssinaturaSolicitada` + chamada ao gateway | 3 | [x] |
-| 6 | Webhook de pagamento (HMAC + dedup + publica resultado) | 5 | [ ] |
+| 6 | Webhook de pagamento (HMAC + dedup + publica resultado) | 5 | [x] |
 | 7 | Changelog + bump versão `0.2.0` | 1-6 | [ ] |
 
 **Fluxo de validação end-to-end (após BE-6):** cadastra usuário → solicita

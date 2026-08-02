@@ -98,7 +98,9 @@ public class ConfirmarPagamentoAdesao {
     if (evento.status() == StatusPagamento.REJECTED) {
       assinatura.recusarPagamento();
     } else {
-      assinatura.ativar(hoje, hoje.plusDays(Duration.ofMillis(cicloMs).toDays()));
+      LocalDate dataExpiracao = hoje.plusDays(Duration.ofMillis(cicloMs).toDays());
+      assinatura.ativar(
+          hoje, dataExpiracao, dataExpiracao.atStartOfDay(clock.getZone()).toInstant());
     }
     try {
       pagamentoEventoProcessadoRepository.save(

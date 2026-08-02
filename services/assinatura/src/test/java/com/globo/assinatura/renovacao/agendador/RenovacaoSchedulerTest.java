@@ -247,7 +247,8 @@ class RenovacaoSchedulerTest {
 
   private Assinatura assinaturaAtivaVencida(boolean renovacaoAutomatica) {
     Assinatura assinatura = new Assinatura(1L, Plano.PREMIUM);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T00:00:00Z"));
     // O id tecnico e gerado pelo banco em producao; no teste unitario e ajustado por reflection
     // para que as chamadas aos repositorios recebam o identificador esperado.
     setId(assinatura, 1L);
