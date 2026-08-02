@@ -8,13 +8,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.globo.pagamento.cobranca.Plano;
-import com.globo.pagamento.messaging.event.StatusPagamento;
-import com.globo.pagamento.outbox.OutboxEvent;
-import com.globo.pagamento.outbox.OutboxRepository;
 import com.globo.pagamento.renovacao.PagamentoRenovacao;
 import com.globo.pagamento.renovacao.StatusTentativa;
 import com.globo.pagamento.renovacao.TentativaCobranca;
 import com.globo.pagamento.renovacao.TentativaCobrancaRepository;
+import com.globo.pagamento.shared.contrato.StatusPagamento;
+import com.globo.pagamento.shared.outbox.OutboxEvent;
+import com.globo.pagamento.shared.outbox.OutboxRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
