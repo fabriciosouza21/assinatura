@@ -11,11 +11,13 @@ import com.globo.assinatura.shared.contrato.RenovacaoTentativasEsgotadas;
 import com.globo.assinatura.shared.outbox.OutboxEvent;
 import com.globo.assinatura.shared.outbox.OutboxRepository;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,9 +46,11 @@ public class ProcessarRenovacaoResultado {
   private final OutboxRepository outboxRepository;
   private final JsonMapper jsonMapper;
   private final Clock clock;
+  private final long cicloMs;
 
   /**
-   * Constroi o command com os repositorios, a outbox, o serializador JSON e o relogio injetados.
+   * Constroi o command com os repositorios, a outbox, o serializador JSON, o relogio e a duracao do
+   * ciclo injetados.
    *
    * @param renovacaoRepository repositorio de persistencia de renovacoes
    * @param assinaturaRepository repositorio de persistencia de assinaturas
@@ -54,6 +58,7 @@ public class ProcessarRenovacaoResultado {
    * @param outboxRepository repositorio de persistencia da outbox
    * @param jsonMapper serializador JSON do evento de dominio
    * @param clock relogio para calculo do instante do evento
+   * @param cicloMs duracao do ciclo de renovacao em milissegundos
    */
   public ProcessarRenovacaoResultado(
       RenovacaoRepository renovacaoRepository,
@@ -61,13 +66,15 @@ public class ProcessarRenovacaoResultado {
       RenovacaoEventoProcessadoRepository renovacaoEventoProcessadoRepository,
       OutboxRepository outboxRepository,
       JsonMapper jsonMapper,
-      Clock clock) {
+      Clock clock,
+      @Value("${app.renovacao.ciclo-ms}") long cicloMs) {
     this.renovacaoRepository = renovacaoRepository;
     this.assinaturaRepository = assinaturaRepository;
     this.renovacaoEventoProcessadoRepository = renovacaoEventoProcessadoRepository;
     this.outboxRepository = outboxRepository;
     this.jsonMapper = jsonMapper;
     this.clock = clock;
+    this.cicloMs = cicloMs;
   }
 
   /**
@@ -128,7 +135,7 @@ public class ProcessarRenovacaoResultado {
     }
     Assinatura assinatura = possivelAssinatura.get();
     renovacao.aprovar();
-    assinatura.renovar(assinatura.getFimCiclo().plusMonths(1));
+    assinatura.renovar(assinatura.getFimCiclo().plusDays(Duration.ofMillis(cicloMs).toDays()));
     gravarEvento(assinatura, renovacao, evento);
     registrarIdempotencia(evento.eventId(), renovacao.getUuid());
   }

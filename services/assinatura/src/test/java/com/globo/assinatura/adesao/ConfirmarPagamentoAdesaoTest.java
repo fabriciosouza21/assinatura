@@ -16,6 +16,7 @@ import com.globo.assinatura.assinatura.StatusAssinatura;
 import com.globo.assinatura.shared.contrato.PagamentoStatusAtualizado;
 import com.globo.assinatura.shared.contrato.StatusPagamento;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -33,6 +34,12 @@ import org.springframework.dao.DataIntegrityViolationException;
 @ExtendWith(MockitoExtension.class)
 class ConfirmarPagamentoAdesaoTest {
 
+  /** Duracao padrao do ciclo de renovacao: 30 dias. */
+  private static final long CICLO_DIAS_PADRAO = 30;
+
+  /** Duracao padrao do ciclo de renovacao, em milissegundos. */
+  private static final long CICLO_MS_PADRAO = Duration.ofDays(CICLO_DIAS_PADRAO).toMillis();
+
   @Mock private AssinaturaRepository assinaturaRepository;
   @Mock private PagamentoEventoProcessadoRepository pagamentoEventoProcessadoRepository;
 
@@ -44,7 +51,7 @@ class ConfirmarPagamentoAdesaoTest {
     relogio = Clock.systemDefaultZone();
     command =
         new ConfirmarPagamentoAdesao(
-            assinaturaRepository, pagamentoEventoProcessadoRepository, relogio);
+            assinaturaRepository, pagamentoEventoProcessadoRepository, relogio, CICLO_MS_PADRAO);
   }
 
   @Test
@@ -103,7 +110,7 @@ class ConfirmarPagamentoAdesaoTest {
     relogio = Clock.fixed(Instant.parse("2026-01-15T10:00:00Z"), ZoneOffset.UTC);
     command =
         new ConfirmarPagamentoAdesao(
-            assinaturaRepository, pagamentoEventoProcessadoRepository, relogio);
+            assinaturaRepository, pagamentoEventoProcessadoRepository, relogio, CICLO_MS_PADRAO);
     PagamentoStatusAtualizado evento =
         new PagamentoStatusAtualizado(
             UUID.fromString("11111111-1111-1111-1111-111111111111"),
@@ -138,7 +145,7 @@ class ConfirmarPagamentoAdesaoTest {
     relogio = Clock.fixed(Instant.parse("2026-01-15T10:00:00Z"), ZoneOffset.UTC);
     command =
         new ConfirmarPagamentoAdesao(
-            assinaturaRepository, pagamentoEventoProcessadoRepository, relogio);
+            assinaturaRepository, pagamentoEventoProcessadoRepository, relogio, CICLO_MS_PADRAO);
 
     command.executar(evento);
 
@@ -148,8 +155,8 @@ class ConfirmarPagamentoAdesaoTest {
   }
 
   @Test
-  @DisplayName("Deve definir a data de expiracao para um mes apos o inicio")
-  void deveDefinirDataExpiracaoParaUmMesAposInicio() {
+  @DisplayName("Deve definir a data de expiracao para um ciclo apos o inicio")
+  void deveDefinirDataExpiracaoParaUmCicloAposInicio() {
     Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
     when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
         .thenReturn(Optional.of(assinatura));
@@ -163,13 +170,13 @@ class ConfirmarPagamentoAdesaoTest {
     relogio = Clock.fixed(Instant.parse("2026-01-15T10:00:00Z"), ZoneOffset.UTC);
     command =
         new ConfirmarPagamentoAdesao(
-            assinaturaRepository, pagamentoEventoProcessadoRepository, relogio);
+            assinaturaRepository, pagamentoEventoProcessadoRepository, relogio, CICLO_MS_PADRAO);
 
     command.executar(evento);
 
     assertThat(assinatura.getDataExpiracao())
-        .as("data expiracao deve ser um mes apos o inicio")
-        .isEqualTo(LocalDate.of(2026, 2, 15));
+        .as("data expiracao deve avancar um ciclo (30 dias) apos o inicio")
+        .isEqualTo(LocalDate.of(2026, 1, 15).plusDays(CICLO_DIAS_PADRAO));
   }
 
   @Test

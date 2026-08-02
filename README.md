@@ -26,24 +26,60 @@ assinatura  ──AssinaturaSolicitada──▶  kafka  ──▶  pagamento  �
 
 - **Infraestrutura completa** sobe com um comando via `docker compose up`.
 - **Assinatura Service**: autenticação JWT obrigatória nas rotas de assinatura
-  (o dono vem do token, ver ADR 0003), cadastro de usuário, persistência com
-  Postgres + Flyway, healthcheck via Actuator.
-- **Pagamento Service**: scaffold (entry point + security + config).
+  (o dono vem do token, ver ADR 0003), cadastro de usuário, adesão com status
+  `AGUARDANDO_PAGAMENTO`, persistência com Postgres + Flyway, healthcheck via
+  Actuator.
+- **Renovação automática** (Assinatura Service): agendador varre assinaturas
+  com `proxima_renovacao_em` vencida, cria a renovação e publica
+  `RenovacaoSolicitada` via outbox; consome o resultado e avança o ciclo ou
+  suspende após tentativas esgotadas.
+- **Pagamento Service**: consome `AssinaturaSolicitada` e `RenovacaoSolicitada`,
+  cobra o gateway com idempotência, recebe webhooks com assinatura HMAC e
+  publica os eventos de status.
 - **Mock do gateway**: cria pagamento (idempotente), consulta status, simula
   aprovação/recusa, dispara webhook assíncrono com assinatura HMAC.
-- **Integração**: smoke test valida a comunicação inter-serviços por nome de host
-  na network do compose.
+- **Outbox**: eventos de domínio publicados via outbox com retry e DLQ.
+- **Testes**: unitários por serviço, testes de integração isolados, arquitetura
+  (ArchUnit) e checkstyle/spotless no pipeline.
 
 ## O que falta (escopo do desafio ainda não entregue)
 
-- Endpoint de criação de assinatura com a regra "um usuário, uma assinatura ativa".
-- Agendador de renovação automática no vencimento + suspensão após 3 falhas.
-- Endpoint de cancelamento.
-- Consumo de Kafka e handler de webhook no Pagamento Service.
-- Outbox real no Assinatura Service.
-- Testes automatizados (além do smoke test e do `contextLoads`).
+- Endpoint de cancelamento (o opt-out no vencimento existe no domínio).
 
 A íntegra do escopo e do andamento está em `docs/roadmap/`.
+
+## Como testar via Bruno
+
+A collection [Bruno](https://docs.usebruno.com/) em `bruno/` cobre os fluxos
+de ponta a ponta, encadeando requests sem editar variáveis manualmente. O
+detalhamento de cada fluxo está em `bruno/README.md`; o resumo:
+
+1. Suba o ambiente: `docker compose up -d --build`.
+2. No Bruno: **Open Collection** → pasta `bruno/` → environment **Local**.
+
+Fluxos disponíveis:
+
+- **Adesão**: cadastrar usuário → login → solicitar assinatura → consultar
+  cobrança → simular aprovação → confirmar `ATIVA`.
+- **Renovação (aprovação)**: após a ativação, a renovação dispara sozinha;
+  consultar renovação → simular aprovação → confirmar ciclo avançado.
+- **Renovação (esgotamento)**: simular recusa 3× → confirmar `SUSPENSA`.
+
+Para testar o tempo de renovação em segundos em vez de dias, use o perfil de
+teste rápido no `.env` (detalhes em `bruno/README.md`):
+
+```
+APP_RENOVACAO_CICLO_MS=60000
+APP_RENOVACAO_INTERVALO_MS=1000
+APP_RENOVACAO_SCHEDULER_INTERVALO_MS=1000
+APP_RENOVACAO_TENTATIVAS_BACKOFF_DIAS=0,0
+APP_OUTBOX_INTERVALO_MS=1000
+```
+
+> `proxima_renovacao_em` é uma data (DATE): com ciclo menor que um dia, a
+> renovação vence "hoje" e dispara no próximo sweep (~1s). Cada aprovação
+> encadeia o ciclo seguinte imediatamente; ciclos de um dia ou mais aguardam
+> dias reais.
 
 ## Como rodar
 

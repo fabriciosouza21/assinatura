@@ -114,6 +114,9 @@ services:
       context: services/pagamento
       dockerfile: Dockerfile
     container_name: assinatura-pagamento
+    env_file:
+      - path: .env
+        required: false
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pagamento

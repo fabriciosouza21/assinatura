@@ -7,11 +7,13 @@ import com.globo.assinatura.assinatura.AssinaturaRepository;
 import com.globo.assinatura.shared.contrato.PagamentoStatusAtualizado;
 import com.globo.assinatura.shared.contrato.StatusPagamento;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,21 +33,25 @@ public class ConfirmarPagamentoAdesao {
   private final AssinaturaRepository assinaturaRepository;
   private final PagamentoEventoProcessadoRepository pagamentoEventoProcessadoRepository;
   private final Clock clock;
+  private final long cicloMs;
 
   /**
-   * Constroi o command com os repositorios e o relogio injetados.
+   * Constroi o command com os repositorios, o relogio e a duracao do ciclo injetados.
    *
    * @param assinaturaRepository repositorio de persistencia de assinaturas
    * @param pagamentoEventoProcessadoRepository repositorio de eventos de pagamento processados
    * @param clock relogio para calculo das datas de vigencia
+   * @param cicloMs duracao do ciclo de renovacao em milissegundos
    */
   public ConfirmarPagamentoAdesao(
       AssinaturaRepository assinaturaRepository,
       PagamentoEventoProcessadoRepository pagamentoEventoProcessadoRepository,
-      Clock clock) {
+      Clock clock,
+      @Value("${app.renovacao.ciclo-ms}") long cicloMs) {
     this.assinaturaRepository = assinaturaRepository;
     this.pagamentoEventoProcessadoRepository = pagamentoEventoProcessadoRepository;
     this.clock = clock;
+    this.cicloMs = cicloMs;
   }
 
   /**
@@ -92,7 +98,7 @@ public class ConfirmarPagamentoAdesao {
     if (evento.status() == StatusPagamento.REJECTED) {
       assinatura.recusarPagamento();
     } else {
-      assinatura.ativar(hoje, hoje.plusMonths(1));
+      assinatura.ativar(hoje, hoje.plusDays(Duration.ofMillis(cicloMs).toDays()));
     }
     try {
       pagamentoEventoProcessadoRepository.save(

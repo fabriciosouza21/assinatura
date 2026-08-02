@@ -19,6 +19,7 @@ import com.globo.assinatura.shared.contrato.RenovacaoTentativasEsgotadas;
 import com.globo.assinatura.shared.outbox.OutboxEvent;
 import com.globo.assinatura.shared.outbox.OutboxRepository;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -36,6 +37,12 @@ import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(MockitoExtension.class)
 class ProcessarRenovacaoResultadoTest {
+
+  /** Duracao padrao do ciclo de renovacao: 30 dias. */
+  private static final long CICLO_DIAS_PADRAO = 30;
+
+  /** Duracao padrao do ciclo de renovacao, em milissegundos. */
+  private static final long CICLO_MS_PADRAO = Duration.ofDays(CICLO_DIAS_PADRAO).toMillis();
 
   @Mock private RenovacaoRepository renovacaoRepository;
   @Mock private AssinaturaRepository assinaturaRepository;
@@ -57,7 +64,8 @@ class ProcessarRenovacaoResultadoTest {
             renovacaoEventoProcessadoRepository,
             outboxRepository,
             jsonMapper,
-            relogio);
+            relogio,
+            CICLO_MS_PADRAO);
   }
 
   @Test
@@ -87,8 +95,8 @@ class ProcessarRenovacaoResultadoTest {
   }
 
   @Test
-  @DisplayName("Deve avancar o fim do ciclo em um mes ao aprovar a renovacao")
-  void deveAvancarFimCicloEmUmMesAoAprovarRenovacao() {
+  @DisplayName("Deve avancar o fim do ciclo em uma duracao de ciclo ao aprovar a renovacao")
+  void deveAvancarFimCicloEmUmCicloAoAprovarRenovacao() {
     Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
     assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
     assinatura.iniciarRenovacao();
@@ -109,14 +117,14 @@ class ProcessarRenovacaoResultadoTest {
     command.executar(evento);
 
     assertThat(assinatura.getFimCiclo())
-        .as("novo fim de ciclo deve avancar um mes sobre o anterior")
-        .isEqualTo(fimCicloAntes.plusMonths(1));
+        .as("novo fim de ciclo deve avancar uma duracao de ciclo sobre o anterior")
+        .isEqualTo(fimCicloAntes.plusDays(CICLO_DIAS_PADRAO));
     assertThat(assinatura.getInicioCiclo())
         .as("inicio do ciclo deve assumir o fim de ciclo anterior")
         .isEqualTo(fimCicloAntes);
     assertThat(assinatura.getProximaRenovacaoEm())
         .as("proxima renovacao deve seguir o novo fim de ciclo")
-        .isEqualTo(fimCicloAntes.plusMonths(1));
+        .isEqualTo(fimCicloAntes.plusDays(CICLO_DIAS_PADRAO));
   }
 
   @Test
@@ -264,7 +272,8 @@ class ProcessarRenovacaoResultadoTest {
             renovacaoEventoProcessadoRepository,
             outboxRepository,
             jsonMapper,
-            relogioFixo);
+            relogioFixo,
+            CICLO_MS_PADRAO);
     PagamentoRenovacaoAprovado evento =
         new PagamentoRenovacaoAprovado(
             UUID.randomUUID(),
