@@ -296,4 +296,20 @@ class AssinaturaTest {
         .as("Status permanece em renovacao ate a conclusao da cobranca")
         .isEqualTo(StatusAssinatura.EM_RENOVACAO);
   }
+
+  @Test
+  @DisplayName("Deve manter cancelada ao solicitar cancelamento novamente")
+  void deveManterCanceladaAoSolicitarCancelamentoNovamente() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.solicitarCancelamento();
+
+    EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
+
+    assertThat(efeito)
+        .as("Efeito da segunda solicitacao de cancelamento")
+        .isEqualTo(EfeitoCancelamento.IDEMPOTENTE);
+    assertThat(assinatura.getStatus())
+        .as("Status permanece cancelada apos nova solicitacao")
+        .isEqualTo(StatusAssinatura.CANCELADA);
+  }
 }
