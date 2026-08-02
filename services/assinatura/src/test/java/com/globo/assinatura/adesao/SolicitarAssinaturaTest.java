@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,6 +12,7 @@ import com.globo.assinatura.assinatura.Assinatura;
 import com.globo.assinatura.assinatura.AssinaturaRepository;
 import com.globo.assinatura.assinatura.Plano;
 import com.globo.assinatura.assinatura.StatusAssinatura;
+import com.globo.assinatura.shared.cache.CacheVersionado;
 import com.globo.assinatura.shared.outbox.OutboxEvent;
 import com.globo.assinatura.shared.outbox.OutboxRepository;
 import com.globo.assinatura.shared.outbox.OutboxStatus;
@@ -36,6 +38,8 @@ class SolicitarAssinaturaTest {
 
   @Mock private OutboxRepository outboxRepository;
 
+  @Mock private CacheVersionado cacheVersionado;
+
   private SolicitarAssinatura command;
 
   @BeforeEach
@@ -45,7 +49,8 @@ class SolicitarAssinaturaTest {
             usuarioRepository,
             assinaturaRepository,
             outboxRepository,
-            JsonMapper.builder().build());
+            JsonMapper.builder().build(),
+            cacheVersionado);
   }
 
   @Test
@@ -144,5 +149,50 @@ class SolicitarAssinaturaTest {
         .as("Falha ao gravar o evento deve propagar para que a transacao role back o insert")
         .isInstanceOf(RuntimeException.class)
         .hasMessageContaining("outbox indisponivel");
+  }
+
+  @Test
+  @DisplayName("Deve invalidar o cache da listagem do usuario apos a solicitacao")
+  void deveInvalidarCacheDaListagemAposSolicitacao() {
+    Usuario usuario = new Usuario("Fulano", "fulano@example.com");
+    usuario.setId(42L);
+    when(usuarioRepository.findByUuid("uuid-usuario")).thenReturn(Optional.of(usuario));
+    when(assinaturaRepository.save(any(Assinatura.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    command.executar("uuid-usuario", Plano.PREMIUM);
+
+    verify(cacheVersionado).invalidarAposCommit("assinatura:list:versao:" + usuario.getUuid());
+  }
+
+  @Test
+  @DisplayName("Nao deve invalidar o cache quando a solicitacao falha por assinatura aberta")
+  void naoDeveInvalidarCacheQuandoSolicitacaoFalhaPorAssinaturaAberta() {
+    Usuario usuario = new Usuario("Fulano", "fulano@example.com");
+    usuario.setId(42L);
+    when(usuarioRepository.findByUuid("uuid-usuario")).thenReturn(Optional.of(usuario));
+    when(assinaturaRepository.existsByUsuarioIdAndStatusIn(eq(42L), any())).thenReturn(true);
+
+    assertThatThrownBy(() -> command.executar("uuid-usuario", Plano.BASICO))
+        .as("Assinatura aberta deve gerar conflito")
+        .isInstanceOf(AssinaturaAbertaException.class);
+
+    verify(cacheVersionado, never()).invalidarAposCommit(any());
+  }
+
+  @Test
+  @DisplayName("Nao deve invalidar o cache quando o insert viola o indice unico sob concorrencia")
+  void naoDeveInvalidarCacheQuandoInsertViolaIndiceUnico() {
+    Usuario usuario = new Usuario("Fulano", "fulano@example.com");
+    usuario.setId(42L);
+    when(usuarioRepository.findByUuid("uuid-usuario")).thenReturn(Optional.of(usuario));
+    when(assinaturaRepository.existsByUsuarioIdAndStatusIn(eq(42L), any())).thenReturn(false);
+    when(assinaturaRepository.save(any(Assinatura.class)))
+        .thenThrow(new DataIntegrityViolationException("uq_assinatura_aberta_usuario"));
+
+    assertThatThrownBy(() -> command.executar("uuid-usuario", Plano.BASICO))
+        .as("Violacao do indice unico sob concorrencia deve gerar conflito")
+        .isInstanceOf(AssinaturaAbertaException.class);
+
+    verify(cacheVersionado, never()).invalidarAposCommit(any());
   }
 }

@@ -5,6 +5,7 @@ import com.globo.assinatura.assinatura.AssinaturaNaoEncontradaException;
 import com.globo.assinatura.assinatura.AssinaturaRepository;
 import com.globo.assinatura.assinatura.EfeitoCancelamento;
 import com.globo.assinatura.cancelamento.api.CancelamentoResponse;
+import com.globo.assinatura.shared.cache.CacheVersionado;
 import com.globo.assinatura.shared.contrato.AssinaturaCancelada;
 import com.globo.assinatura.shared.contrato.CancelamentoAgendado;
 import com.globo.assinatura.shared.contrato.StatusAssinatura;
@@ -38,6 +39,7 @@ public class CancelarAssinatura {
   private final OutboxRepository outboxRepository;
   private final JsonMapper jsonMapper;
   private final Clock clock;
+  private final CacheVersionado cacheVersionado;
 
   /**
    * Constroi o command com os repositorios, o serializador JSON e o relogio injetados.
@@ -47,18 +49,21 @@ public class CancelarAssinatura {
    * @param outboxRepository repositorio de persistencia da outbox
    * @param jsonMapper serializador JSON dos eventos de dominio
    * @param clock relogio para carimbar o instante dos eventos
+   * @param cacheVersionado primitivas do cache distribuido para invalidar a listagem
    */
   public CancelarAssinatura(
       AssinaturaRepository assinaturaRepository,
       UsuarioRepository usuarioRepository,
       OutboxRepository outboxRepository,
       JsonMapper jsonMapper,
-      Clock clock) {
+      Clock clock,
+      CacheVersionado cacheVersionado) {
     this.assinaturaRepository = assinaturaRepository;
     this.usuarioRepository = usuarioRepository;
     this.outboxRepository = outboxRepository;
     this.jsonMapper = jsonMapper;
     this.clock = clock;
+    this.cacheVersionado = cacheVersionado;
   }
 
   /**
@@ -87,12 +92,14 @@ public class CancelarAssinatura {
     EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
     if (efeito == EfeitoCancelamento.AGENDADO) {
       gravarEventoCancelamentoAgendado(assinatura);
+      invalidarCache(dono);
       log.atInfo()
           .addKeyValue("event", "cancelamento_agendado")
           .addKeyValue("assinaturaId", assinatura.getUuid())
           .log("Cancelamento agendado para o fim do ciclo");
     } else if (efeito == EfeitoCancelamento.IMEDIATO) {
       gravarEventoAssinaturaCancelada(assinatura);
+      invalidarCache(dono);
       log.atInfo()
           .addKeyValue("event", "cancelamento_efetivado")
           .addKeyValue("assinaturaId", assinatura.getUuid())
@@ -109,6 +116,14 @@ public class CancelarAssinatura {
         assinatura.getStatus(),
         assinatura.isRenovacaoAutomatica(),
         assinatura.getFimCiclo());
+  }
+
+  private void invalidarCache(Usuario dono) {
+    cacheVersionado.invalidarAposCommit("assinatura:list:versao:" + dono.getUuid());
+    log.atInfo()
+        .addKeyValue("event", "assinatura_lista_cache_invalidada")
+        .addKeyValue("usuarioId", dono.getUuid())
+        .log("Cache de listagem invalidado apos o cancelamento");
   }
 
   private void gravarEventoCancelamentoAgendado(Assinatura assinatura) {

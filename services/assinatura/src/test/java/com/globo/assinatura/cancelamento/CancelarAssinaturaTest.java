@@ -17,6 +17,7 @@ import com.globo.assinatura.assinatura.AssinaturaRepository;
 import com.globo.assinatura.assinatura.Plano;
 import com.globo.assinatura.assinatura.StatusAssinatura;
 import com.globo.assinatura.cancelamento.api.CancelamentoResponse;
+import com.globo.assinatura.shared.cache.CacheVersionado;
 import com.globo.assinatura.shared.contrato.AssinaturaCancelada;
 import com.globo.assinatura.shared.contrato.CancelamentoAgendado;
 import com.globo.assinatura.shared.outbox.OutboxEvent;
@@ -51,6 +52,8 @@ class CancelarAssinaturaTest {
 
   @Mock private OutboxRepository outboxRepository;
 
+  @Mock private CacheVersionado cacheVersionado;
+
   private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
   private CancelarAssinatura command;
@@ -63,7 +66,8 @@ class CancelarAssinaturaTest {
             usuarioRepository,
             outboxRepository,
             jsonMapper,
-            Clock.systemUTC());
+            Clock.systemUTC(),
+            cacheVersionado);
   }
 
   @Test
@@ -84,7 +88,8 @@ class CancelarAssinaturaTest {
             usuarioRepository,
             outboxRepository,
             jsonMapper,
-            Clock.fixed(instanteFixo, ZoneOffset.UTC));
+            Clock.fixed(instanteFixo, ZoneOffset.UTC),
+            cacheVersionado);
 
     UsuarioAutenticado principal =
         new UsuarioAutenticado("fulano@example.com", dono.getUuid(), "ROLE_USUARIO");
@@ -343,5 +348,62 @@ class CancelarAssinaturaTest {
         .as("Status cancelado no evento")
         .isEqualTo(com.globo.assinatura.shared.contrato.StatusAssinatura.CANCELADA);
     assertThat(evento.fimCiclo()).as("Sem fim de ciclo no evento").isNull();
+  }
+
+  @Test
+  @DisplayName("Deve invalidar o cache do dono ao agendar o cancelamento")
+  void deveInvalidarCacheDoDonoAoAgendarCancelamento() throws Exception {
+    Assinatura assinatura = new Assinatura(42L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    Usuario dono = new Usuario("Fulano", "fulano@example.com");
+    dono.setId(42L);
+    dono.setUuid("11111111-1111-1111-1111-111111111111");
+    UsuarioAutenticado principal =
+        new UsuarioAutenticado("fulano@example.com", dono.getUuid(), "ROLE_USUARIO");
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.of(dono));
+
+    command.executar(assinatura.getUuid(), principal);
+
+    verify(cacheVersionado).invalidarAposCommit("assinatura:list:versao:" + dono.getUuid());
+  }
+
+  @Test
+  @DisplayName("Deve invalidar o cache do dono ao efetivar o cancelamento imediato")
+  void deveInvalidarCacheDoDonoAoEfetivarCancelamentoImediato() throws Exception {
+    Assinatura assinatura = new Assinatura(42L, Plano.BASICO);
+    Usuario dono = new Usuario("Fulano", "fulano@example.com");
+    dono.setId(42L);
+    dono.setUuid("11111111-1111-1111-1111-111111111111");
+    UsuarioAutenticado principal =
+        new UsuarioAutenticado("fulano@example.com", dono.getUuid(), "ROLE_USUARIO");
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.of(dono));
+
+    command.executar(assinatura.getUuid(), principal);
+
+    verify(cacheVersionado).invalidarAposCommit("assinatura:list:versao:" + dono.getUuid());
+  }
+
+  @Test
+  @DisplayName("Nao deve invalidar o cache em cancelamento idempotente")
+  void naoDeveInvalidarCacheEmCancelamentoIdempotente() throws Exception {
+    Assinatura assinatura = new Assinatura(42L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.solicitarCancelamento();
+    Usuario dono = new Usuario("Fulano", "fulano@example.com");
+    dono.setId(42L);
+    dono.setUuid("11111111-1111-1111-1111-111111111111");
+    UsuarioAutenticado principal =
+        new UsuarioAutenticado("fulano@example.com", dono.getUuid(), "ROLE_USUARIO");
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.of(dono));
+
+    command.executar(assinatura.getUuid(), principal);
+
+    verifyNoInteractions(cacheVersionado);
   }
 }

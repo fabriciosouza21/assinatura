@@ -24,7 +24,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class ListarAssinaturasTest {
@@ -35,11 +34,13 @@ class ListarAssinaturasTest {
 
   @Mock private UsuarioRepository usuarioRepository;
 
+  @Mock private AssinaturaListaCache assinaturaListaCache;
+
   @InjectMocks private ListarAssinaturas query;
 
   private static Usuario usuarioComId() {
     Usuario usuario = new Usuario("Fulano", "fulano@example.com");
-    ReflectionTestUtils.setField(usuario, "id", USUARIO_INTERNO);
+    usuario.setId(USUARIO_INTERNO);
     return usuario;
   }
 
@@ -68,6 +69,52 @@ class ListarAssinaturasTest {
         .containsOnly(usuario.getUuid());
     verify(assinaturaRepository)
         .findByUsuarioIdOrderByIdDesc(USUARIO_INTERNO, PageRequest.of(0, 20));
+  }
+
+  @Test
+  @DisplayName("Deve responder do cache sem consultar o banco em acerto de cache")
+  void deveResponderDoCacheSemConsultarBanco() {
+    Usuario usuario = usuarioComId();
+    AssinaturaLista cacheada = new AssinaturaLista(List.of(), 0, 20, 0);
+    when(assinaturaListaCache.recuperar(usuario.getUuid(), 0, 20))
+        .thenReturn(Optional.of(cacheada));
+
+    AssinaturaLista resposta = query.executar(usuario.getUuid(), 0, 20);
+
+    assertThat(resposta).as("Resposta vem do cache").isSameAs(cacheada);
+    verify(usuarioRepository, never()).findByUuid(any());
+    verify(assinaturaRepository, never()).findByUsuarioIdOrderByIdDesc(any(), any());
+  }
+
+  @Test
+  @DisplayName("Deve consultar o banco e popular o cache em miss")
+  void deveConsultarBancoQuandoCacheMiss() {
+    Usuario usuario = usuarioComId();
+    Assinatura assinatura = new Assinatura(USUARIO_INTERNO, Plano.PREMIUM);
+    when(assinaturaListaCache.recuperar(usuario.getUuid(), 0, 20)).thenReturn(Optional.empty());
+    when(usuarioRepository.findByUuid(usuario.getUuid())).thenReturn(Optional.of(usuario));
+    when(assinaturaRepository.findByUsuarioIdOrderByIdDesc(USUARIO_INTERNO, PageRequest.of(0, 20)))
+        .thenReturn(new PageImpl<>(List.of(assinatura), PageRequest.of(0, 20), 1));
+
+    AssinaturaLista resposta = query.executar(usuario.getUuid(), 0, 20);
+
+    assertThat(resposta.items()).as("Itens consultados do banco").hasSize(1);
+    verify(assinaturaListaCache).popular(usuario.getUuid(), 0, 20, resposta);
+  }
+
+  @Test
+  @DisplayName("Deve popular o cache tambem para usuario sem assinaturas")
+  void devePopularCacheParaUsuarioSemAssinaturas() {
+    Usuario usuario = usuarioComId();
+    when(assinaturaListaCache.recuperar(usuario.getUuid(), 0, 20)).thenReturn(Optional.empty());
+    when(usuarioRepository.findByUuid(usuario.getUuid())).thenReturn(Optional.of(usuario));
+    when(assinaturaRepository.findByUsuarioIdOrderByIdDesc(USUARIO_INTERNO, PageRequest.of(0, 20)))
+        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+    AssinaturaLista resposta = query.executar(usuario.getUuid(), 0, 20);
+
+    assertThat(resposta.items()).as("Itens de usuario sem assinaturas").isEmpty();
+    verify(assinaturaListaCache).popular(usuario.getUuid(), 0, 20, resposta);
   }
 
   @Test

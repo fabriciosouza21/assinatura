@@ -83,6 +83,10 @@ app:
     # Menos de um dia faz a renovacao vencer no proprio dia da ativacao (proxima_renovacao_em
     # e DATE), disparando no proximo ciclo do scheduler: util para testar o fluxo via Bruno.
     ciclo-ms: ${APP_RENOVACAO_CICLO_MS:2592000000}
+  cache:
+    # Tempo de vida das paginas da listagem em segundos; rede de seguranca caso
+    # alguma invalidacao falhe.
+    assinatura-lista-ttl: ${APP_CACHE_ASSINATURA_LISTA_TTL:300}
 
 management:
   endpoints:

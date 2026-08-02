@@ -17,29 +17,38 @@ import org.springframework.transaction.annotation.Transactional;
  * Query de listagem de assinaturas.
  *
  * <p>Lista as assinaturas do usuario dono do token, paginadas e ordenadas da mais recente para a
- * mais antiga. Usuario sem assinaturas, ou cujo uuid nao corresponda a um usuario cadastrado,
- * recebe pagina vazia com total zero. Responsavel apenas por leitura.
+ * mais antiga, consultando o cache distribuido antes do banco (cache-aside). Usuario sem
+ * assinaturas, ou cujo uuid nao corresponda a um usuario cadastrado, recebe pagina vazia com total
+ * zero. Responsavel apenas por leitura.
  */
 @Service
 public class ListarAssinaturas {
 
   private final AssinaturaRepository assinaturaRepository;
   private final UsuarioRepository usuarioRepository;
+  private final AssinaturaListaCache assinaturaListaCache;
 
   /**
-   * Constroi a query com os repositorios injetados.
+   * Constroi a query com os repositorios e o cache injetados.
    *
    * @param assinaturaRepository repositorio de persistencia de assinaturas
    * @param usuarioRepository repositorio de persistencia de usuarios
+   * @param assinaturaListaCache cache distribuido da listagem
    */
   public ListarAssinaturas(
-      AssinaturaRepository assinaturaRepository, UsuarioRepository usuarioRepository) {
+      AssinaturaRepository assinaturaRepository,
+      UsuarioRepository usuarioRepository,
+      AssinaturaListaCache assinaturaListaCache) {
     this.assinaturaRepository = assinaturaRepository;
     this.usuarioRepository = usuarioRepository;
+    this.assinaturaListaCache = assinaturaListaCache;
   }
 
   /**
    * Lista as assinaturas do usuario do token, paginadas da mais recente para a mais antiga.
+   *
+   * <p>Em acerto de cache devolve a pagina armazenada sem consultar o banco; em miss consulta o
+   * banco e popula o cache. Falha do Redis degrada para o banco.
    *
    * @param usuarioUuid uuid publico do usuario dono, extraido do token JWT
    * @param page pagina corrente, comecando em 0
@@ -48,6 +57,17 @@ public class ListarAssinaturas {
    */
   @Transactional(readOnly = true)
   public AssinaturaLista executar(String usuarioUuid, int page, int size) {
+    Optional<AssinaturaLista> possivelCacheada =
+        assinaturaListaCache.recuperar(usuarioUuid, page, size);
+    if (possivelCacheada.isPresent()) {
+      return possivelCacheada.get();
+    }
+    AssinaturaLista lista = buscarNoBanco(usuarioUuid, page, size);
+    assinaturaListaCache.popular(usuarioUuid, page, size, lista);
+    return lista;
+  }
+
+  private AssinaturaLista buscarNoBanco(String usuarioUuid, int page, int size) {
     Optional<Usuario> possivelUsuario = usuarioRepository.findByUuid(usuarioUuid);
     if (possivelUsuario.isEmpty()) {
       return new AssinaturaLista(List.of(), page, size, 0);

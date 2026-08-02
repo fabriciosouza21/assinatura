@@ -4,6 +4,7 @@ import com.globo.assinatura.assinatura.Assinatura;
 import com.globo.assinatura.assinatura.AssinaturaRepository;
 import com.globo.assinatura.assinatura.Plano;
 import com.globo.assinatura.assinatura.StatusAssinatura;
+import com.globo.assinatura.shared.cache.CacheVersionado;
 import com.globo.assinatura.shared.contrato.AssinaturaSolicitada;
 import com.globo.assinatura.shared.outbox.OutboxEvent;
 import com.globo.assinatura.shared.outbox.OutboxRepository;
@@ -12,6 +13,8 @@ import com.globo.assinatura.usuario.UsuarioRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +31,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 public class SolicitarAssinatura {
 
+  private static final Logger log = LoggerFactory.getLogger(SolicitarAssinatura.class);
+
   private static final String AGGREGATE_TYPE = "Assinatura";
   private static final String EVENT_TYPE = "AssinaturaSolicitada";
   private static final List<StatusAssinatura> STATUS_ABERTOS =
@@ -37,24 +42,28 @@ public class SolicitarAssinatura {
   private final AssinaturaRepository assinaturaRepository;
   private final OutboxRepository outboxRepository;
   private final JsonMapper jsonMapper;
+  private final CacheVersionado cacheVersionado;
 
   /**
-   * Constroi o command com os repositorios e o serializador JSON injetados.
+   * Constroi o command com os repositorios, o serializador JSON e o cache injetados.
    *
    * @param usuarioRepository repositorio de persistencia de usuarios
    * @param assinaturaRepository repositorio de persistencia de assinaturas
    * @param outboxRepository repositorio de persistencia da outbox
    * @param jsonMapper serializador JSON do evento de dominio
+   * @param cacheVersionado primitivas do cache distribuido para invalidar a listagem
    */
   public SolicitarAssinatura(
       UsuarioRepository usuarioRepository,
       AssinaturaRepository assinaturaRepository,
       OutboxRepository outboxRepository,
-      JsonMapper jsonMapper) {
+      JsonMapper jsonMapper,
+      CacheVersionado cacheVersionado) {
     this.usuarioRepository = usuarioRepository;
     this.assinaturaRepository = assinaturaRepository;
     this.outboxRepository = outboxRepository;
     this.jsonMapper = jsonMapper;
+    this.cacheVersionado = cacheVersionado;
   }
 
   /**
@@ -81,6 +90,11 @@ public class SolicitarAssinatura {
       throw new AssinaturaAbertaException();
     }
     gravarEvento(persistida, usuario, plano);
+    cacheVersionado.invalidarAposCommit("assinatura:list:versao:" + usuario.getUuid());
+    log.atInfo()
+        .addKeyValue("event", "assinatura_lista_cache_invalidada")
+        .addKeyValue("usuarioId", usuario.getUuid())
+        .log("Cache de listagem invalidado apos a solicitacao");
     return persistida;
   }
 
