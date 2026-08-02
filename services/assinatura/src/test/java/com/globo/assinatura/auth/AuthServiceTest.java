@@ -1,6 +1,10 @@
 package com.globo.assinatura.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.globo.assinatura.security.JwtService;
@@ -20,6 +24,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
@@ -28,6 +35,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * uuid publico do usuario de dominio).
  */
 @ExtendWith(MockitoExtension.class)
+@ExtendWith(OutputCaptureExtension.class)
 class AuthServiceTest {
 
   private static final String SECRET = "segredo-suficientemente-longo-para-hs256-aaaa-bbbb";
@@ -89,5 +97,38 @@ class AuthServiceTest {
     assertThat(claims)
         .as("Admin nao possui usuario de dominio ligado")
         .doesNotContainKey("usuarioId");
+  }
+
+  @Test
+  @DisplayName("Deve rodar o password encoder mesmo quando o usuario nao existe")
+  void loginDeUsuarioInexistenteRodaPasswordEncoder(CapturedOutput output) {
+    when(userRepository.findByUsername("nao-existe@example.com")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(
+            () -> authService.login(new LoginRequest("nao-existe@example.com", "SenhaForte1")))
+        .as("Credenciais de usuario inexistente devem ser rejeitadas")
+        .isInstanceOf(BadCredentialsException.class);
+
+    verify(passwordEncoder).matches(eq("SenhaForte1"), anyString());
+  }
+
+  @Test
+  @DisplayName("Deve emitir JWT sem claim usuarioId e registrar warn em credencial orfa")
+  void loginComCredencialOrfaEmiteTokenSemUsuarioId(CapturedOutput output) {
+    User orfao = new User("orfao@example.com", "hash-bcrypt", "ROLE_CLIENT", 99L);
+    when(userRepository.findByUsername("orfao@example.com")).thenReturn(Optional.of(orfao));
+    when(passwordEncoder.matches("SenhaForte1", "hash-bcrypt")).thenReturn(true);
+    when(usuarioRepository.findById(99L)).thenReturn(Optional.empty());
+
+    LoginResponse resposta =
+        authService.login(new LoginRequest("orfao@example.com", "SenhaForte1"));
+
+    Claims claims = claimsDoToken(resposta.token());
+    assertThat(claims)
+        .as("Credencial orfa nao recebe claim usuarioId")
+        .doesNotContainKey("usuarioId");
+    assertThat(output)
+        .as("Warn deve sinalizar a degradacao com evento estavel")
+        .contains("credencial_usuario_orfao");
   }
 }
