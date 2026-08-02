@@ -125,6 +125,42 @@ public class OutboxEvent {
   }
 
   /**
+   * Retorna o tipo do agregado de origem do evento.
+   *
+   * @return tipo do agregado
+   */
+  public String getAggregateType() {
+    return aggregateType;
+  }
+
+  /**
+   * Retorna o identificador publico do agregado de origem.
+   *
+   * @return identificador do agregado
+   */
+  public UUID getAggregateId() {
+    return aggregateId;
+  }
+
+  /**
+   * Retorna o tipo do evento.
+   *
+   * @return tipo do evento
+   */
+  public String getEventType() {
+    return eventType;
+  }
+
+  /**
+   * Retorna o payload do evento serializado em JSON.
+   *
+   * @return payload do evento
+   */
+  public String getPayload() {
+    return payload;
+  }
+
+  /**
    * Retorna a situacao atual do evento.
    *
    * @return situacao do evento
