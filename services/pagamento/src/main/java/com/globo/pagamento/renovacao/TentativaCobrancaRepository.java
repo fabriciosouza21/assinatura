@@ -6,6 +6,7 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Repositorio de persistencia do agregado {@link TentativaCobranca}.
@@ -43,6 +44,17 @@ public interface TentativaCobrancaRepository extends JpaRepository<TentativaCobr
           LIMIT 200
           """)
   List<TentativaCobranca> buscarProntasParaCobrar();
+
+  /**
+   * Busca as tentativas pendentes de uma renovacao.
+   *
+   * @param renovacaoId identificador publico da renovacao
+   * @return tentativas ainda pendentes da renovacao
+   */
+  @Query(
+      "select t from TentativaCobranca t where t.renovacaoId = :renovacaoId "
+          + "and t.status = com.globo.pagamento.renovacao.StatusTentativa.PENDENTE")
+  List<TentativaCobranca> buscarPendentesPorRenovacaoId(@Param("renovacaoId") String renovacaoId);
 
   /**
    * Busca a tentativa cobrada sob o identificador de cobranca do gateway.

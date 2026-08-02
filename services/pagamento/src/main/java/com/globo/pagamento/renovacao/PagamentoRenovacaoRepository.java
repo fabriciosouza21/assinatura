@@ -2,6 +2,7 @@ package com.globo.pagamento.renovacao;
 
 import com.globo.pagamento.cobranca.Plano;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -64,4 +65,12 @@ public interface PagamentoRenovacaoRepository extends JpaRepository<PagamentoRen
    * @return pagamento da renovacao, ou vazio se nao existir
    */
   Optional<PagamentoRenovacao> findByRenovacaoId(String renovacaoId);
+
+  /**
+   * Busca os pagamentos de renovacao vinculados a uma assinatura.
+   *
+   * @param assinaturaId identificador publico da assinatura
+   * @return pagamentos de renovacao encontrados para a assinatura
+   */
+  List<PagamentoRenovacao> findByAssinaturaId(String assinaturaId);
 }
