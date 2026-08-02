@@ -1,0 +1,27 @@
+info:
+  name: Simular recusa
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{mockGatewayUrl}}/v1/mock/payments/{{paymentId}}/status"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "status": "REJECTED"
+      }
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        expect(res.getStatus(), "status do mock").to.be.oneOf([200, 202]);
+        expect(res.body.webhookScheduled).to.equal(true);
+
+settings:
+  encodeUrl: true
