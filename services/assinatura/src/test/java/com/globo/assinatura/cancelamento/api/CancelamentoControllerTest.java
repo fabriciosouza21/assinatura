@@ -1,13 +1,17 @@
 package com.globo.assinatura.cancelamento.api;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.globo.assinatura.assinatura.AssinaturaNaoEncontradaException;
 import com.globo.assinatura.assinatura.StatusAssinatura;
 import com.globo.assinatura.cancelamento.CancelarAssinatura;
 import com.globo.assinatura.security.UsuarioAutenticado;
@@ -32,7 +36,10 @@ import org.springframework.test.web.servlet.MockMvc;
     excludeFilters =
         @ComponentScan.Filter(
             type = FilterType.REGEX,
-            pattern = "com\\.globo\\.assinatura\\.security\\..*"))
+            pattern = {
+              "com\\.globo\\.assinatura\\.security\\..*",
+              "com\\.globo\\.assinatura\\.assinatura\\.AssinaturaExceptionHandler"
+            }))
 @Import(ProblemExceptionHandler.class)
 class CancelamentoControllerTest {
 
@@ -68,5 +75,25 @@ class CancelamentoControllerTest {
         .andExpect(jsonPath("$.acessoAte").value("2026-02-01"));
 
     verify(cancelarAssinatura).executar(ASSINATURA_UUID, principal);
+  }
+
+  @Test
+  @DisplayName("Deve retornar 404 ao cancelar assinatura inexistente")
+  void deveRetornarNotFoundAoCancelarAssinaturaInexistente() throws Exception {
+    UsuarioAutenticado principal =
+        new UsuarioAutenticado("cliente@example.com", USUARIO_UUID, "ROLE_CLIENT");
+    Authentication cliente =
+        new UsernamePasswordAuthenticationToken(
+            principal, null, List.of(new SimpleGrantedAuthority(principal.role())));
+    when(cancelarAssinatura.executar(anyString(), any(UsuarioAutenticado.class)))
+        .thenThrow(new AssinaturaNaoEncontradaException());
+
+    mockMvc
+        .perform(
+            post("/assinaturas/{uuid}/cancelamento", ASSINATURA_UUID)
+                .with(authentication(cliente))
+                .with(csrf()))
+        .andExpect(status().isNotFound())
+        .andExpect(content().string(""));
   }
 }
