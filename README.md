@@ -32,13 +32,25 @@ assinatura  ──AssinaturaSolicitada──▶  kafka  ──▶  pagamento  �
 - **Renovação automática** (Assinatura Service): agendador varre assinaturas
   com `proxima_renovacao_em` vencida, cria a renovação e publica
   `RenovacaoSolicitada` via outbox; consome o resultado e avança o ciclo ou
-  suspende após tentativas esgotadas.
+  suspende após tentativas esgotadas. A duração do ciclo é configurável via
+  `APP_RENOVACAO_CICLO_MS` (default 1 minuto; produção usa 30 dias).
+  `proxima_renovacao_em` é um instante preciso (timestamptz): com ciclo
+  sub-diário, a janela `ATIVA` dura exatamente `cicloMs` reais.
+- **Cancelamento de assinatura**: `POST /assinaturas/{uuid}/cancelamento`
+  (JWT do dono) encerra o contrato e publica `CancelamentoAgendado`; quem
+  desabilita a renovação automática também é cancelado no vencimento do ciclo.
+  O Pagamento Service consome o cancelamento e abandona tentativas pendentes.
+- **Consulta de renovação** (Pagamento Service): `GET /renovacoes/{assinaturaId}`
+  retorna a correlação entre a assinatura e a cobrança de renovação mais recente
+  (`paymentId` e status da tentativa). A consulta de assinatura expõe o ciclo
+  (`inicioCiclo`, `fimCiclo`, `proximaRenovacaoEm`, `renovacaoAutomatica`).
 - **Pagamento Service**: consome `AssinaturaSolicitada` e `RenovacaoSolicitada`,
-  cobra o gateway com idempotência, recebe webhooks com assinatura HMAC e
-  publica os eventos de status.
+  cobra o gateway com idempotência e retries agendados, recebe webhooks com
+  assinatura HMAC e publica os eventos de status via outbox.
 - **Mock do gateway**: cria pagamento (idempotente), consulta status, simula
   aprovação/recusa, dispara webhook assíncrono com assinatura HMAC.
-- **Outbox**: eventos de domínio publicados via outbox com retry e DLQ.
+- **Outbox**: eventos de domínio publicados via outbox com retry e DLQ, nos dois
+  serviços.
 - **Listagem de assinaturas**: `GET /assinaturas` paginado (dono do token), com
   cache Redis cache-aside e invalidação por versão nos fluxos de escrita.
 - **Testes**: unitários por serviço, testes de integração isolados, arquitetura
@@ -46,7 +58,9 @@ assinatura  ──AssinaturaSolicitada──▶  kafka  ──▶  pagamento  �
 
 ## O que falta (escopo do desafio ainda não entregue)
 
-- Endpoint de cancelamento (o opt-out no vencimento existe no domínio).
+- Listagem paginada de assinaturas com cache Redis (`GET /assinaturas`): PRD,
+  contrato OpenAPI e roadmap prontos em `docs/`; a implementação é a release
+  0.4.0 (ver `docs/roadmap/2026-08-02-plano-implementacao-listagem-cache.md`).
 
 A íntegra do escopo e do andamento está em `docs/roadmap/`.
 
@@ -85,10 +99,14 @@ detalhamento de cada fluxo está em `bruno/README.md`; o resumo:
 
 Fluxos disponíveis:
 
-- **Adesão**: cadastrar usuário → login → solicitar assinatura → consultar
-  cobrança → simular aprovação → confirmar `ATIVA`.
-- **Renovação (aprovação)**: após a ativação, a renovação dispara sozinha;
-  consultar renovação → simular aprovação → confirmar ciclo avançado.
+- **Adesão** (`bruno/fluxo/assinatura/`): cadastrar usuário → login →
+  solicitar assinatura → consultar cobrança → simular aprovação → confirmar
+  `ATIVA`. Os endpoints usados ficam separados por serviço em `bruno/api/`
+  (`assinatura/`, `pagamento/`, `mock-gateway/`, `renovacao/`); a pasta
+  `fluxo/assinatura/` reproduz o encadeamento completo em ordem.
+- **Renovação (aprovação)** (`bruno/fluxo/renovacao/`): após a ativação, a
+  renovação dispara sozinha; consultar renovação → simular aprovação →
+  confirmar ciclo avançado.
 - **Renovação (esgotamento)**: simular recusa 3× → confirmar `SUSPENSA`.
 
 Para testar o tempo de renovação em segundos em vez de dias, use o perfil de
@@ -102,10 +120,11 @@ APP_RENOVACAO_TENTATIVAS_BACKOFF_DIAS=0,0
 APP_OUTBOX_INTERVALO_MS=1000
 ```
 
-> `proxima_renovacao_em` é uma data (DATE): com ciclo menor que um dia, a
-> renovação vence "hoje" e dispara no próximo sweep (~1s). Cada aprovação
-> encadeia o ciclo seguinte imediatamente; ciclos de um dia ou mais aguardam
-> dias reais.
+> `proxima_renovacao_em` é um instante preciso (timestamptz): com ciclo menor
+> que um dia, a janela `ATIVA` dura exatamente `cicloMs` reais e a renovação
+> dispara no sweep seguinte (~1s); após aprovar, a assinatura volta a `ATIVA`
+> estável até o ciclo seguinte vencer. Ciclos de um dia ou mais aguardam dias
+> reais.
 
 ## Como rodar
 

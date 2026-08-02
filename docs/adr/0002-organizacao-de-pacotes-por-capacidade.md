@@ -1,7 +1,7 @@
 # ADR 0002: Organização de pacotes por capacidade de negócio (Common Closure)
 
 **Date:** 2026-08-01
-**Status:** Proposed
+**Status:** Accepted
 **Contexto:** Desafio técnico Globo — Sistema de Assinaturas
 
 ## Context

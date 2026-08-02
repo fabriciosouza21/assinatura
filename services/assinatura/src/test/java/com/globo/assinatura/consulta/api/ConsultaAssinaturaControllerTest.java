@@ -14,6 +14,8 @@ import com.globo.assinatura.assinatura.StatusAssinatura;
 import com.globo.assinatura.consulta.ConsultarAssinatura;
 import com.globo.assinatura.shared.seguranca.AcessoNegadoException;
 import com.globo.assinatura.shared.seguranca.UsuarioAutenticado;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -71,6 +73,31 @@ class ConsultaAssinaturaControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value("assinatura-uuid"))
         .andExpect(jsonPath("$.usuarioId").value("usuario-uuid"));
+  }
+
+  @Test
+  @DisplayName("Deve retornar a proxima renovacao em datetime ISO-8601 com ciclos como data")
+  void deveRetornarProximaRenovacaoEmDatetimeIso8601() throws Exception {
+    when(consultarAssinatura.executar(any(), any()))
+        .thenReturn(
+            new AssinaturaResponse(
+                "assinatura-uuid",
+                "usuario-uuid",
+                Plano.PREMIUM,
+                LocalDate.of(2026, 8, 2),
+                LocalDate.of(2026, 9, 2),
+                StatusAssinatura.ATIVA,
+                LocalDate.of(2026, 8, 2),
+                LocalDate.of(2026, 9, 2),
+                Instant.parse("2026-09-02T12:00:00Z"),
+                true));
+
+    mockMvc
+        .perform(get("/assinaturas/assinatura-uuid").with(authentication(cliente())))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.proximaRenovacaoEm").value("2026-09-02T12:00:00Z"))
+        .andExpect(jsonPath("$.fimCiclo").value("2026-09-02"))
+        .andExpect(jsonPath("$.inicioCiclo").value("2026-08-02"));
   }
 
   @Test

@@ -1,6 +1,6 @@
 package com.globo.assinatura.assinatura;
 
-import java.time.LocalDate;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -71,18 +71,18 @@ public interface AssinaturaRepository extends JpaRepository<Assinatura, Long> {
    * linha impede que a mesma assinatura seja renovada duas vezes. A condicao {@code <=} recupera
    * renovações atrasadas apos indisponibilidade da aplicacao.
    *
-   * @param hoje data corrente usada como limite de vencimento
+   * @param agora instante corrente usado como limite de vencimento
    * @param limite maximo de assinaturas selecionadas por ciclo
    * @return assinaturas vencidas bloqueadas para renovacao
    */
   @Query(
       value =
           "SELECT * FROM assinatura "
-              + "WHERE status = 'ATIVA' AND proxima_renovacao_em <= :hoje "
+              + "WHERE status = 'ATIVA' AND proxima_renovacao_em <= :agora "
               + "ORDER BY proxima_renovacao_em "
               + "LIMIT :limite "
               + "FOR UPDATE SKIP LOCKED",
       nativeQuery = true)
   List<Assinatura> buscarVencidasParaRenovacao(
-      @Param("hoje") LocalDate hoje, @Param("limite") int limite);
+      @Param("agora") Instant agora, @Param("limite") int limite);
 }

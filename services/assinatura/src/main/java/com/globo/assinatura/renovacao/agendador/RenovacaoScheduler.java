@@ -28,7 +28,7 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Varre assinaturas com o ciclo vencido e dispara a renovacao automatica.
  *
- * <p>Seleciona assinaturas ativas com {@code proxima_renovacao_em <= hoje} sob {@code FOR UPDATE
+ * <p>Seleciona assinaturas ativas com {@code proxima_renovacao_em <= agora} sob {@code FOR UPDATE
  * SKIP LOCKED}, permitindo que multiplas instâncias processem lotes disjuntos. Para cada uma: se o
  * dono optou por nao renovar, cancela a assinatura e grava {@code AssinaturaCancelada} na outbox.
  * Caso contrario, cria a renovacao do ciclo (idempotente por ciclo) e grava {@code
@@ -64,7 +64,7 @@ public class RenovacaoScheduler {
    * @param usuarioRepository repositorio de persistencia de usuarios
    * @param cacheVersionado primitivas do cache distribuido para invalidar a listagem
    * @param tamanhoLote maximo de assinaturas processadas por ciclo
-   * @param clock relogio para calculo da data de vencimento e do instante do evento
+   * @param clock relogio para calculo do instante de vencimento e do instante do evento
    */
   public RenovacaoScheduler(
       AssinaturaRepository assinaturaRepository,
@@ -96,7 +96,7 @@ public class RenovacaoScheduler {
   @Transactional
   public void varrerVencimentos() {
     List<Assinatura> vencidas =
-        assinaturaRepository.buscarVencidasParaRenovacao(LocalDate.now(clock), tamanhoLote);
+        assinaturaRepository.buscarVencidasParaRenovacao(Instant.now(clock), tamanhoLote);
     log.atDebug()
         .addKeyValue("event", "renovacao_batch_inicio")
         .addKeyValue("tamanhoLote", vencidas.size())

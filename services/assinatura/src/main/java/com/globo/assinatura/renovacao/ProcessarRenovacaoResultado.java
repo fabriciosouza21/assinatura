@@ -15,6 +15,7 @@ import com.globo.assinatura.usuario.UsuarioRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -145,7 +146,8 @@ public class ProcessarRenovacaoResultado {
     }
     Assinatura assinatura = possivelAssinatura.get();
     renovacao.aprovar();
-    assinatura.renovar(assinatura.getFimCiclo().plusDays(Duration.ofMillis(cicloMs).toDays()));
+    LocalDate novoFimCiclo = assinatura.getFimCiclo().plusDays(Duration.ofMillis(cicloMs).toDays());
+    assinatura.renovar(novoFimCiclo, Instant.now(clock).plusMillis(cicloMs));
     gravarEvento(assinatura, renovacao, evento);
     registrarIdempotencia(evento.eventId(), renovacao.getUuid());
     invalidarCache(assinatura);

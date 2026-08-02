@@ -74,7 +74,8 @@ class CancelarAssinaturaTest {
   @DisplayName("Deve carimbar o instante do evento com o relogio injetado")
   void deveCarimbarInstanteDoEventoComRelogioInjetado() throws Exception {
     Assinatura assinatura = new Assinatura(42L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T00:00:00Z"));
     Usuario dono = new Usuario("Fulano", "fulano@example.com");
     dono.setId(42L);
     dono.setUuid("11111111-1111-1111-1111-111111111111");
@@ -110,7 +111,7 @@ class CancelarAssinaturaTest {
     LocalDate inicioCiclo = LocalDate.of(2026, 1, 1);
     LocalDate fimCiclo = LocalDate.of(2026, 2, 1);
     Assinatura assinatura = new Assinatura(42L, Plano.BASICO);
-    assinatura.ativar(inicioCiclo, fimCiclo);
+    assinatura.ativar(inicioCiclo, fimCiclo, fimCiclo.atStartOfDay(ZoneOffset.UTC).toInstant());
     Usuario dono = new Usuario("Fulano", "fulano@example.com");
     dono.setId(42L);
     dono.setUuid("11111111-1111-1111-1111-111111111111");
@@ -154,7 +155,8 @@ class CancelarAssinaturaTest {
   @DisplayName("Deve cancelar imediatamente assinatura suspensa sem preservar o acesso")
   void deveCancelarImediatamenteAssinaturaSuspensaSemPreservarAcesso() throws Exception {
     Assinatura assinatura = new Assinatura(42L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T00:00:00Z"));
     assinatura.iniciarRenovacao();
     assinatura.suspender();
     Usuario dono = new Usuario("Fulano", "fulano@example.com");
@@ -172,6 +174,9 @@ class CancelarAssinaturaTest {
         .as("Status apos o cancelamento imediato")
         .isEqualTo(StatusAssinatura.CANCELADA);
     assertThat(resposta.acessoAte()).as("Sem acesso a preservar no cancelamento imediato").isNull();
+    assertThat(assinatura.getProximaRenovacaoEm())
+        .as("Instante da proxima renovacao limpo no cancelamento imediato")
+        .isNull();
 
     ArgumentCaptor<OutboxEvent> capturado = ArgumentCaptor.forClass(OutboxEvent.class);
     verify(outboxRepository).save(capturado.capture());
@@ -185,7 +190,8 @@ class CancelarAssinaturaTest {
   @DisplayName("Deve registrar log do cancelamento agendado")
   void deveRegistrarLogDoCancelamentoAgendado() {
     Assinatura assinatura = new Assinatura(42L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T00:00:00Z"));
     Usuario dono = new Usuario("Fulano", "fulano@example.com");
     dono.setId(42L);
     dono.setUuid("11111111-1111-1111-1111-111111111111");

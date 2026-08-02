@@ -18,6 +18,7 @@ import com.globo.assinatura.usuario.UsuarioRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -108,8 +109,11 @@ class RenovacaoResultadoConsumerIntegracaoTest {
                   .as("Status transitou para ATIVA apos consumo do evento APROVADO")
                   .isEqualTo(StatusAssinatura.ATIVA);
               assertThat(assinaturaAtualizada.getFimCiclo())
-                  .as("Fim do ciclo avancado em uma duracao de ciclo")
-                  .isEqualTo(assinatura.getFimCiclo().plusDays(30));
+                  .as("Fim do ciclo preservado com ciclo sub-diario, sem avancar dias")
+                  .isEqualTo(assinatura.getFimCiclo());
+              assertThat(assinaturaAtualizada.getProximaRenovacaoEm())
+                  .as("Proxima renovacao agendada no futuro pelo instante do processamento")
+                  .isAfter(Instant.now());
 
               Renovacao renovacaoAtualizada =
                   renovacaoRepository.findById(renovacao.getId()).orElseThrow();
@@ -215,7 +219,7 @@ class RenovacaoResultadoConsumerIntegracaoTest {
     Assinatura assinatura = new Assinatura(usuario.getId(), Plano.PREMIUM);
     LocalDate inicio = LocalDate.now().minusDays(60);
     LocalDate vencimento = LocalDate.now().minusDays(30);
-    assinatura.ativar(inicio, vencimento);
+    assinatura.ativar(inicio, vencimento, vencimento.atStartOfDay(ZoneOffset.UTC).toInstant());
     assinaturaRepository.saveAndFlush(assinatura);
     assinatura.iniciarRenovacao();
     assinaturaRepository.saveAndFlush(assinatura);

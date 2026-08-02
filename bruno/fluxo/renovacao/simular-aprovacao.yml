@@ -1,0 +1,27 @@
+info:
+  name: Simular aprovacao
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{mockGatewayUrl}}/v1/mock/payments/{{paymentId}}/status"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "status": "APPROVED"
+      }
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        expect(res.getStatus(), "status do mock").to.be.oneOf([200, 202]);
+        expect(res.body.webhookScheduled).to.equal(true);
+
+settings:
+  encodeUrl: true

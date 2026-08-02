@@ -12,7 +12,10 @@ import com.globo.assinatura.shared.outbox.OutboxRepository;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
 import java.lang.reflect.Field;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -111,6 +114,46 @@ class RenovacaoSchedulerIntegracaoTest {
         .isZero();
   }
 
+  @Test
+  @DisplayName("Deve retomar no primeiro sweep assinatura vencida ha instantes")
+  void deveRetomarVencidaNoPrimeiroSweepComJanelaSubDiaria() {
+    Assinatura assinatura = persistirAssinaturaAtiva(Instant.now().minusSeconds(5));
+
+    scheduler.varrerVencimentos();
+
+    Assinatura recarregada = assinaturaRepository.findById(assinatura.getId()).orElseThrow();
+    assertThat(recarregada.getStatus())
+        .as("Assinatura vencida ha instantes retomada no primeiro sweep")
+        .isEqualTo(StatusAssinatura.EM_RENOVACAO);
+  }
+
+  @Test
+  @DisplayName("Nao deve selecionar assinatura com proxima renovacao ainda no futuro")
+  void naoDeveSelecionarAssinaturaComProximaRenovacaoNoFuturo() {
+    Assinatura assinatura = persistirAssinaturaAtiva(Instant.now().plus(Duration.ofMinutes(5)));
+
+    scheduler.varrerVencimentos();
+
+    Assinatura recarregada = assinaturaRepository.findById(assinatura.getId()).orElseThrow();
+    assertThat(recarregada.getStatus())
+        .as("Assinatura com instante futuro permanece ativa")
+        .isEqualTo(StatusAssinatura.ATIVA);
+    assertThat(renovacaoRepository.countByAssinaturaId(assinatura.getId()))
+        .as("Nenhuma renovacao criada para instante futuro")
+        .isZero();
+  }
+
+  private Assinatura persistirAssinaturaAtiva(Instant proximaRenovacaoEm) {
+    Usuario usuario =
+        usuarioRepository.save(
+            new Usuario("Fulano", "scheduler-ativa-" + UUID.randomUUID() + "@example.com"));
+    Assinatura assinatura = new Assinatura(usuario.getId(), Plano.PREMIUM);
+    LocalDate inicio = LocalDate.now().minusDays(60);
+    LocalDate vencimento = LocalDate.now().minusDays(30);
+    assinatura.ativar(inicio, vencimento, proximaRenovacaoEm);
+    return assinaturaRepository.saveAndFlush(assinatura);
+  }
+
   private Assinatura persistirAssinaturaAtivaVencida(boolean renovacaoAutomatica) {
     // Email unico por execucao para nao conflitar com os demais testes de integracao que
     // compartilham a base sem cleanup.
@@ -120,7 +163,7 @@ class RenovacaoSchedulerIntegracaoTest {
     Assinatura assinatura = new Assinatura(usuario.getId(), Plano.PREMIUM);
     LocalDate inicio = LocalDate.now().minusDays(60);
     LocalDate vencimento = LocalDate.now().minusDays(30);
-    assinatura.ativar(inicio, vencimento);
+    assinatura.ativar(inicio, vencimento, vencimento.atStartOfDay(ZoneOffset.UTC).toInstant());
     if (!renovacaoAutomatica) {
       desabilitarRenovacaoAutomatica(assinatura);
     }

@@ -14,6 +14,8 @@ import com.globo.assinatura.shared.seguranca.AcessoNegadoException;
 import com.globo.assinatura.shared.seguranca.UsuarioAutenticado;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,6 +53,26 @@ class ConsultarAssinaturaTest {
     assertThat(resposta.status()).as("Status").isEqualTo(StatusAssinatura.AGUARDANDO_PAGAMENTO);
     assertThat(resposta.dataInicio()).as("Data inicio nula enquanto aguarda").isNull();
     assertThat(resposta.dataExpiracao()).as("Data expiracao nula enquanto aguarda").isNull();
+  }
+
+  @Test
+  @DisplayName("Deve expor a proxima renovacao como instante preservando o horario")
+  void deveExporProximaRenovacaoComoInstantePreservandoHorario() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T12:30:00Z"));
+    Usuario usuario = new Usuario("Fulano", "fulano@example.com");
+    when(assinaturaRepository.findByUuid(assinatura.getUuid())).thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.of(usuario));
+
+    AssinaturaResponse resposta = query.executar(assinatura.getUuid(), dono(usuario));
+
+    assertThat(resposta.proximaRenovacaoEm())
+        .as("Instante da proxima renovacao preservado na consulta")
+        .isEqualTo(Instant.parse("2026-02-01T12:30:00Z"));
+    assertThat(resposta.fimCiclo())
+        .as("Fim do ciclo continua exposto como data")
+        .isEqualTo(LocalDate.of(2026, 2, 1));
   }
 
   @Test

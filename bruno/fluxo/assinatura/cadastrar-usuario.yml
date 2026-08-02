@@ -1,0 +1,30 @@
+info:
+  name: Cadastrar usuario
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{assinaturaUrl}}/usuarios"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "nome": "Usuario Teste",
+        "email": "usuario.teste@example.com",
+        "senha": "{{password}}"
+      }
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        bru.setVar("usuarioId", res.body.id);
+        expect(res.getStatus()).to.equal(201);
+        expect(res.body.id, "usuarioId capturado").to.be.a('string');
+
+settings:
+  encodeUrl: true

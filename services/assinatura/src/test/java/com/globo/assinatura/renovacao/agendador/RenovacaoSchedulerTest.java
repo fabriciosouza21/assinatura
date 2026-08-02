@@ -180,18 +180,19 @@ class RenovacaoSchedulerTest {
   }
 
   @Test
-  @DisplayName("Deve buscar as vencidas usando a data do relogio injetado, nao o relogio de parede")
-  void deveUsarDataDoRelogioInjetadoAoBuscarVencidas() {
-    RenovacaoScheduler schedulerComRelogio = schedulerComRelogioFixo("2026-01-15T10:00:00Z");
+  @DisplayName("Deve buscar as vencidas usando o instante do relogio injetado, nao o de parede")
+  void deveUsarInstanteDoRelogioInjetadoAoBuscarVencidas() {
+    Instant instanteFixo = Instant.parse("2026-01-15T10:00:00Z");
+    RenovacaoScheduler schedulerComRelogio = schedulerComRelogioFixo(instanteFixo.toString());
     when(assinaturaRepository.buscarVencidasParaRenovacao(any(), anyInt())).thenReturn(List.of());
 
     schedulerComRelogio.varrerVencimentos();
 
-    ArgumentCaptor<LocalDate> dataCaptor = ArgumentCaptor.forClass(LocalDate.class);
-    verify(assinaturaRepository).buscarVencidasParaRenovacao(dataCaptor.capture(), eq(100));
-    assertThat(dataCaptor.getValue())
-        .as("Data do relogio injetado repassada a busca de vencidas")
-        .isEqualTo(LocalDate.of(2026, 1, 15));
+    ArgumentCaptor<Instant> instanteCaptor = ArgumentCaptor.forClass(Instant.class);
+    verify(assinaturaRepository).buscarVencidasParaRenovacao(instanteCaptor.capture(), eq(100));
+    assertThat(instanteCaptor.getValue())
+        .as("Instante do relogio injetado repassado a busca de vencidas")
+        .isEqualTo(instanteFixo);
   }
 
   @Test
@@ -257,7 +258,8 @@ class RenovacaoSchedulerTest {
 
   private Assinatura assinaturaAtivaVencida(boolean renovacaoAutomatica) {
     Assinatura assinatura = new Assinatura(1L, Plano.PREMIUM);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T00:00:00Z"));
     // O id tecnico e gerado pelo banco em producao; no teste unitario e ajustado por reflection
     // para que as chamadas aos repositorios recebam o identificador esperado.
     setId(assinatura, 1L);
