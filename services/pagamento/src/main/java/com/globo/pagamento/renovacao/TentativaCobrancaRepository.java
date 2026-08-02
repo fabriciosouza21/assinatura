@@ -46,14 +46,20 @@ public interface TentativaCobrancaRepository extends JpaRepository<TentativaCobr
   List<TentativaCobranca> buscarProntasParaCobrar();
 
   /**
-   * Busca as tentativas pendentes de uma renovacao.
+   * Busca as tentativas pendentes de uma renovacao ainda nao enviadas ao gateway.
+   *
+   * <p>Somente tentativas sem {@code paymentId} podem ser canceladas. O lock de escrita serializa o
+   * cancelamento com o scheduler, impedindo que uma tentativa seja enviada ao gateway enquanto esta
+   * sendo cancelada.
    *
    * @param renovacaoId identificador publico da renovacao
-   * @return tentativas ainda pendentes da renovacao
+   * @return tentativas pendentes e ainda nao enviadas da renovacao
    */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(
       "select t from TentativaCobranca t where t.renovacaoId = :renovacaoId "
-          + "and t.status = com.globo.pagamento.renovacao.StatusTentativa.PENDENTE")
+          + "and t.status = com.globo.pagamento.renovacao.StatusTentativa.PENDENTE "
+          + "and t.paymentId is null")
   List<TentativaCobranca> buscarPendentesPorRenovacaoId(@Param("renovacaoId") String renovacaoId);
 
   /**
