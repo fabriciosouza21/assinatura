@@ -332,4 +332,22 @@ class AssinaturaTest {
         .as("Renovacao automatica permanece desligada")
         .isFalse();
   }
+
+  @Test
+  @DisplayName("Deve desabilitar renovacao automatica no cancelamento imediato")
+  void deveDesabilitarRenovacaoAutomaticaAoCancelarImediatamenteAssinaturaAguardandoPagamento() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+
+    EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
+
+    assertThat(efeito)
+        .as("Efeito do cancelamento em assinatura aguardando pagamento")
+        .isEqualTo(EfeitoCancelamento.IMEDIATO);
+    assertThat(assinatura.isRenovacaoAutomatica())
+        .as("Renovacao automatica desligada no cancelamento imediato")
+        .isFalse();
+    assertThat(assinatura.getStatus())
+        .as("Status transita para cancelada imediatamente")
+        .isEqualTo(StatusAssinatura.CANCELADA);
+  }
 }

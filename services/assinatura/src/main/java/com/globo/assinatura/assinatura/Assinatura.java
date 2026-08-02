@@ -187,6 +187,7 @@ public class Assinatura {
     if (this.status == StatusAssinatura.SUSPENSA
         || this.status == StatusAssinatura.AGUARDANDO_PAGAMENTO
         || this.status == StatusAssinatura.PAGAMENTO_RECUSADO) {
+      this.renovacaoAutomatica = false;
       this.status = StatusAssinatura.CANCELADA;
       return EfeitoCancelamento.IMEDIATO;
     }
