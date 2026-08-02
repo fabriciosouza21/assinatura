@@ -92,6 +92,7 @@ class ProcessarWebhookRenovacaoTest {
         .isEqualTo("PagamentoRenovacaoAprovado");
     assertThat(evento.getPayload())
         .as("Payload com renovacao, pagamento e ciclo")
+        .contains("\"tipo\":\"APROVADO\"")
         .contains("\"renovacaoId\":\"" + RENOVACAO_ID + "\"")
         .contains("\"paymentId\":\"" + PAYMENT_ID + "\"")
         .contains("\"cicloReferencia\":2");
@@ -166,6 +167,7 @@ class ProcessarWebhookRenovacaoTest {
         .isEqualTo("RenovacaoTentativasEsgotadas");
     assertThat(evento.getPayload())
         .as("Evento terminal sem paymentId, conforme o contrato")
+        .contains("\"tipo\":\"ESGOTADO\"")
         .contains("\"renovacaoId\":\"" + RENOVACAO_ID + "\"")
         .doesNotContain("paymentId");
   }

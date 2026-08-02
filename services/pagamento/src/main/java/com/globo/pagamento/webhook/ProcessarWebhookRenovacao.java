@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Command que decide o resultado de uma cobranca de renovacao a partir do status oficial do
@@ -142,6 +143,7 @@ public class ProcessarWebhookRenovacao {
         eventId,
         pagamento,
         "PagamentoRenovacaoAprovado",
+        "APROVADO",
         new PagamentoRenovacaoAprovado(
             eventId,
             Instant.now(),
@@ -167,6 +169,7 @@ public class ProcessarWebhookRenovacao {
           eventId,
           pagamento,
           "RenovacaoTentativasEsgotadas",
+          "ESGOTADO",
           new RenovacaoTentativasEsgotadas(
               eventId,
               Instant.now(),
@@ -199,8 +202,12 @@ public class ProcessarWebhookRenovacao {
   }
 
   private void gravarOutbox(
-      UUID eventId, PagamentoRenovacao pagamento, String eventType, Object evento) {
-    String payload = objectMapper.writeValueAsString(evento);
+      UUID eventId, PagamentoRenovacao pagamento, String eventType, String tipo, Object evento) {
+    ObjectNode envelope = objectMapper.createObjectNode();
+    ObjectNode corpo = objectMapper.valueToTree(evento);
+    envelope.put("tipo", tipo);
+    envelope.setAll(corpo);
+    String payload = objectMapper.writeValueAsString(envelope);
     outboxRepository.save(
         OutboxEvent.criar(
             eventId,
