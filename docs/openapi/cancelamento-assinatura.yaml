@@ -1,0 +1,203 @@
+openapi: 3.1.0
+info:
+  title: Cancelamento de assinatura
+  description: |
+    Endpoint de cancelamento exposto pelo Assinatura Service. Cancelar e um
+    opt-out da renovacao automatica, nao uma interrupcao do ciclo pago: uma
+    assinatura `ATIVA` continua `ATIVA` ate `fimCiclo` e so transita para
+    `CANCELADA` na varredura de vencimentos.
+
+    Diferente de `POST /assinaturas` e `GET /assinaturas/{uuid}`, que sao
+    publicos ate o login de cliente (ADR 0001), o cancelamento altera o ciclo de
+    vida de um contrato e cai na regra `anyRequest().authenticated()` do
+    `SecurityConfig`: exige JWT do dono da assinatura.
+
+    A operacao e idempotente: repetir a chamada nao gera evento novo nem
+    antecipa o fim do ciclo.
+
+    Contratos de referencia:
+      - `docs/cancelamento/cancelamento-assinatura.puml`
+      - `docs/openapi/assinatura.yaml` (solicitacao e consulta)
+  version: 0.1.0
+servers:
+  - url: http://assinatura:8080
+    description: Rede interna do docker-compose
+  - url: http://localhost:18080
+    description: Host local (porta publicada)
+tags:
+  - name: Assinatura
+    description: Cancelamento de assinatura
+
+security:
+  - bearerAuth: []
+
+paths:
+  /assinaturas/{uuid}/cancelamento:
+    post:
+      tags: [Assinatura]
+      summary: Cancela a assinatura de um usuario
+      description: |
+        Registra o cancelamento da assinatura identificada pelo uuid publico. O
+        efeito depende do status corrente:
+
+          - `ATIVA`: marca `renovacaoAutomatica = false` e **mantem o status
+            ATIVA**. O acesso segue ate `acessoAte` (fim do ciclo ja pago) e
+            nenhuma nova cobranca e criada. A transicao para `CANCELADA`
+            acontece na varredura de vencimentos.
+          - `EM_RENOVACAO`: marca `renovacaoAutomatica = false` sem abortar a
+            cobranca em curso. Se ela for aprovada, o ciclo recem-pago e o
+            ultimo; se as tentativas se esgotarem, a assinatura e suspensa.
+          - `AGUARDANDO_PAGAMENTO`, `PAGAMENTO_RECUSADO` e `SUSPENSA`: nao ha
+            ciclo pago a preservar, o cancelamento e imediato e o status vai
+            para `CANCELADA`.
+          - `CANCELADA`: nenhuma alteracao, resposta 200 com o estado atual.
+
+        A assinatura e lida sob bloqueio de linha, impedindo que o cancelamento
+        e a varredura de vencimentos decidam o mesmo ciclo em paralelo. A
+        alteracao e o evento de outbox sao gravados na mesma transacao.
+      operationId: cancelarAssinatura
+      parameters:
+        - $ref: '#/components/parameters/AssinaturaUuid'
+      responses:
+        '200':
+          description: Cancelamento registrado (ou ja registrado, no caso idempotente).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelamentoResponse'
+              examples:
+                agendado:
+                  summary: Assinatura ATIVA — acesso preservado ate o fim do ciclo
+                  value:
+                    id: 770e8400-e29b-41d4-a716-446655440000
+                    status: ATIVA
+                    renovacaoAutomatica: false
+                    acessoAte: "2025-04-10"
+                emRenovacao:
+                  summary: Cobranca de renovacao em curso — decide o ultimo ciclo
+                  value:
+                    id: 770e8400-e29b-41d4-a716-446655440000
+                    status: EM_RENOVACAO
+                    renovacaoAutomatica: false
+                    acessoAte: "2025-04-10"
+                imediato:
+                  summary: Assinatura sem ciclo pago — cancelamento imediato
+                  value:
+                    id: 770e8400-e29b-41d4-a716-446655440000
+                    status: CANCELADA
+                    renovacaoAutomatica: false
+                    acessoAte: null
+                idempotente:
+                  summary: Assinatura ja cancelada — nenhuma alteracao
+                  value:
+                    id: 770e8400-e29b-41d4-a716-446655440000
+                    status: CANCELADA
+                    renovacaoAutomatica: false
+                    acessoAte: "2025-04-10"
+        '400':
+          description: uuid malformado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                status: 400
+                title: Requisicao invalida
+                errors:
+                  - campo: uuid
+                    motivo: deve ser um uuid valido
+        '401':
+          description: Token ausente, expirado ou invalido. Corpo vazio.
+        '403':
+          description: Token valido de outro usuario que nao o dono da assinatura. Corpo vazio.
+        '404':
+          description: uuid nao corresponde a nenhuma assinatura. Corpo vazio.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT emitido por `POST /auth/login` (ver `docs/openapi/auth.yaml`).
+  parameters:
+    AssinaturaUuid:
+      name: uuid
+      in: path
+      required: true
+      description: Uuid publico da assinatura, o mesmo devolvido em `POST /assinaturas`.
+      schema:
+        type: string
+        format: uuid
+      example: 770e8400-e29b-41d4-a716-446655440000
+  schemas:
+    StatusAssinatura:
+      type: string
+      description: |
+        Status do ciclo de vida da assinatura. Valores alcancaveis como resposta
+        do cancelamento: `ATIVA` (cancelamento agendado), `EM_RENOVACAO`
+        (cobranca em curso decide o ultimo ciclo) e `CANCELADA` (efetivado).
+      enum:
+        - AGUARDANDO_PAGAMENTO
+        - ATIVA
+        - PAGAMENTO_RECUSADO
+        - EM_RENOVACAO
+        - SUSPENSA
+        - CANCELADA
+      example: ATIVA
+    CancelamentoResponse:
+      type: object
+      description: |
+        Estado da assinatura apos o cancelamento. Enquanto `status` for `ATIVA`
+        com `renovacaoAutomatica = false`, o cancelamento esta agendado e o
+        acesso permanece liberado — e o mesmo par que `GET /assinaturas/{uuid}`
+        devolve durante a carencia.
+      required: [id, status, renovacaoAutomatica]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Uuid publico da assinatura cancelada.
+          example: 770e8400-e29b-41d4-a716-446655440000
+        status:
+          $ref: '#/components/schemas/StatusAssinatura'
+        renovacaoAutomatica:
+          type: boolean
+          description: |
+            Sempre `false` apos o cancelamento. Nenhuma nova cobranca sera
+            criada para os proximos ciclos.
+          example: false
+        acessoAte:
+          type: [string, "null"]
+          format: date
+          description: |
+            Fim do ciclo ja pago (`fimCiclo`), ate quando o servico permanece
+            disponivel. Nulo quando nao ha ciclo pago a preservar (assinatura
+            cancelada antes da primeira ativacao).
+          example: "2025-04-10"
+    Problem:
+      type: object
+      description: |
+        Detalhe de erro (RFC 9457). O array `errors` lista os campos invalidos
+        no 400. As demais respostas de erro retornam corpo vazio.
+      properties:
+        status:
+          type: integer
+          description: Codigo de status HTTP.
+        title:
+          type: string
+          description: Titulo curto do erro.
+        errors:
+          type: array
+          description: Campos invalidos (presente no 400).
+          items:
+            type: object
+            required: [campo, motivo]
+            properties:
+              campo:
+                type: string
+                description: Nome do campo invalido.
+              motivo:
+                type: string
+                description: Motivo da invalidade.

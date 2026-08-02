@@ -17,10 +17,15 @@ import java.time.Instant;
  * <p>Agregado de persistencia que registra o pedido de renovacao recebido de {@code
  * RenovacaoSolicitada}. A unicidade por {@code renovacaoId} e a garantia de idempotencia: um
  * redelivery nao cria um segundo pagamento para a mesma renovacao.
+ *
+ * <p>E tambem a fabrica das {@link TentativaCobranca} do ciclo: a sequencia de {@code numero} nasce
+ * aqui, e nao no chamador, para que nenhuma tentativa seja criada fora de ordem.
  */
 @Entity
 @Table(name = "pagamento_renovacao")
 public class PagamentoRenovacao {
+
+  private static final int PRIMEIRA_TENTATIVA = 1;
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -77,6 +82,41 @@ public class PagamentoRenovacao {
     this.plano = plano;
     this.valor = valor;
     this.cicloReferencia = cicloReferencia;
+  }
+
+  /**
+   * Registra a primeira tentativa de cobranca desta renovacao.
+   *
+   * <p>Nasce {@link StatusTentativa#PENDENTE}, sem {@code paymentId} e sem agendamento: o scheduler
+   * a cobra no proximo ciclo.
+   *
+   * @return tentativa de numero {@value #PRIMEIRA_TENTATIVA}
+   */
+  public TentativaCobranca registrarTentativa() {
+    return new TentativaCobranca(renovacaoId, PRIMEIRA_TENTATIVA);
+  }
+
+  /**
+   * Registra a tentativa seguinte a uma tentativa recusada, agendada para o futuro.
+   *
+   * <p>O numero e derivado da tentativa anterior, mantendo a sequencia dentro do agregado. A
+   * tentativa nasce sem {@code paymentId}: quem cobra e o scheduler, quando {@code
+   * proximaTentativaEm} vencer.
+   *
+   * @param anterior tentativa recusada que origina a proxima; deve pertencer a esta renovacao
+   * @param proximaTentativaEm instante a partir do qual a nova tentativa fica elegivel para
+   *     cobranca
+   * @return tentativa com o numero seguinte ao da anterior
+   * @throws IllegalArgumentException se {@code anterior} for nula ou de outra renovacao
+   */
+  public TentativaCobranca registrarTentativa(
+      TentativaCobranca anterior, Instant proximaTentativaEm) {
+    if (anterior == null || !renovacaoId.equals(anterior.getRenovacaoId())) {
+      throw new IllegalArgumentException("tentativa anterior deve pertencer a esta renovacao");
+    }
+    TentativaCobranca proxima = new TentativaCobranca(renovacaoId, anterior.getNumero() + 1);
+    proxima.agendarPara(proximaTentativaEm);
+    return proxima;
   }
 
   /**

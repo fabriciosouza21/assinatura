@@ -1,0 +1,160 @@
+@startuml
+title Cancelamento de assinatura (acesso preservado até o fim do ciclo)
+
+autonumber
+hide footbox
+
+skinparam backgroundColor #FFFFFF
+skinparam ParticipantPadding 24
+skinparam BoxPadding 10
+skinparam maxMessageSize 100
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor "Cliente" as CLI
+control "Assinatura\nService" as AS
+database "DB\nAssinaturas" as DBAS
+participant "Outbox Publisher\n(Assinatura)" as OUTBOX
+queue "Kafka" as KAFKA
+control "Pagamento\nService" as PS
+database "DB\nPagamentos" as DBPS
+participant "Scheduler de\nRenovação" as SCHED
+
+== Solicitar cancelamento ==
+
+CLI -> AS: POST /assinaturas/{uuid}/cancelamento
+AS -> DBAS: Busca assinatura pelo uuid, com lock
+
+note over AS, DBAS
+  O bloqueio da linha impede que o cancelamento
+  e a varredura de vencimentos decidam o mesmo
+  ciclo em paralelo.
+end note
+
+alt uuid não corresponde a assinatura
+    DBAS --> AS: Nenhuma linha
+    AS --> CLI: 404 Not Found
+else assinatura encontrada
+    DBAS --> AS: {assinaturaId, status, fimCiclo,\nrenovacaoAutomatica}
+
+    == Decidir pelo status do ciclo ==
+
+    alt status = ATIVA
+        AS -> DBAS: Marca renovacao_automatica = false\n(status permanece ATIVA)
+        AS -> DBAS: Grava evento CancelamentoAgendado\nna tabela outbox
+        AS --> CLI: 200 OK\n{status: ATIVA, renovacaoAutomatica: false,\nacessoAte: fimCiclo}
+
+        note right of AS
+          O ciclo já pago não é interrompido.
+          O acesso segue até fimCiclo e nenhuma
+          nova cobrança é criada.
+        end note
+    else status = EM_RENOVACAO
+        AS -> DBAS: Marca renovacao_automatica = false\n(status permanece EM_RENOVACAO)
+        AS -> DBAS: Grava evento CancelamentoAgendado\nna tabela outbox
+        AS --> CLI: 200 OK\n{status: EM_RENOVACAO, renovacaoAutomatica: false}
+
+        note right of AS
+          A cobrança em curso não é abortada.
+          Se aprovada, o ciclo recém-pago é o
+          último; se as tentativas se esgotarem,
+          a assinatura é suspensa.
+        end note
+    else status = AGUARDANDO_PAGAMENTO
+        AS -> DBAS: Marca assinatura como CANCELADA
+        AS -> DBAS: Grava evento AssinaturaCancelada\nna tabela outbox
+        AS --> CLI: 200 OK\n{status: CANCELADA}
+
+        note right of AS
+          Não há ciclo pago a preservar:
+          o cancelamento é imediato.
+        end note
+    else status = SUSPENSA ou PAGAMENTO_RECUSADO
+        AS -> DBAS: Marca assinatura como CANCELADA
+        AS -> DBAS: Grava evento AssinaturaCancelada\nna tabela outbox
+        AS --> CLI: 200 OK\n{status: CANCELADA}
+
+        note right of AS
+          O acesso já estava interrompido.
+          O cancelamento apenas encerra
+          o ciclo de vida.
+        end note
+    else status = CANCELADA
+        AS --> CLI: 200 OK (nenhuma alteração)
+
+        note right of AS
+          Cancelar duas vezes é idempotente:
+          nenhum evento novo é gravado.
+        end note
+    end
+end
+
+note over AS, DBAS
+  A alteração da assinatura e o registro do
+  evento na outbox ocorrem na mesma transação.
+end note
+
+== Publicar o evento de cancelamento ==
+
+OUTBOX -> DBAS: Buscar eventos não publicados
+DBAS --> OUTBOX: CancelamentoAgendado\nou AssinaturaCancelada
+OUTBOX -> KAFKA: Publicar evento\n{eventId, assinaturaId, status, fimCiclo}\nkey = assinaturaId
+
+note over OUTBOX, KAFKA
+  A outbox escolhe o tópico pelo tipo do evento,
+  como já ocorre com AssinaturaSolicitada e
+  RenovacaoSolicitada.
+end note
+
+KAFKA -> PS: Consumir evento de cancelamento
+PS -> DBPS: Deduplica por eventId
+
+alt eventId já processado
+    PS -> DBPS: Nenhuma alteração
+else eventId novo
+    PS -> DBPS: Cancela tentativas pendentes\nda renovação da assinatura
+    PS -> DBPS: Marcar eventId como processado
+
+    note right of PS
+      Impede que o scheduler de tentativas
+      cobre um ciclo que não será renovado.
+      Tentativas já aprovadas não são tocadas.
+    end note
+end
+
+== Efetivar o cancelamento no vencimento ==
+
+SCHED -> AS: Executar varredura de vencimentos
+AS -> DBAS: Seleciona ciclos com\nproxima_renovacao_em <= hoje, com lock
+DBAS --> AS: Lote de assinaturas bloqueadas
+
+loop Para cada assinatura vencida
+    alt renovacao_automatica = false
+        AS -> DBAS: Marca assinatura como CANCELADA
+        AS -> DBAS: Grava evento AssinaturaCancelada\nna tabela outbox
+
+        note right of AS
+          É o mesmo ramo de opt-out da renovação
+          automática: nenhuma nova renovação é
+          criada e nenhuma cobrança é disparada.
+        end note
+    else renovacao_automatica = true
+        AS -> DBAS: Segue o fluxo de renovação\n(ver renovacao-automatica-assinatura.puml)
+    end
+end
+
+== Consultar após o cancelamento ==
+
+CLI -> AS: GET /assinaturas/{uuid}
+AS -> DBAS: Busca assinatura pelo uuid
+DBAS --> AS: {status, dataExpiracao, renovacaoAutomatica}
+AS --> CLI: 200 OK
+
+note over CLI, AS
+  Entre a solicitação e o vencimento, a consulta
+  responde ATIVA com renovacaoAutomatica = false:
+  o cliente enxerga o cancelamento agendado sem
+  perder o acesso contratado.
+end note
+
+@enduml

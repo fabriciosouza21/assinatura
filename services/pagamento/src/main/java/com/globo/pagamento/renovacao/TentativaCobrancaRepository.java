@@ -1,7 +1,10 @@
 package com.globo.pagamento.renovacao;
 
+import jakarta.persistence.LockModeType;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
 /**
@@ -14,10 +17,57 @@ public interface TentativaCobrancaRepository extends JpaRepository<TentativaCobr
   /**
    * Seleciona as tentativas de cobranca ainda nao enviadas ao gateway de pagamento.
    *
-   * @return tentativas sem {@code payment_id} (nao cobradas pelo gateway)
+   * <p>Uma tentativa e elegivel quando esta {@code PENDENTE}, ainda nao tem {@code payment_id} e o
+   * agendamento venceu. As tentativas de retry criadas apos uma recusa nascem com {@code
+   * proxima_tentativa_em} no futuro, e o predicado temporal e o que faz o backoff valer: sem ele,
+   * elas seriam cobradas no ciclo seguinte do scheduler, e nao na data marcada. A primeira
+   * tentativa do ciclo nasce sem agendamento ({@code NULL}) e e cobrada de imediato.
+   *
+   * <p>O {@code LIMIT} corta o lote em um tamanho fixo por ciclo: a transacao do scheduler segura o
+   * {@code FOR UPDATE SKIP LOCKED} de cada linha ate o commit, e um lote ilimitado prenderia
+   * conexao e persistence context por centenas de roundtrips ao gateway. O que sobrar e selecionado
+   * no ciclo seguinte.
+   *
+   * @return tentativas pendentes, nao cobradas e com o agendamento vencido, limitadas a 200
    */
   @Query(
       nativeQuery = true,
-      value = "SELECT * FROM tentativa_cobranca WHERE payment_id IS NULL FOR UPDATE SKIP LOCKED")
+      value =
+          """
+          SELECT * FROM tentativa_cobranca
+          WHERE status = 'PENDENTE'
+            AND payment_id IS NULL
+            AND (proxima_tentativa_em IS NULL OR proxima_tentativa_em <= now())
+          ORDER BY id
+          FOR UPDATE SKIP LOCKED
+          LIMIT 200
+          """)
   List<TentativaCobranca> buscarProntasParaCobrar();
+
+  /**
+   * Busca a tentativa cobrada sob o identificador de cobranca do gateway.
+   *
+   * <p>Um {@code paymentId} pertence a uma unica tentativa: e por ele que o webhook ancora a
+   * decisao do gateway na tentativa certa.
+   *
+   * @param paymentId identificador da cobranca no gateway
+   * @return tentativa correspondente, ou vazio se nenhuma tiver sido cobrada sob esse identificador
+   */
+  Optional<TentativaCobranca> findByPaymentId(String paymentId);
+
+  /**
+   * Busca a tentativa cobrada sob o identificador de cobranca do gateway, travando-a para escrita
+   * ate o fim da transacao.
+   *
+   * <p>E o caminho usado pelo webhook para decidir: o lock serializa notificacoes concorrentes
+   * sobre a mesma cobranca (reenvio do gateway, replay). A segunda transacao bloqueia ate a
+   * primeira commitar e, ao prosseguir, enxerga a tentativa ja decidida e a ignora, evitando a
+   * dupla publicacao do resultado.
+   *
+   * @param paymentId identificador da cobranca no gateway
+   * @return tentativa correspondente, ou vazio se nenhuma tiver sido cobrada sob esse identificador
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select t from TentativaCobranca t where t.paymentId = :paymentId")
+  Optional<TentativaCobranca> buscarPorPaymentIdParaAtualizacao(String paymentId);
 }

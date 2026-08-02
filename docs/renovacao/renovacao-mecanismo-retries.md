@@ -73,7 +73,11 @@ expirado, fraude) não é uma falha transitória: não muda em 100ms. A próxima
 tentativa faz sentido em D+1, quando o cliente talvez tenha regularizado a situação.
 
 Por isso o contador mora na tabela `tentativa_cobranca` (campo `numero`, 1 a 3) e a
-janela é de dias, não de segundos. O scheduler do BE-12 busca tentativas vencidas
+janela é de dias, não de segundos. A janela é externalizada em
+`app.renovacao.tentativas-backoff-dias`, com default `1,3`: a recusa da tentativa
+1 agenda a tentativa 2 para D+1, a recusa da tentativa 2 agenda a tentativa 3 para
+D+3, e o tamanho da lista define o total de tentativas do ciclo (com o default,
+três: D+0, D+1 e D+3). O scheduler do BE-12 busca tentativas vencidas
 (`proxima_tentativa_em <= now()`), chama o gateway, e o webhook do BE-13 decide o
 resultado. Apenas três recusas **definitivas** (decisão de negócio) produzem
 `RenovacaoTentativasEsgotadas` e suspendem a assinatura.
@@ -86,7 +90,7 @@ Dentro do BE-12 há **dois** retries, e é crucial não misturá-los:
 |---|---|---|
 | O que falhou | Timeout, 5xx do gateway | Recusa (saldo, cartão, fraude) |
 | Natureza | Transitória, muda em segundos | Decisão de negócio, persistente |
-| Janela | Segundos | Dias (D+1, D+3, D+7) |
+| Janela | Segundos | Dias (default D+1, D+3) |
 | Idempotency-Key | Mesma chave | Nova chave por tentativa |
 | Incrementa `numero`? | Não | Sim |
 | Quem decide o terminal | Próprio WebClient | Webhook (BE-13) |

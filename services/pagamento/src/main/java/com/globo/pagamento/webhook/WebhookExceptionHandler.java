@@ -9,8 +9,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
  * Tratamento de excecoes do endpoint de webhook, mapeando-as para os codigos HTTP do contrato
- * ({@code 401} para assinatura invalida, {@code 503} para falha de publicacao e {@code 500} para
- * excecoes nao tratadas).
+ * ({@code 401} para assinatura invalida, {@code 503} para falha de publicacao e para decisao ainda
+ * indisponivel, e {@code 500} para excecoes nao tratadas).
  */
 @RestControllerAdvice
 public class WebhookExceptionHandler {
@@ -41,6 +41,21 @@ public class WebhookExceptionHandler {
         .addKeyValue("event", "webhook_publicacao_falhou")
         .setCause(e)
         .log("Falha de publicacao ou consulta ao gateway");
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new Erro(e.getMessage()));
+  }
+
+  /**
+   * Trata a notificacao que chegou antes de a tentativa cobrada estar visivel, devolvendo {@code
+   * 503} para o gateway reenviar.
+   *
+   * <p>O registro em WARN com o contexto completo acontece no command, no ponto em que a decisao
+   * falha; aqui apenas o codigo HTTP e mapeado.
+   *
+   * @param e excecao lancada
+   * @return resposta {@code 503} com o codigo do erro
+   */
+  @ExceptionHandler(DecisaoRenovacaoIndisponivelException.class)
+  public ResponseEntity<Erro> handleDecisaoIndisponivel(DecisaoRenovacaoIndisponivelException e) {
     return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new Erro(e.getMessage()));
   }
 
