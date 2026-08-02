@@ -209,4 +209,179 @@ class AssinaturaTest {
         .as("Suspender assinatura ativa e transicao invalida")
         .isInstanceOf(IllegalStateException.class);
   }
+
+  @Test
+  @DisplayName("Deve agendar o cancelamento ao solicitar em assinatura ativa")
+  void deveAgendarCancelamentoAoSolicitarCancelamento() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
+
+    assertThat(efeito)
+        .as("Efeito do cancelamento em assinatura ativa")
+        .isEqualTo(EfeitoCancelamento.AGENDADO);
+    assertThat(assinatura.isRenovacaoAutomatica())
+        .as("Renovacao automatica desligada ao agendar cancelamento")
+        .isFalse();
+    assertThat(assinatura.getStatus())
+        .as("Status permanece ativa ate o fim do ciclo")
+        .isEqualTo(StatusAssinatura.ATIVA);
+  }
+
+  @Test
+  @DisplayName("Deve cancelar imediatamente ao solicitar em assinatura suspensa")
+  void deveCancelarImediatamenteAoSolicitarCancelamentoEmAssinaturaSuspensa() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.iniciarRenovacao();
+    assinatura.suspender();
+
+    EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
+
+    assertThat(efeito)
+        .as("Efeito do cancelamento em assinatura suspensa")
+        .isEqualTo(EfeitoCancelamento.IMEDIATO);
+    assertThat(assinatura.getStatus())
+        .as("Status transita para cancelada imediatamente")
+        .isEqualTo(StatusAssinatura.CANCELADA);
+  }
+
+  @Test
+  @DisplayName("Deve limpar o fim do ciclo ao cancelar imediatamente assinatura suspensa")
+  void deveLimparFimDoCicloAoCancelarImediatamenteAssinaturaSuspensa() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.iniciarRenovacao();
+    assinatura.suspender();
+
+    assinatura.solicitarCancelamento();
+
+    assertThat(assinatura.getFimCiclo()).as("Fim do ciclo limpo no cancelamento imediato").isNull();
+    assertThat(assinatura.getProximaRenovacaoEm())
+        .as("Proxima renovacao limpa no cancelamento imediato")
+        .isNull();
+  }
+
+  @Test
+  @DisplayName("Deve cancelar imediatamente ao solicitar em assinatura aguardando pagamento")
+  void deveCancelarImediatamenteAoSolicitarCancelamentoEmAssinaturaAguardandoPagamento() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+
+    EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
+
+    assertThat(efeito)
+        .as("Efeito do cancelamento em assinatura aguardando pagamento")
+        .isEqualTo(EfeitoCancelamento.IMEDIATO);
+    assertThat(assinatura.getStatus())
+        .as("Status transita para cancelada imediatamente")
+        .isEqualTo(StatusAssinatura.CANCELADA);
+  }
+
+  @Test
+  @DisplayName("Deve cancelar imediatamente ao solicitar em assinatura com pagamento recusado")
+  void deveCancelarImediatamenteAoSolicitarCancelamentoEmAssinaturaComPagamentoRecusado() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.recusarPagamento();
+
+    EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
+
+    assertThat(efeito)
+        .as("Efeito do cancelamento em assinatura com pagamento recusado")
+        .isEqualTo(EfeitoCancelamento.IMEDIATO);
+    assertThat(assinatura.getStatus())
+        .as("Status transita para cancelada imediatamente")
+        .isEqualTo(StatusAssinatura.CANCELADA);
+  }
+
+  @Test
+  @DisplayName("Deve agendar cancelamento ao solicitar em assinatura em renovacao")
+  void deveAgendarCancelamentoAoSolicitarCancelamentoEmAssinaturaEmRenovacao() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.iniciarRenovacao();
+
+    EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
+
+    assertThat(efeito)
+        .as("Efeito do cancelamento em assinatura em renovacao")
+        .isEqualTo(EfeitoCancelamento.AGENDADO);
+    assertThat(assinatura.isRenovacaoAutomatica())
+        .as("Renovacao automatica desligada ao agendar cancelamento")
+        .isFalse();
+    assertThat(assinatura.getStatus())
+        .as("Status permanece em renovacao ate a conclusao da cobranca")
+        .isEqualTo(StatusAssinatura.EM_RENOVACAO);
+  }
+
+  @Test
+  @DisplayName("Deve manter cancelada ao solicitar cancelamento novamente")
+  void deveManterCanceladaAoSolicitarCancelamentoNovamente() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.solicitarCancelamento();
+
+    EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
+
+    assertThat(efeito)
+        .as("Efeito da segunda solicitacao de cancelamento")
+        .isEqualTo(EfeitoCancelamento.IDEMPOTENTE);
+    assertThat(assinatura.getStatus())
+        .as("Status permanece cancelada apos nova solicitacao")
+        .isEqualTo(StatusAssinatura.CANCELADA);
+  }
+
+  @Test
+  @DisplayName("Deve manter cancelamento agendado ao solicitar novamente em assinatura ativa")
+  void deveManterCancelamentoAgendadoAoSolicitarNovamenteEmAssinaturaAtiva() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.solicitarCancelamento();
+
+    EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
+
+    assertThat(efeito)
+        .as("Efeito da segunda solicitacao de cancelamento agendado")
+        .isEqualTo(EfeitoCancelamento.IDEMPOTENTE);
+    assertThat(assinatura.getStatus())
+        .as("Status permanece ativa apos nova solicitacao")
+        .isEqualTo(StatusAssinatura.ATIVA);
+    assertThat(assinatura.isRenovacaoAutomatica())
+        .as("Renovacao automatica permanece desligada")
+        .isFalse();
+  }
+
+  @Test
+  @DisplayName("Deve manter o cancelamento agendado em assinatura em renovacao")
+  void deveManterCancelamentoAgendadoAoSolicitarNovamenteEmAssinaturaEmRenovacao() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.iniciarRenovacao();
+    assinatura.solicitarCancelamento();
+
+    EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
+
+    assertThat(efeito)
+        .as("Efeito da segunda solicitacao em assinatura em renovacao")
+        .isEqualTo(EfeitoCancelamento.IDEMPOTENTE);
+    assertThat(assinatura.getStatus())
+        .as("Status permanece em renovacao apos nova solicitacao")
+        .isEqualTo(StatusAssinatura.EM_RENOVACAO);
+  }
+
+  @Test
+  @DisplayName("Deve desabilitar renovacao automatica no cancelamento imediato")
+  void deveDesabilitarRenovacaoAutomaticaAoCancelarImediatamenteAssinaturaAguardandoPagamento() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+
+    EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
+
+    assertThat(efeito)
+        .as("Efeito do cancelamento em assinatura aguardando pagamento")
+        .isEqualTo(EfeitoCancelamento.IMEDIATO);
+    assertThat(assinatura.isRenovacaoAutomatica())
+        .as("Renovacao automatica desligada no cancelamento imediato")
+        .isFalse();
+    assertThat(assinatura.getStatus())
+        .as("Status transita para cancelada imediatamente")
+        .isEqualTo(StatusAssinatura.CANCELADA);
+  }
 }

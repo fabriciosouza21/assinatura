@@ -18,6 +18,7 @@ import com.globo.assinatura.assinatura.StatusAssinatura;
 import com.globo.assinatura.renovacao.Renovacao;
 import com.globo.assinatura.renovacao.RenovacaoRepository;
 import com.globo.assinatura.renovacao.StatusRenovacao;
+import com.globo.assinatura.shared.contrato.AssinaturaCancelada;
 import com.globo.assinatura.shared.contrato.RenovacaoSolicitada;
 import com.globo.assinatura.shared.outbox.OutboxEvent;
 import com.globo.assinatura.shared.outbox.OutboxRepository;
@@ -114,7 +115,25 @@ class RenovacaoSchedulerTest {
         .as("Assinatura cancelada por opt-out")
         .isEqualTo(StatusAssinatura.CANCELADA);
     verify(renovacaoRepository, never()).save(any());
-    verify(outboxRepository, never()).save(any());
+
+    ArgumentCaptor<OutboxEvent> outboxCaptor = ArgumentCaptor.forClass(OutboxEvent.class);
+    verify(outboxRepository).save(outboxCaptor.capture());
+    OutboxEvent outboxEvent = outboxCaptor.getValue();
+    assertThat(outboxEvent.getEventType())
+        .as("Tipo do evento da outbox")
+        .isEqualTo("AssinaturaCancelada");
+    assertThat(outboxEvent.getStatus())
+        .as("Evento nasce pendente")
+        .isEqualTo(OutboxStatus.PENDENTE);
+
+    AssinaturaCancelada evento =
+        jsonMapper().readValue(outboxEvent.getPayload(), AssinaturaCancelada.class);
+    assertThat(evento.status())
+        .as("Status cancelado no evento")
+        .isEqualTo(com.globo.assinatura.shared.contrato.StatusAssinatura.CANCELADA);
+    assertThat(evento.fimCiclo())
+        .as("Fim do ciclo encerrado no evento")
+        .isEqualTo(LocalDate.of(2026, 2, 1));
   }
 
   @Test

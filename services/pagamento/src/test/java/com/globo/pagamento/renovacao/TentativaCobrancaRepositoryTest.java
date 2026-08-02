@@ -151,6 +151,58 @@ class TentativaCobrancaRepositoryTest {
     }
   }
 
+  @Test
+  @DisplayName("Deve retornar apenas as tentativas pendentes sem payment id da renovacao")
+  void deveRetornarApenasTentativasPendentesSemPaymentIdDaRenovacao() {
+    TentativaCobranca pendente = new TentativaCobranca("ren-filtro", 1);
+    TentativaCobranca cobrada = new TentativaCobranca("ren-filtro", 2);
+    cobrada.registrarCobranca("pay-filtro");
+    TentativaCobranca recusada = new TentativaCobranca("ren-filtro", 3);
+    recusada.recusar();
+    TentativaCobranca outraRenovacao = new TentativaCobranca("ren-outra", 1);
+    tentativaCobrancaRepository.save(pendente);
+    tentativaCobrancaRepository.save(cobrada);
+    tentativaCobrancaRepository.save(recusada);
+    tentativaCobrancaRepository.save(outraRenovacao);
+    tentativaCobrancaRepository.flush();
+
+    List<TentativaCobranca> pendentes =
+        tentativaCobrancaRepository.buscarPendentesPorRenovacaoId("ren-filtro");
+
+    assertThat(pendentes)
+        .as("Apenas a tentativa pendente sem payment id da renovacao")
+        .extracting(TentativaCobranca::getNumero)
+        .containsExactly(1);
+  }
+
+  @Test
+  @DisplayName("Deve pular no cancelamento a tentativa travada pelo scheduler")
+  @Transactional(propagation = Propagation.NEVER)
+  void devePularNoCancelamentoTentativaTravadaPeloScheduler() {
+    emSetup = emf.createEntityManager();
+    emT1 = emf.createEntityManager();
+    emT2 = emf.createEntityManager();
+    try {
+      persistirTentativaProntaCommitada();
+
+      TentativaCobrancaRepository repoT1 =
+          new JpaRepositoryFactory(emT1).getRepository(TentativaCobrancaRepository.class);
+      emT1.getTransaction().begin();
+      repoT1.buscarPendentesPorRenovacaoId("ren-lock");
+
+      TentativaCobrancaRepository repoT2 =
+          new JpaRepositoryFactory(emT2).getRepository(TentativaCobrancaRepository.class);
+      emT2.getTransaction().begin();
+      emT2.createNativeQuery("SET LOCAL lock_timeout = '2s'").executeUpdate();
+      List<TentativaCobranca> resultadoT2 = repoT2.buscarPendentesPorRenovacaoId("ren-lock");
+
+      assertThat(resultadoT2).as("T2 nao deve bloquear na tentativa travada por T1").isEmpty();
+    } finally {
+      rollbackAtivo(emT1);
+      rollbackAtivo(emT2);
+    }
+  }
+
   private void persistirTentativaProntaCommitada() {
     emSetup.getTransaction().begin();
     emSetup.persist(new TentativaCobranca("ren-lock", 1));

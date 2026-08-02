@@ -4,7 +4,9 @@ import com.globo.assinatura.assinatura.Assinatura;
 import com.globo.assinatura.assinatura.AssinaturaRepository;
 import com.globo.assinatura.renovacao.Renovacao;
 import com.globo.assinatura.renovacao.RenovacaoRepository;
+import com.globo.assinatura.shared.contrato.AssinaturaCancelada;
 import com.globo.assinatura.shared.contrato.RenovacaoSolicitada;
+import com.globo.assinatura.shared.contrato.StatusAssinatura;
 import com.globo.assinatura.shared.outbox.OutboxEvent;
 import com.globo.assinatura.shared.outbox.OutboxRepository;
 import java.time.Clock;
@@ -26,9 +28,10 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <p>Seleciona assinaturas ativas com {@code proxima_renovacao_em <= hoje} sob {@code FOR UPDATE
  * SKIP LOCKED}, permitindo que multiplas instâncias processem lotes disjuntos. Para cada uma: se o
- * dono optou por nao renovar, cancela a assinatura; caso contrario, cria a renovacao do ciclo
- * (idempotente por ciclo) e grava {@code RenovacaoSolicitada} na outbox na mesma transacao,
- * mantendo o acesso liberado enquanto a cobranca e decidida.
+ * dono optou por nao renovar, cancela a assinatura e grava {@code AssinaturaCancelada} na outbox.
+ * Caso contrario, cria a renovacao do ciclo (idempotente por ciclo) e grava {@code
+ * RenovacaoSolicitada} na outbox na mesma transacao, mantendo o acesso liberado enquanto a cobranca
+ * e decidida.
  */
 @Component
 public class RenovacaoScheduler {
@@ -36,6 +39,8 @@ public class RenovacaoScheduler {
   private static final Logger log = LoggerFactory.getLogger(RenovacaoScheduler.class);
   private static final String AGGREGATE_TYPE = "Renovacao";
   private static final String EVENT_TYPE = "RenovacaoSolicitada";
+  private static final String AGGREGATE_TYPE_ASSINATURA = "Assinatura";
+  private static final String EVENT_TYPE_ASSINATURA_CANCELADA = "AssinaturaCancelada";
 
   private final AssinaturaRepository assinaturaRepository;
   private final RenovacaoRepository renovacaoRepository;
@@ -106,6 +111,7 @@ public class RenovacaoScheduler {
   private void processar(Assinatura assinatura) {
     if (!assinatura.isRenovacaoAutomatica()) {
       assinatura.cancelar();
+      gravarEventoAssinaturaCancelada(assinatura);
       log.atInfo()
           .addKeyValue("event", "assinatura_cancelada_opt_out")
           .addKeyValue("assinaturaId", assinatura.getUuid())
@@ -159,5 +165,30 @@ public class RenovacaoScheduler {
     } catch (JacksonException e) {
       throw new IllegalStateException("Falha ao serializar evento RenovacaoSolicitada", e);
     }
+  }
+
+  private String serializar(AssinaturaCancelada evento) {
+    try {
+      return jsonMapper.writeValueAsString(evento);
+    } catch (JacksonException e) {
+      throw new IllegalStateException("Falha ao serializar evento AssinaturaCancelada", e);
+    }
+  }
+
+  private void gravarEventoAssinaturaCancelada(Assinatura assinatura) {
+    AssinaturaCancelada evento =
+        new AssinaturaCancelada(
+            UUID.randomUUID(),
+            Instant.now(clock),
+            UUID.fromString(assinatura.getUuid()),
+            StatusAssinatura.valueOf(assinatura.getStatus().name()),
+            assinatura.getFimCiclo());
+    outboxRepository.save(
+        OutboxEvent.criar(
+            evento.eventId(),
+            AGGREGATE_TYPE_ASSINATURA,
+            evento.assinaturaId(),
+            EVENT_TYPE_ASSINATURA_CANCELADA,
+            serializar(evento)));
   }
 }

@@ -18,8 +18,9 @@ import java.time.Instant;
  * scheduler que cobra a tentativa no gateway preenche esses campos.
  *
  * <p>A construcao e responsabilidade de {@link PagamentoRenovacao}, que gera a sequencia de {@code
- * numero}. As transicoes de status sao decididas pelo webhook a partir do status oficial do
- * gateway.
+ * numero}. As transicoes de decisao do gateway sao feitas pelo webhook a partir do status oficial
+ * do gateway. Um cancelamento administrativo ou de ciclo pode marcar a tentativa como {@link
+ * StatusTentativa#CANCELADA} por {@link #cancelar()}.
  */
 @Entity
 @Table(name = "tentativa_cobranca")
@@ -164,6 +165,16 @@ public class TentativaCobranca {
   public void recusar() {
     exigirPendente();
     this.status = StatusTentativa.RECUSADA;
+  }
+
+  /**
+   * Cancela a tentativa antes de uma decisao do gateway.
+   *
+   * @throws IllegalStateException se a tentativa ja tiver sido decidida
+   */
+  public void cancelar() {
+    exigirPendente();
+    this.status = StatusTentativa.CANCELADA;
   }
 
   /**

@@ -1,11 +1,14 @@
 package com.globo.pagamento.renovacao;
 
 import jakarta.persistence.LockModeType;
+import jakarta.persistence.QueryHint;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Repositorio de persistencia do agregado {@link TentativaCobranca}.
@@ -43,6 +46,25 @@ public interface TentativaCobrancaRepository extends JpaRepository<TentativaCobr
           LIMIT 200
           """)
   List<TentativaCobranca> buscarProntasParaCobrar();
+
+  /**
+   * Busca as tentativas pendentes de uma renovacao ainda nao enviadas ao gateway.
+   *
+   * <p>Somente tentativas sem {@code paymentId} podem ser canceladas. O lock de escrita serializa o
+   * cancelamento com o scheduler, impedindo que uma tentativa seja enviada ao gateway enquanto esta
+   * sendo cancelada. Tentativas travadas pelo scheduler no momento da leitura sao puladas ({@code
+   * SKIP LOCKED}): estao em cobranca no gateway e seguem o fluxo normal da decisao.
+   *
+   * @param renovacaoId identificador publico da renovacao
+   * @return tentativas pendentes e ainda nao enviadas da renovacao
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "-2"))
+  @Query(
+      "select t from TentativaCobranca t where t.renovacaoId = :renovacaoId "
+          + "and t.status = com.globo.pagamento.renovacao.StatusTentativa.PENDENTE "
+          + "and t.paymentId is null")
+  List<TentativaCobranca> buscarPendentesPorRenovacaoId(@Param("renovacaoId") String renovacaoId);
 
   /**
    * Busca a tentativa mais recente de uma renovacao.

@@ -64,6 +64,8 @@ app:
       RenovacaoSolicitada: ${APP_KAFKA_ROTAS_RENOVACAO_SOLICITADA:renovacao-solicitada}
       AssinaturaRenovada: ${APP_KAFKA_ROTAS_ASSINATURA_RENOVADA:assinatura-renovada}
       AssinaturaSuspensa: ${APP_KAFKA_ROTAS_ASSINATURA_SUSPENSA:assinatura-suspensa}
+      CancelamentoAgendado: ${APP_KAFKA_ROTAS_CANCELAMENTO_AGENDADO:cancelamento-agendado}
+      AssinaturaCancelada: ${APP_KAFKA_ROTAS_ASSINATURA_CANCELADA:assinatura-cancelada}
     topico-pagamento-status-atualizado: ${APP_KAFKA_TOPICO_PAGAMENTO_STATUS_ATUALIZADO:pagamento-status-atualizado}
     topico-pagamento-status-atualizado-dlq: ${APP_KAFKA_TOPICO_PAGAMENTO_STATUS_ATUALIZADO_DLQ:pagamento-status-atualizado-dlq}
     topico-renovacao-resultado: ${APP_KAFKA_TOPICO_RENOVACAO_RESULTADO:renovacao-resultado}

@@ -73,6 +73,28 @@ public class MessagingConfig {
   }
 
   /**
+   * Declara o topico de eventos {@code CancelamentoAgendado}.
+   *
+   * @param rotas rotas de eventos da outbox para topicos Kafka
+   * @return topico Kafka a ser criado pelo KafkaAdmin
+   */
+  @Bean
+  public NewTopic topicoCancelamentoAgendado(RotasEventoTopicoProperties rotas) {
+    return new NewTopic(rotas.rotasEventoTopico().get("CancelamentoAgendado"), 1, (short) 1);
+  }
+
+  /**
+   * Declara o topico de eventos {@code AssinaturaCancelada}.
+   *
+   * @param rotas rotas de eventos da outbox para topicos Kafka
+   * @return topico Kafka a ser criado pelo KafkaAdmin
+   */
+  @Bean
+  public NewTopic topicoAssinaturaCancelada(RotasEventoTopicoProperties rotas) {
+    return new NewTopic(rotas.rotasEventoTopico().get("AssinaturaCancelada"), 1, (short) 1);
+  }
+
+  /**
    * Cria o topico de status de pagamento atualizado.
    *
    * @param nome nome do topico definido em {@code app.kafka.topico-pagamento-status-atualizado}
