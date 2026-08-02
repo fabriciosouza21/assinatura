@@ -9,57 +9,65 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.kafka.core.KafkaTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /**
  * Configuracao dos beans do webhook de pagamento.
  *
- * <p>Monta os dois ramos atendidos pelo endpoint: {@link ProcessarWebhookPagamento} com o topico
- * {@code pagamento-status-atualizado} da adesao, e {@link ProcessarWebhookRenovacao} com o topico
- * {@code renovacao-resultado} da renovacao.
+ * <p>Monta os dois ramos atendidos pelo endpoint: {@link ProcessarWebhookPagamento} com o {@link
+ * RegistrarResultadoWebhook} que registra o resultado na outbox, e {@link
+ * ProcessarWebhookRenovacao} com a decisao do ciclo de renovacao.
  */
 @Configuration
 public class WebhookConfig {
 
-  private static final String TOPICO_PAGAMENTO_STATUS = "pagamento-status-atualizado";
-
   /**
    * Cria o command de processamento de webhook.
    *
-   * @param objectMapper mapeador JSON para serializar o evento publicado
    * @param hmacValidator validador da assinatura HMAC
    * @param eventoRepository repositorio de eventos processados (dedup)
-   * @param cobrancaRepository repositorio de cobrancas
    * @param pagamentoRenovacaoRepository repositorio de pagamentos de renovacao, usado no despacho
    * @param gatewayClient client de consulta de status no gateway
    * @param normalizador normalizador de status
-   * @param processarRenovacao command que decide o resultado de uma cobranca de renovacao
-   * @param kafkaTemplate template de publicacao no Kafka
+   * @param registrarResultado command que registra o resultado do webhook na outbox
    * @return o command configurado
    */
   @Bean
   public ProcessarWebhookPagamento processarWebhookPagamento(
-      ObjectMapper objectMapper,
       HmacSignatureValidator hmacValidator,
       WebhookEventoProcessadoRepository eventoRepository,
-      CobrancaRepository cobrancaRepository,
       PagamentoRenovacaoRepository pagamentoRenovacaoRepository,
       GatewayPagamentoClient gatewayClient,
       NormalizadorStatus normalizador,
-      ProcessarWebhookRenovacao processarRenovacao,
-      KafkaTemplate<String, String> kafkaTemplate) {
+      RegistrarResultadoWebhook registrarResultado) {
     return new ProcessarWebhookPagamento(
-        objectMapper,
         hmacValidator,
         eventoRepository,
-        cobrancaRepository,
         pagamentoRenovacaoRepository,
         gatewayClient,
         normalizador,
-        processarRenovacao,
-        kafkaTemplate,
-        TOPICO_PAGAMENTO_STATUS);
+        registrarResultado);
+  }
+
+  /**
+   * Cria o command que registra o resultado do webhook na outbox.
+   *
+   * @param eventoRepository repositorio de eventos processados (dedup)
+   * @param cobrancaRepository repositorio de cobrancas
+   * @param processarRenovacao command que decide o resultado de uma cobranca de renovacao
+   * @param outboxRepository repositorio da outbox
+   * @param objectMapper mapeador JSON para serializar o evento gravado na outbox
+   * @return o command configurado
+   */
+  @Bean
+  public RegistrarResultadoWebhook registrarResultadoWebhook(
+      WebhookEventoProcessadoRepository eventoRepository,
+      CobrancaRepository cobrancaRepository,
+      ProcessarWebhookRenovacao processarRenovacao,
+      OutboxRepository outboxRepository,
+      ObjectMapper objectMapper) {
+    return new RegistrarResultadoWebhook(
+        eventoRepository, cobrancaRepository, processarRenovacao, outboxRepository, objectMapper);
   }
 
   /**
