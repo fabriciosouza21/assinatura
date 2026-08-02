@@ -131,4 +131,18 @@ class OutboxEventTest {
         .as("Ultimo erro apos falha definitiva")
         .isEqualTo("falha na autorizacao do gateway");
   }
+
+  @Test
+  @DisplayName("Deve manter evento pendente ao registrar falha")
+  void deveManterEventoPendenteAoRegistrarFalha() {
+    OutboxEvent evento =
+        OutboxEvent.criar(
+            UUID.randomUUID(), "Cobranca", UUID.randomUUID(), "PagamentoStatusAtualizado", "{}");
+
+    evento.registrarFalha("falha de rede", Instant.parse("2026-08-01T12:05:00Z"));
+
+    assertThat(evento.getStatus())
+        .as("Status apos registrar falha")
+        .isEqualTo(OutboxStatus.PENDENTE);
+  }
 }
