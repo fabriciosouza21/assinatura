@@ -38,6 +38,7 @@ public class OutboxEvent {
   private Instant proximaTentativaEm;
   private Instant criadoEm;
   private Instant publicadoEm;
+  private String ultimoErro;
 
   /** Construtor sem argumentos exigido pelo provedor JPA. */
   protected OutboxEvent() {}
@@ -87,11 +88,14 @@ public class OutboxEvent {
   /**
    * Registra uma falha de publicacao mantendo o evento pendente para a proxima tentativa.
    *
+   * <p>Incrementa o contador de tentativas e registra a mensagem de erro.
+   *
    * @param erro mensagem do erro ocorrido
    * @param proximaTentativa instante agendado para a proxima tentativa
    */
   public void registrarFalha(String erro, Instant proximaTentativa) {
     this.tentativas++;
+    this.ultimoErro = erro;
   }
 
   /**
@@ -119,5 +123,14 @@ public class OutboxEvent {
    */
   public int getTentativas() {
     return tentativas;
+  }
+
+  /**
+   * Retorna a mensagem do ultimo erro de publicacao.
+   *
+   * @return mensagem do ultimo erro
+   */
+  public String getUltimoErro() {
+    return ultimoErro;
   }
 }

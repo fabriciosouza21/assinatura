@@ -61,4 +61,16 @@ class OutboxEventTest {
         .as("Contador de tentativas apos registrar falha")
         .isEqualTo(1);
   }
+
+  @Test
+  @DisplayName("Deve registrar o ultimo erro da falha")
+  void deveRegistrarUltimoErro() {
+    OutboxEvent evento =
+        OutboxEvent.criar(
+            UUID.randomUUID(), "Cobranca", UUID.randomUUID(), "PagamentoStatusAtualizado", "{}");
+
+    evento.registrarFalha("falha de rede", Instant.parse("2026-08-01T12:05:00Z"));
+
+    assertThat(evento.getUltimoErro()).as("Ultimo erro registrado").isEqualTo("falha de rede");
+  }
 }
