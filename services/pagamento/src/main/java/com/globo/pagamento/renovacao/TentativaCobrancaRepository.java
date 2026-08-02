@@ -45,6 +45,14 @@ public interface TentativaCobrancaRepository extends JpaRepository<TentativaCobr
   List<TentativaCobranca> buscarProntasParaCobrar();
 
   /**
+   * Busca a tentativa mais recente de uma renovacao.
+   *
+   * @param renovacaoId identificador publico da renovacao
+   * @return tentativa mais recente, ou vazio se a renovacao ainda nao tiver tentativas
+   */
+  Optional<TentativaCobranca> findFirstByRenovacaoIdOrderByNumeroDesc(String renovacaoId);
+
+  /**
    * Busca a tentativa cobrada sob o identificador de cobranca do gateway.
    *
    * <p>Um {@code paymentId} pertence a uma unica tentativa: e por ele que o webhook ancora a

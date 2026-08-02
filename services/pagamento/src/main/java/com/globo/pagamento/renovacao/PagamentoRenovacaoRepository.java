@@ -64,4 +64,12 @@ public interface PagamentoRenovacaoRepository extends JpaRepository<PagamentoRen
    * @return pagamento da renovacao, ou vazio se nao existir
    */
   Optional<PagamentoRenovacao> findByRenovacaoId(String renovacaoId);
+
+  /**
+   * Busca o pagamento de renovacao mais recente de uma assinatura.
+   *
+   * @param assinaturaId identificador publico da assinatura renovada
+   * @return pagamento da renovacao mais recente, ou vazio se a assinatura nunca renovou
+   */
+  Optional<PagamentoRenovacao> findFirstByAssinaturaIdOrderByCriadoEmDesc(String assinaturaId);
 }
