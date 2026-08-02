@@ -75,12 +75,20 @@ paths:
                     dataInicio: "2025-03-10"
                     dataExpiracao: "2025-04-10"
                     status: ATIVA
+                    inicioCiclo: "2025-03-10"
+                    fimCiclo: "2025-04-10"
+                    proximaRenovacaoEm: "2025-04-10"
+                    renovacaoAutomatica: true
                   - id: "660e8400-e29b-41d4-a716-446655440000"
                     usuarioId: "550e8400-e29b-41d4-a716-446655440000"
                     plano: BASICO
                     dataInicio: "2025-01-10"
                     dataExpiracao: "2025-02-10"
                     status: CANCELADA
+                    inicioCiclo: "2025-01-10"
+                    fimCiclo: "2025-02-10"
+                    proximaRenovacaoEm: "2025-02-10"
+                    renovacaoAutomatica: true
                 page: 0
                 size: 20
                 total: 2
@@ -185,6 +193,10 @@ paths:
                     dataInicio: null
                     dataExpiracao: null
                     status: AGUARDANDO_PAGAMENTO
+                    inicioCiclo: null
+                    fimCiclo: null
+                    proximaRenovacaoEm: null
+                    renovacaoAutomatica: true
                 ativa:
                   summary: Assinatura ativa
                   value:
@@ -194,6 +206,10 @@ paths:
                     dataInicio: "2025-03-10"
                     dataExpiracao: "2025-04-10"
                     status: ATIVA
+                    inicioCiclo: "2025-03-10"
+                    fimCiclo: "2025-04-10"
+                    proximaRenovacaoEm: "2025-04-10"
+                    renovacaoAutomatica: true
         '401':
           description: Token ausente, expirado ou invalido. Corpo vazio.
         '403':
@@ -296,6 +312,24 @@ components:
           description: Definida na ativacao. Nula enquanto aguarda pagamento.
         status:
           $ref: '#/components/schemas/StatusAssinatura'
+        inicioCiclo:
+          type: string
+          format: date
+          nullable: true
+          description: Inicio do ciclo de renovacao corrente. Nulo antes da primeira ativacao.
+        fimCiclo:
+          type: string
+          format: date
+          nullable: true
+          description: Fim do ciclo de renovacao corrente. Nulo antes da primeira ativacao.
+        proximaRenovacaoEm:
+          type: string
+          format: date
+          nullable: true
+          description: Data da proxima renovacao. Nula antes da primeira ativacao.
+        renovacaoAutomatica:
+          type: boolean
+          description: Indica se a renovacao automatica esta habilitada.
     AssinaturaLista:
       type: object
       description: Pagina da listagem de assinaturas do usuario autenticado.

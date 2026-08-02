@@ -7,8 +7,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-/** Trata as excecoes da consulta de assinatura no controller de leitura. */
-@RestControllerAdvice(assignableTypes = ConsultaAssinaturaController.class)
+/** Trata as excecoes das queries de leitura de assinatura. */
+@RestControllerAdvice(
+    assignableTypes = {ConsultaAssinaturaController.class, ListaAssinaturasController.class})
 public class ConsultaExceptionHandler {
 
   /**

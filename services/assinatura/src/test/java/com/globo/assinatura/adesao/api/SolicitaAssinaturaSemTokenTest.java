@@ -92,4 +92,21 @@ class SolicitaAssinaturaSemTokenTest {
         .as("Consulta sem token deve ser bloqueada pela seguranca")
         .isEqualTo(401);
   }
+
+  @Test
+  @DisplayName("Deve recusar listagem sem token em /assinaturas com 401")
+  void deveRecusarListagemSemToken() throws Exception {
+    HttpRequest request =
+        HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + port + "/assinaturas"))
+            .GET()
+            .build();
+
+    HttpResponse<String> resposta =
+        HttpClient.newHttpClient().send(request, BodyHandlers.ofString());
+
+    assertThat(resposta.statusCode())
+        .as("Listagem sem token deve ser bloqueada pela seguranca")
+        .isEqualTo(401);
+  }
 }
