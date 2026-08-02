@@ -214,7 +214,12 @@ class ConfirmarPagamentoAdesaoTest {
     relogio = Clock.fixed(instanteFixo, ZoneOffset.UTC);
     command =
         new ConfirmarPagamentoAdesao(
-            assinaturaRepository, pagamentoEventoProcessadoRepository, relogio, 60_000L);
+            assinaturaRepository,
+            pagamentoEventoProcessadoRepository,
+            usuarioRepository,
+            cacheVersionado,
+            relogio,
+            60_000L);
     PagamentoStatusAtualizado evento =
         new PagamentoStatusAtualizado(
             UUID.randomUUID(),

@@ -132,6 +132,8 @@ class ProcessarRenovacaoResultadoTest {
             renovacaoRepository,
             assinaturaRepository,
             renovacaoEventoProcessadoRepository,
+            usuarioRepository,
+            cacheVersionado,
             outboxRepository,
             jsonMapper,
             Clock.fixed(instanteFixo, ZoneOffset.UTC),
@@ -167,6 +169,8 @@ class ProcessarRenovacaoResultadoTest {
             renovacaoRepository,
             assinaturaRepository,
             renovacaoEventoProcessadoRepository,
+            usuarioRepository,
+            cacheVersionado,
             outboxRepository,
             jsonMapper,
             Clock.fixed(instanteFixo, ZoneOffset.UTC),
@@ -731,7 +735,10 @@ class ProcessarRenovacaoResultadoTest {
 
   private Assinatura assinaturaDona() {
     Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
-    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 15),
+        LocalDate.of(2026, 2, 15),
+        Instant.parse("2026-02-15T00:00:00Z"));
     assinatura.iniciarRenovacao();
     return assinatura;
   }

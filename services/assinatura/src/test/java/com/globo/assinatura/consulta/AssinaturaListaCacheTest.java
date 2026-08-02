@@ -12,6 +12,7 @@ import com.globo.assinatura.consulta.api.AssinaturaLista;
 import com.globo.assinatura.consulta.api.AssinaturaResponse;
 import com.globo.assinatura.shared.cache.CacheVersionado;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -50,7 +51,7 @@ class AssinaturaListaCacheTest {
                 StatusAssinatura.ATIVA,
                 LocalDate.of(2026, 8, 1),
                 LocalDate.of(2026, 8, 31),
-                LocalDate.of(2026, 8, 31),
+                Instant.parse("2026-08-31T00:00:00Z"),
                 true)),
         0,
         20,

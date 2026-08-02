@@ -13,6 +13,7 @@ import com.globo.assinatura.consulta.api.AssinaturaLista;
 import com.globo.assinatura.consulta.api.AssinaturaResponse;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -122,7 +123,8 @@ class ListarAssinaturasTest {
   void deveRefletirDadosDaAssinaturaEmCadaItem() {
     Usuario usuario = usuarioComId();
     Assinatura assinatura = new Assinatura(USUARIO_INTERNO, Plano.PREMIUM);
-    assinatura.ativar(LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31));
+    assinatura.ativar(
+        LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31), Instant.parse("2026-08-31T00:00:00Z"));
     when(usuarioRepository.findByUuid(usuario.getUuid())).thenReturn(Optional.of(usuario));
     when(assinaturaRepository.findByUsuarioIdOrderByIdDesc(USUARIO_INTERNO, PageRequest.of(0, 20)))
         .thenReturn(new PageImpl<>(List.of(assinatura), PageRequest.of(0, 20), 1));

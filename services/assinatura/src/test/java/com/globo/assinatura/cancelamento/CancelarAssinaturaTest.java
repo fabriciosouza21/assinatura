@@ -360,7 +360,8 @@ class CancelarAssinaturaTest {
   @DisplayName("Deve invalidar o cache do dono ao agendar o cancelamento")
   void deveInvalidarCacheDoDonoAoAgendarCancelamento() throws Exception {
     Assinatura assinatura = new Assinatura(42L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T00:00:00Z"));
     Usuario dono = new Usuario("Fulano", "fulano@example.com");
     dono.setId(42L);
     dono.setUuid("11111111-1111-1111-1111-111111111111");
@@ -397,7 +398,8 @@ class CancelarAssinaturaTest {
   @DisplayName("Nao deve invalidar o cache em cancelamento idempotente")
   void naoDeveInvalidarCacheEmCancelamentoIdempotente() throws Exception {
     Assinatura assinatura = new Assinatura(42L, Plano.BASICO);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T00:00:00Z"));
     assinatura.solicitarCancelamento();
     Usuario dono = new Usuario("Fulano", "fulano@example.com");
     dono.setId(42L);

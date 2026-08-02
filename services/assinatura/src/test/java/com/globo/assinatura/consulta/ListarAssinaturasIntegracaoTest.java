@@ -11,6 +11,7 @@ import com.globo.assinatura.consulta.api.AssinaturaLista;
 import com.globo.assinatura.consulta.api.AssinaturaResponse;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -63,7 +64,10 @@ class ListarAssinaturasIntegracaoTest {
   private Assinatura salvarAssinatura(Usuario usuario, Plano plano, StatusAssinatura status) {
     Assinatura assinatura = new Assinatura(usuario.getId(), plano);
     if (status == StatusAssinatura.ATIVA) {
-      assinatura.ativar(LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31));
+      assinatura.ativar(
+          LocalDate.of(2026, 7, 1),
+          LocalDate.of(2026, 7, 31),
+          Instant.parse("2026-07-31T00:00:00Z"));
     } else if (status == StatusAssinatura.CANCELADA) {
       assinatura.solicitarCancelamento();
     }
