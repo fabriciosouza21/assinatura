@@ -227,4 +227,22 @@ class AssinaturaTest {
         .as("Status permanece ativa ate o fim do ciclo")
         .isEqualTo(StatusAssinatura.ATIVA);
   }
+
+  @Test
+  @DisplayName("Deve cancelar imediatamente ao solicitar em assinatura suspensa")
+  void deveCancelarImediatamenteAoSolicitarCancelamentoEmAssinaturaSuspensa() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.iniciarRenovacao();
+    assinatura.suspender();
+
+    EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
+
+    assertThat(efeito)
+        .as("Efeito do cancelamento em assinatura suspensa")
+        .isEqualTo(EfeitoCancelamento.IMEDIATO);
+    assertThat(assinatura.getStatus())
+        .as("Status transita para cancelada imediatamente")
+        .isEqualTo(StatusAssinatura.CANCELADA);
+  }
 }

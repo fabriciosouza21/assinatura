@@ -165,17 +165,21 @@ public class Assinatura {
   }
 
   /**
-   * Agenda o cancelamento da assinatura no fim do ciclo vigente.
+   * Solicita o cancelamento da assinatura.
    *
    * @return efeito do cancelamento solicitado
-   * @throws IllegalStateException se a assinatura nao estiver ativa
+   * @throws IllegalStateException se a assinatura nao estiver ativa nem suspensa
    */
   public EfeitoCancelamento solicitarCancelamento() {
-    if (this.status != StatusAssinatura.ATIVA) {
-      throw new IllegalStateException("nao e possivel cancelar uma assinatura que nao esta ativa");
+    if (this.status == StatusAssinatura.ATIVA) {
+      this.renovacaoAutomatica = false;
+      return EfeitoCancelamento.AGENDADO;
     }
-    this.renovacaoAutomatica = false;
-    return EfeitoCancelamento.AGENDADO;
+    if (this.status == StatusAssinatura.SUSPENSA) {
+      this.status = StatusAssinatura.CANCELADA;
+      return EfeitoCancelamento.IMEDIATO;
+    }
+    throw new IllegalStateException("nao e possivel cancelar a assinatura neste status");
   }
 
   /**
