@@ -3,7 +3,7 @@ package com.globo.pagamento.webhook;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.globo.pagamento.gateway.StatusGateway;
-import com.globo.pagamento.messaging.event.StatusPagamento;
+import com.globo.pagamento.shared.contrato.StatusPagamento;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

@@ -1,7 +1,7 @@
 package com.globo.pagamento.webhook;
 
 import com.globo.pagamento.gateway.StatusGateway;
-import com.globo.pagamento.messaging.event.StatusPagamento;
+import com.globo.pagamento.shared.contrato.StatusPagamento;
 import org.springframework.stereotype.Component;
 
 /**

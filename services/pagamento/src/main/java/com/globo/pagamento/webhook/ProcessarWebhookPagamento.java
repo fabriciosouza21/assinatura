@@ -2,9 +2,11 @@ package com.globo.pagamento.webhook;
 
 import com.globo.pagamento.gateway.GatewayPagamentoClient;
 import com.globo.pagamento.gateway.StatusGateway;
-import com.globo.pagamento.messaging.event.StatusPagamento;
 import com.globo.pagamento.renovacao.PagamentoRenovacao;
 import com.globo.pagamento.renovacao.PagamentoRenovacaoRepository;
+import com.globo.pagamento.shared.contrato.StatusPagamento;
+import com.globo.pagamento.webhook.api.HmacSignatureValidator;
+import com.globo.pagamento.webhook.idempotencia.WebhookEventoProcessadoRepository;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -21,7 +23,7 @@ import org.slf4j.LoggerFactory;
  * <p>Um unico endpoint atende dois fluxos, distinguidos pelo {@code externalReference} da
  * notificacao: quando ele resolve um {@link PagamentoRenovacao} conhecido, a decisao e delegada ao
  * fluxo de renovacao; caso contrario, o {@code externalReference} e o {@code assinaturaId} da
- * adesao e o fluxo publica {@link com.globo.pagamento.messaging.event.PagamentoStatusAtualizado}.
+ * adesao e o fluxo publica {@link com.globo.pagamento.shared.contrato.PagamentoStatusAtualizado}.
  */
 public class ProcessarWebhookPagamento {
 
