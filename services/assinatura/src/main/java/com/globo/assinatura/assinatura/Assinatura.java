@@ -165,7 +165,7 @@ public class Assinatura {
   }
 
   /**
-   * Solicita o cancelamento da assinatura.
+   * Solicita o cancelamento da assinatura, agendando-o para o fim do ciclo ou efetivando-o.
    *
    * @return efeito do cancelamento solicitado
    * @throws IllegalStateException se a assinatura estiver em um status nao cancelavel
@@ -175,11 +175,9 @@ public class Assinatura {
       this.renovacaoAutomatica = false;
       return EfeitoCancelamento.AGENDADO;
     }
-    if (this.status == StatusAssinatura.SUSPENSA) {
-      this.status = StatusAssinatura.CANCELADA;
-      return EfeitoCancelamento.IMEDIATO;
-    }
-    if (this.status == StatusAssinatura.AGUARDANDO_PAGAMENTO) {
+    if (this.status == StatusAssinatura.SUSPENSA
+        || this.status == StatusAssinatura.AGUARDANDO_PAGAMENTO
+        || this.status == StatusAssinatura.PAGAMENTO_RECUSADO) {
       this.status = StatusAssinatura.CANCELADA;
       return EfeitoCancelamento.IMEDIATO;
     }
