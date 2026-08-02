@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.globo.assinatura.assinatura.AcessoNegadoException;
 import com.globo.assinatura.assinatura.AssinaturaNaoEncontradaException;
 import com.globo.assinatura.assinatura.StatusAssinatura;
 import com.globo.assinatura.cancelamento.CancelarAssinatura;
@@ -94,6 +95,26 @@ class CancelamentoControllerTest {
                 .with(authentication(cliente))
                 .with(csrf()))
         .andExpect(status().isNotFound())
+        .andExpect(content().string(""));
+  }
+
+  @Test
+  @DisplayName("Deve retornar 403 ao cancelar assinatura de outro usuario")
+  void deveRetornarForbiddenAoCancelarAssinaturaDeOutroUsuario() throws Exception {
+    UsuarioAutenticado principal =
+        new UsuarioAutenticado("cliente@example.com", USUARIO_UUID, "ROLE_CLIENT");
+    Authentication cliente =
+        new UsernamePasswordAuthenticationToken(
+            principal, null, List.of(new SimpleGrantedAuthority(principal.role())));
+    when(cancelarAssinatura.executar(anyString(), any(UsuarioAutenticado.class)))
+        .thenThrow(new AcessoNegadoException());
+
+    mockMvc
+        .perform(
+            post("/assinaturas/{uuid}/cancelamento", ASSINATURA_UUID)
+                .with(authentication(cliente))
+                .with(csrf()))
+        .andExpect(status().isForbidden())
         .andExpect(content().string(""));
   }
 }
