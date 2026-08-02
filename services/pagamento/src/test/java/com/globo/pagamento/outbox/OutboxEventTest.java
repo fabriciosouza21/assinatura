@@ -117,4 +117,18 @@ class OutboxEventTest {
         .as("Instante em que as tentativas se esgotaram")
         .isEqualTo(falhouEm);
   }
+
+  @Test
+  @DisplayName("Deve registrar o ultimo erro na falha definitiva")
+  void deveRegistrarUltimoErroNaFalhaDefinitiva() {
+    OutboxEvent evento =
+        OutboxEvent.criar(
+            UUID.randomUUID(), "Cobranca", UUID.randomUUID(), "PagamentoStatusAtualizado", "{}");
+
+    evento.marcarFalha("falha na autorizacao do gateway", Instant.parse("2026-08-01T12:10:00Z"));
+
+    assertThat(evento.getUltimoErro())
+        .as("Ultimo erro apos falha definitiva")
+        .isEqualTo("falha na autorizacao do gateway");
+  }
 }

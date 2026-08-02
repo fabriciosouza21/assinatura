@@ -111,6 +111,7 @@ public class OutboxEvent {
    */
   public void marcarFalha(String erro, Instant falhouEm) {
     this.status = OutboxStatus.FALHA;
+    this.ultimoErro = erro;
     this.falhouEm = falhouEm;
   }
 
