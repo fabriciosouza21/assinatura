@@ -188,8 +188,8 @@ BE-16 domínio/schema ──> BE-17 escrita ──> BE-18 scheduler ──> BE-1
 | # | Entregavel | Depende de | Status |
 |---|-----------|-----------|--------|
 | 1 | Domínio e schema (BE-16, migration V10) | — | [x] |
-| 2 | Fluxos de escrita (BE-17) | 1 | [ ] |
-| 3 | Scheduler e varredura (BE-18) | 2 | [ ] |
-| 4 | Contrato de consulta + OpenAPI (BE-19) | 3 | [ ] |
+| 2 | Fluxos de escrita (BE-17) | 1 | [x] |
+| 3 | Scheduler e varredura (BE-18) | 2 | [x] |
+| 4 | Contrato de consulta + OpenAPI (BE-19) | 3 | [x] |
 | 5 | Testes de integração (INT-1) | 4 | [ ] |
 | 6 | Documentação e perfil rápido (DOCS-4) | 5 | [ ] |

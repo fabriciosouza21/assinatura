@@ -172,18 +172,19 @@ class RenovacaoSchedulerTest {
   }
 
   @Test
-  @DisplayName("Deve buscar as vencidas usando a data do relogio injetado, nao o relogio de parede")
-  void deveUsarDataDoRelogioInjetadoAoBuscarVencidas() {
-    RenovacaoScheduler schedulerComRelogio = schedulerComRelogioFixo("2026-01-15T10:00:00Z");
+  @DisplayName("Deve buscar as vencidas usando o instante do relogio injetado, nao o de parede")
+  void deveUsarInstanteDoRelogioInjetadoAoBuscarVencidas() {
+    Instant instanteFixo = Instant.parse("2026-01-15T10:00:00Z");
+    RenovacaoScheduler schedulerComRelogio = schedulerComRelogioFixo(instanteFixo.toString());
     when(assinaturaRepository.buscarVencidasParaRenovacao(any(), anyInt())).thenReturn(List.of());
 
     schedulerComRelogio.varrerVencimentos();
 
-    ArgumentCaptor<LocalDate> dataCaptor = ArgumentCaptor.forClass(LocalDate.class);
-    verify(assinaturaRepository).buscarVencidasParaRenovacao(dataCaptor.capture(), eq(100));
-    assertThat(dataCaptor.getValue())
-        .as("Data do relogio injetado repassada a busca de vencidas")
-        .isEqualTo(LocalDate.of(2026, 1, 15));
+    ArgumentCaptor<Instant> instanteCaptor = ArgumentCaptor.forClass(Instant.class);
+    verify(assinaturaRepository).buscarVencidasParaRenovacao(instanteCaptor.capture(), eq(100));
+    assertThat(instanteCaptor.getValue())
+        .as("Instante do relogio injetado repassado a busca de vencidas")
+        .isEqualTo(instanteFixo);
   }
 
   @Test

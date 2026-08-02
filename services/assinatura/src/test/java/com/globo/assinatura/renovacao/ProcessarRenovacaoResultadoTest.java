@@ -119,8 +119,18 @@ class ProcessarRenovacaoResultadoTest {
             "pay_123",
             2);
     LocalDate fimCicloAntes = assinatura.getFimCiclo();
+    Instant instanteFixo = Instant.parse("2026-02-15T14:30:00Z");
+    ProcessarRenovacaoResultado commandComRelogio =
+        new ProcessarRenovacaoResultado(
+            renovacaoRepository,
+            assinaturaRepository,
+            renovacaoEventoProcessadoRepository,
+            outboxRepository,
+            jsonMapper,
+            Clock.fixed(instanteFixo, ZoneOffset.UTC),
+            CICLO_MS_PADRAO);
 
-    command.executar(evento);
+    commandComRelogio.executar(evento);
 
     assertThat(assinatura.getFimCiclo())
         .as("novo fim de ciclo deve avancar uma duracao de ciclo sobre o anterior")
@@ -129,9 +139,48 @@ class ProcessarRenovacaoResultadoTest {
         .as("inicio do ciclo deve assumir o fim de ciclo anterior")
         .isEqualTo(fimCicloAntes);
     assertThat(assinatura.getProximaRenovacaoEm())
-        .as("proxima renovacao deve seguir o novo fim de ciclo")
-        .isEqualTo(
-            fimCicloAntes.plusDays(CICLO_DIAS_PADRAO).atStartOfDay(ZoneOffset.UTC).toInstant());
+        .as("proxima renovacao deve ser o instante do processamento mais o ciclo")
+        .isEqualTo(instanteFixo.plusMillis(CICLO_MS_PADRAO));
+  }
+
+  @Test
+  @DisplayName("Deve voltar a ativa com a proxima renovacao no futuro ao aprovar ciclo sub-diario")
+  void deveVoltarParaAtivaComProximaRenovacaoNoFuturoAoAprovarCicloSubDiario() {
+    Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
+    assinatura.ativar(
+        LocalDate.of(2026, 8, 2), LocalDate.of(2026, 8, 2), Instant.parse("2026-08-02T12:00:00Z"));
+    assinatura.iniciarRenovacao();
+    Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
+        .thenReturn(Optional.of(renovacao));
+    when(assinaturaRepository.findById(42L)).thenReturn(Optional.of(assinatura));
+    Instant instanteFixo = Instant.parse("2026-08-02T13:00:00Z");
+    ProcessarRenovacaoResultado commandComRelogio =
+        new ProcessarRenovacaoResultado(
+            renovacaoRepository,
+            assinaturaRepository,
+            renovacaoEventoProcessadoRepository,
+            outboxRepository,
+            jsonMapper,
+            Clock.fixed(instanteFixo, ZoneOffset.UTC),
+            60_000L);
+    PagamentoRenovacaoAprovado evento =
+        new PagamentoRenovacaoAprovado(
+            UUID.randomUUID(),
+            Instant.parse("2026-08-02T12:00:00Z"),
+            UUID.fromString(renovacao.getUuid()),
+            UUID.randomUUID(),
+            "pay_123",
+            2);
+
+    commandComRelogio.executar(evento);
+
+    assertThat(assinatura.getStatus())
+        .as("assinatura deve voltar a ATIVA apos renovacao aprovada")
+        .isEqualTo(StatusAssinatura.ATIVA);
+    assertThat(assinatura.getProximaRenovacaoEm())
+        .as("proxima renovacao com ciclo sub-diario deve estar no futuro")
+        .isEqualTo(instanteFixo.plusMillis(60_000L));
   }
 
   @Test

@@ -8,7 +8,6 @@ import com.globo.assinatura.shared.seguranca.AcessoNegadoException;
 import com.globo.assinatura.shared.seguranca.UsuarioAutenticado;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
-import java.time.ZoneOffset;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,9 +67,7 @@ public class ConsultarAssinatura {
         assinatura.getStatus(),
         assinatura.getInicioCiclo(),
         assinatura.getFimCiclo(),
-        assinatura.getProximaRenovacaoEm() == null
-            ? null
-            : assinatura.getProximaRenovacaoEm().atZone(ZoneOffset.UTC).toLocalDate(),
+        assinatura.getProximaRenovacaoEm(),
         assinatura.isRenovacaoAutomatica());
   }
 

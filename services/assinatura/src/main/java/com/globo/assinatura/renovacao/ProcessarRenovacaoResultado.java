@@ -137,7 +137,7 @@ public class ProcessarRenovacaoResultado {
     Assinatura assinatura = possivelAssinatura.get();
     renovacao.aprovar();
     LocalDate novoFimCiclo = assinatura.getFimCiclo().plusDays(Duration.ofMillis(cicloMs).toDays());
-    assinatura.renovar(novoFimCiclo, novoFimCiclo.atStartOfDay(clock.getZone()).toInstant());
+    assinatura.renovar(novoFimCiclo, Instant.now(clock).plusMillis(cicloMs));
     gravarEvento(assinatura, renovacao, evento);
     registrarIdempotencia(evento.eventId(), renovacao.getUuid());
   }
