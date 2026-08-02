@@ -88,4 +88,18 @@ class ConsultarAssinaturaTest {
         .as("Administrador enxerga a assinatura do dono")
         .isEqualTo(dono.getUuid());
   }
+
+  @Test
+  @DisplayName("Deve lancar nao encontrado quando a assinatura aponta para usuario inexistente")
+  void deveLancarNaoEncontradoQuandoAssinaturaApontaParaUsuarioInexistente() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    when(assinaturaRepository.findByUuid(assinatura.getUuid())).thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.empty());
+    UsuarioAutenticado principal =
+        new UsuarioAutenticado("fulano@example.com", "usuario-uuid", "ROLE_CLIENT");
+
+    assertThatThrownBy(() -> query.executar(assinatura.getUuid(), principal))
+        .as("Assinatura orfa deve gerar nao encontrado, nao erro de infraestrutura")
+        .isInstanceOf(AssinaturaNaoEncontradaException.class);
+  }
 }

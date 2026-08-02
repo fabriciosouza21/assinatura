@@ -37,7 +37,8 @@ public class ConsultarAssinatura {
    * @param uuid uuid publico da assinatura
    * @param principal identidade extraida do token JWT
    * @return a representacao completa da assinatura, com o uuid publico do usuario dono
-   * @throws AssinaturaNaoEncontradaException se o uuid nao corresponder a uma assinatura
+   * @throws AssinaturaNaoEncontradaException se o uuid nao corresponder a uma assinatura, ou se a
+   *     assinatura apontar para um usuario inexistente
    * @throws AcessoNegadoException se a assinatura pertencer a outro usuario e o solicitante nao for
    *     administrador
    */
@@ -45,7 +46,10 @@ public class ConsultarAssinatura {
   public AssinaturaResponse executar(String uuid, UsuarioAutenticado principal) {
     Assinatura assinatura =
         assinaturaRepository.findByUuid(uuid).orElseThrow(AssinaturaNaoEncontradaException::new);
-    Usuario usuario = usuarioRepository.findById(assinatura.getUsuarioId()).orElseThrow();
+    Usuario usuario =
+        usuarioRepository
+            .findById(assinatura.getUsuarioId())
+            .orElseThrow(AssinaturaNaoEncontradaException::new);
     if (!podeConsultar(usuario, principal)) {
       throw new AcessoNegadoException();
     }
