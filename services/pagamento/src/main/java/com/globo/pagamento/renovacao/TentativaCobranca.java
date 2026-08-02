@@ -16,6 +16,10 @@ import java.time.Instant;
  * <p>Uma linha por tentativa, identificada por {@code (renovacaoId, numero)}. A tentativa inicial
  * nasce {@link StatusTentativa#PENDENTE}, sem {@code paymentId} e sem {@code proximaTentativaEm}: o
  * scheduler que cobra a tentativa no gateway preenche esses campos.
+ *
+ * <p>A construcao e responsabilidade de {@link PagamentoRenovacao}, que gera a sequencia de {@code
+ * numero}. As transicoes de status sao decididas pelo webhook a partir do status oficial do
+ * gateway.
  */
 @Entity
 @Table(name = "tentativa_cobranca")
@@ -44,12 +48,24 @@ public class TentativaCobranca {
   protected TentativaCobranca() {}
 
   /**
-   * Cria a tentativa inicial de uma renovacao, sempre {@link StatusTentativa#PENDENTE}.
+   * Cria uma tentativa de uma renovacao, sempre {@link StatusTentativa#PENDENTE}.
    *
-   * @param renovacaoId identificador publico da renovacao
-   * @param numero numero ordinal da tentativa (1 para a primeira)
+   * <p>Visibilidade restrita ao pacote: a sequencia de {@code numero} e gerada por {@link
+   * PagamentoRenovacao#registrarTentativa()} e {@link
+   * PagamentoRenovacao#registrarTentativa(TentativaCobranca, Instant)}, nunca informada a mao.
+   *
+   * @param renovacaoId identificador publico da renovacao; nao pode ser nulo nem vazio
+   * @param numero numero ordinal da tentativa; deve ser maior ou igual a 1
+   * @throws IllegalArgumentException se {@code renovacaoId} for vazio ou {@code numero} for menor
+   *     que 1
    */
-  public TentativaCobranca(String renovacaoId, int numero) {
+  TentativaCobranca(String renovacaoId, int numero) {
+    if (renovacaoId == null || renovacaoId.isBlank()) {
+      throw new IllegalArgumentException("renovacaoId nao pode ser vazio");
+    }
+    if (numero < 1) {
+      throw new IllegalArgumentException("numero deve ser maior ou igual a 1");
+    }
     this.renovacaoId = renovacaoId;
     this.numero = numero;
     this.status = StatusTentativa.PENDENTE;
@@ -116,6 +132,67 @@ public class TentativaCobranca {
    */
   public Instant getProximaTentativaEm() {
     return proximaTentativaEm;
+  }
+
+  /**
+   * Informa se a tentativa ainda aguarda decisao do gateway.
+   *
+   * <p>Uma tentativa ja decidida nao pode ser decidida de novo: e o guarda que absorve o reprocesso
+   * de um webhook cuja decisao anterior foi persistida.
+   *
+   * @return {@code true} enquanto o status for {@link StatusTentativa#PENDENTE}
+   */
+  public boolean estaPendente() {
+    return status == StatusTentativa.PENDENTE;
+  }
+
+  /**
+   * Marca a tentativa como aprovada pelo gateway, encerrando as tentativas da renovacao.
+   *
+   * @throws IllegalStateException se a tentativa ja tiver sido decidida
+   */
+  public void aprovar() {
+    exigirPendente();
+    this.status = StatusTentativa.APROVADA;
+  }
+
+  /**
+   * Marca a tentativa como recusada pelo gateway, dando lugar a uma nova tentativa agendada.
+   *
+   * @throws IllegalStateException se a tentativa ja tiver sido decidida
+   */
+  public void recusar() {
+    exigirPendente();
+    this.status = StatusTentativa.RECUSADA;
+  }
+
+  /**
+   * Marca a tentativa como a recusa que esgota o ciclo, sem nova tentativa.
+   *
+   * @throws IllegalStateException se a tentativa ja tiver sido decidida
+   */
+  public void esgotar() {
+    exigirPendente();
+    this.status = StatusTentativa.TENTATIVAS_ESGOTADA;
+  }
+
+  /**
+   * Agenda o instante a partir do qual a tentativa fica elegivel para cobranca.
+   *
+   * @param instante instante da cobranca; nao pode ser nulo
+   * @throws IllegalArgumentException se {@code instante} for nulo
+   */
+  void agendarPara(Instant instante) {
+    if (instante == null) {
+      throw new IllegalArgumentException("proximaTentativaEm nao pode ser nulo");
+    }
+    this.proximaTentativaEm = instante;
+  }
+
+  private void exigirPendente() {
+    if (!estaPendente()) {
+      throw new IllegalStateException("tentativa ja decidida: " + status);
+    }
   }
 
   /**

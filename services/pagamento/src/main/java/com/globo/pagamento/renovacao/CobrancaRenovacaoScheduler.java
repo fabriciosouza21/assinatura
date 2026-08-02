@@ -47,9 +47,15 @@ public class CobrancaRenovacaoScheduler {
    *
    * <p>Ponto de entrada do agendamento: abre a transacao que envolve a cobranca das tentativas
    * prontas e delega o loop a {@link #cobrar()}.
+   *
+   * <p>O delay inicial adia a primeira execucao apos a subida do contexto. Em producao ele escalona
+   * o arranque de varias instancias; nos testes que exercitam {@link #cobrar()} diretamente ele
+   * evita que a execucao agendada dispute as mesmas tentativas via {@code FOR UPDATE SKIP LOCKED}.
    */
   @Transactional
-  @Scheduled(fixedDelayString = "${app.renovacao.scheduler-intervalo-ms}")
+  @Scheduled(
+      initialDelayString = "${app.renovacao.scheduler-delay-inicial-ms}",
+      fixedDelayString = "${app.renovacao.scheduler-intervalo-ms}")
   public void agendar() {
     cobrar();
   }

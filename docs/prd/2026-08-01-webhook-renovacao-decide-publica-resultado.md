@@ -8,7 +8,7 @@ Pagamento do plano `docs/roadmap/2026-07-31-plano-implementacao-renovacao.md`)
 **Versão alvo:** `0.3.0`
 **Contrato de referência:** `docs/contratos/contrato-eventos-renovacao.puml` (eventos
 `PagamentoRenovacaoAprovado` e `RenovacaoTentativasEsgotadas`) e
-`docs/renovacao/renovacao-mecanismo-retries.md` (janela D+1/D+3/D+7 e contadores
+`docs/renovacao/renovacao-mecanismo-retries.md` (janela D+1/D+3 e contadores
 independentes)
 
 ## Problema
@@ -76,7 +76,7 @@ renovação está incompleto: sabe pedir o pagamento, mas não sabe ler a respos
   `PagamentoRenovacaoAprovado`. Encerra as tentativas daquela renovação.
 - `REJECTED` com tentativa menor que 3: marca a tentativa atual como `RECUSADA` e
   cria a próxima tentativa (número seguinte) com `status = PENDENTE`, sem
-  `paymentId` e com `proximaTentativaEm` no futuro (backoff D+1, D+3, D+7), para o
+  `paymentId` e com `proximaTentativaEm` no futuro (backoff D+1, D+3), para o
   scheduler do BE-12 cobrar no dia certo.
 - `REJECTED` com tentativa igual a 3: marca a tentativa como
   `TENTATIVAS_ESGOTADA` e publica `RenovacaoTentativasEsgotadas`. Não cria nova
@@ -97,9 +97,11 @@ renovação está incompleto: sabe pedir o pagamento, mas não sabe ler a respos
 
 ### Should Have
 
-- A janela de backoff (D+1, D+3, D+7) é externalizada em propriedades
-  (`app.renovacao.tentativas-backoff-dias`) no bloco `app:` do `application.yaml`,
-  com defaults em `.env.example`.
+- A janela de backoff é externalizada em propriedades
+  (`app.renovacao.tentativas-backoff-dias`, default `1,3` = D+1 e D+3 após cada
+  recusa) no bloco `app:` do `application.yaml`, com defaults em `.env.example`.
+  O tamanho da lista define o total de tentativas do ciclo: com o default, três
+  tentativas em D+0, D+1 e D+3.
 - Logs estruturados por `renovacaoId`, `paymentId` e `numero` da tentativa para
   rastreabilidade (decisão de aprovado, recusa com retry, recusa esgotada,
   redelivery ignorado).
@@ -159,7 +161,8 @@ renovação está incompleto: sabe pedir o pagamento, mas não sabe ler a respos
 - **Correção do scheduler fica no BE-13.** Resolvido. O scheduler do BE-12
   seleciona tentativas só por `payment_id IS NULL`, ignorando
   `proxima_tentativa_em`. Como BE-13 cria tentativas de retry marcadas para o
-  futuro (D+3 após a primeira recusa), sem a correção elas seriam re-cobradas na
+  futuro (D+1 após a primeira recusa, D+3 após a segunda), sem a correção elas
+  seriam re-cobradas na
   próxima execução do scheduler, quebrando o backoff. A query passa a
   `status = 'PENDENTE' AND payment_id IS NULL AND (proxima_tentativa_em IS NULL OR
   proxima_tentativa_em <= now())`. BE-13 já toca o repositório para criar as
@@ -215,8 +218,8 @@ renovação está incompleto: sabe pedir o pagamento, mas não sabe ler a respos
 ### Backoff é respeitado pelo scheduler
 
 - Given a tentativa número 2 criada pelo webhook após uma recusa, com
-  `proximaTentativaEm` em D+3, when o scheduler do BE-12 roda antes de D+3, then a
-  tentativa não é selecionada para cobrança. Quando o scheduler roda em D+3, then
+  `proximaTentativaEm` em D+1, when o scheduler do BE-12 roda antes de D+1, then a
+  tentativa não é selecionada para cobrança. Quando o scheduler roda em D+1, then
   ela é cobrada no gateway com `Idempotency-Key = <renovacaoId>:2`.
 
 ### Redelivery de eventId não republica

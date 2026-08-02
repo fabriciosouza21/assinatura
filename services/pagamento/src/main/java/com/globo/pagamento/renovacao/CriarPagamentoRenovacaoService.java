@@ -12,12 +12,12 @@ import org.springframework.transaction.annotation.Transactional;
  * Assim, um redelivery nao duplica pagamento nem tentativa.
  *
  * <p>A tentativa inicial nasce {@link StatusTentativa#PENDENTE}, sem {@code paymentId}: o scheduler
- * que cobra a tentativa no gateway preenche esse campo.
+ * que cobra a tentativa no gateway preenche esse campo. Ela e criada pelo agregado {@link
+ * PagamentoRenovacao}, recarregado apos a insercao, para que a sequencia de tentativas nasca sempre
+ * do mesmo lugar.
  */
 @Service
 public class CriarPagamentoRenovacaoService {
-
-  static final int PRIMEIRA_TENTATIVA = 1;
 
   private final PagamentoRenovacaoRepository pagamentoRenovacaoRepository;
   private final TentativaCobrancaRepository tentativaCobrancaRepository;
@@ -40,12 +40,14 @@ public class CriarPagamentoRenovacaoService {
    * renovacao ainda nao existir.
    *
    * @param evento evento consumido do topico {@code renovacao-solicitada}
+   * @throws IllegalStateException se o pagamento recem-inserido nao puder ser recarregado
    */
   @Transactional
   public void processar(RenovacaoSolicitada evento) {
+    String renovacaoId = evento.renovacaoId().toString();
     int inseridas =
         pagamentoRenovacaoRepository.inserirSeNaoExistir(
-            evento.renovacaoId().toString(),
+            renovacaoId,
             evento.assinaturaId().toString(),
             evento.plano().name(),
             evento.valor(),
@@ -53,7 +55,15 @@ public class CriarPagamentoRenovacaoService {
     if (inseridas == 0) {
       return;
     }
-    tentativaCobrancaRepository.save(
-        new TentativaCobranca(evento.renovacaoId().toString(), PRIMEIRA_TENTATIVA));
+    PagamentoRenovacao pagamento =
+        pagamentoRenovacaoRepository
+            .findByRenovacaoId(renovacaoId)
+            .orElseThrow(
+                () ->
+                    new IllegalStateException(
+                        "pagamento da renovacao "
+                            + renovacaoId
+                            + " nao encontrado apos a insercao"));
+    tentativaCobrancaRepository.save(pagamento.registrarTentativa());
   }
 }

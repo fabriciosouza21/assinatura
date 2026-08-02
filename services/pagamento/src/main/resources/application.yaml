@@ -55,6 +55,8 @@ app:
     webhook-notification-url: ${APP_GATEWAY_WEBHOOK_NOTIFICATION_URL:http://pagamento:8080/webhooks/payments}
   renovacao:
     scheduler-intervalo-ms: ${APP_RENOVACAO_SCHEDULER_INTERVALO_MS:5000}
+    scheduler-delay-inicial-ms: ${APP_RENOVACAO_SCHEDULER_DELAY_INICIAL_MS:0}
+    tentativas-backoff-dias: ${APP_RENOVACAO_TENTATIVAS_BACKOFF_DIAS:1,3}
 
 management:
   endpoints:

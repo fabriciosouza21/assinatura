@@ -13,6 +13,7 @@ import com.globo.pagamento.cobranca.Plano;
 import com.globo.pagamento.messaging.event.RenovacaoSolicitada;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,8 @@ class CriarPagamentoRenovacaoServiceTest {
             eq(evento.valor()),
             eq(evento.cicloReferencia())))
         .thenReturn(1);
+    when(pagamentoRenovacaoRepository.findByRenovacaoId(evento.renovacaoId().toString()))
+        .thenReturn(Optional.of(pagamentoDe(evento)));
 
     service.processar(evento);
 
@@ -74,6 +77,15 @@ class CriarPagamentoRenovacaoServiceTest {
     service.processar(evento);
 
     verify(tentativaCobrancaRepository, never()).save(any());
+  }
+
+  private PagamentoRenovacao pagamentoDe(RenovacaoSolicitada evento) {
+    return new PagamentoRenovacao(
+        evento.renovacaoId().toString(),
+        evento.assinaturaId().toString(),
+        evento.plano(),
+        evento.valor(),
+        evento.cicloReferencia());
   }
 
   private RenovacaoSolicitada eventoValido() {

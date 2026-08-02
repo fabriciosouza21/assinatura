@@ -37,10 +37,15 @@ public class WebhookPagamentoController {
   /**
    * Recebe e processa a notificacao de pagamento.
    *
+   * <p>O event id do header precisa coincidir com o {@code id} do corpo assinado: e por ele que a
+   * deduplicacao ancora, e um header divergente indica reutilizacao de um corpo capturado. A
+   * divergencia e rejeitada como assinatura invalida.
+   *
    * @param corpo corpo bruto da requisicao
    * @param eventId identificador unico do evento (header {@code X-Mock-Event-Id})
    * @param assinatura valor do header {@code X-Mock-Signature}
    * @return confirmacao {@code 200} com o eventId processado
+   * @throws WebhookInvalidoException se o event id do header divergir do id do corpo
    */
   @PostMapping
   public ResponseEntity<WebhookAck> receber(
@@ -48,8 +53,12 @@ public class WebhookPagamentoController {
       @RequestHeader("X-Mock-Event-Id") UUID eventId,
       @RequestHeader("X-Mock-Signature") String assinatura) {
     WebhookEvent evento = objectMapper.readValue(corpo, WebhookEvent.class);
+    if (!evento.id().equals(eventId)) {
+      throw new WebhookInvalidoException();
+    }
     UUID processado =
-        command.processar(corpo, eventId, evento.assinaturaId(), evento.paymentId(), assinatura);
+        command.processar(
+            corpo, eventId, evento.externalReference(), evento.paymentId(), assinatura);
     return ResponseEntity.ok(new WebhookAck(true, processado));
   }
 }

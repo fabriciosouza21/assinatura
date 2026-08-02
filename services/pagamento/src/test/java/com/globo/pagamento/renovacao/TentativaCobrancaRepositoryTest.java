@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,11 +23,11 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Teste de integracao do {@link TentativaCobrancaRepository} contra o Postgres real.
  *
- * <p>Valida o predicado de elegibilidade do scheduler (BE-12): a query {@code
- * buscarProntasParaCobrar()} deve devolver apenas as tentativas pendentes que ainda nao possuem
- * {@code paymentId}, excluindo as que ja foram cobradas pelo gateway. Persiste duas tentativas (uma
- * pronta e uma ja cobrada) e exige que apenas a primeira seja retornada. Usa o Postgres do
- * docker-compose (porta 5433, banco {@code pagamento}).
+ * <p>Valida o predicado de elegibilidade do scheduler: a query {@code buscarProntasParaCobrar()}
+ * deve devolver apenas as tentativas {@code PENDENTE} que ainda nao possuem {@code paymentId} e
+ * cujo agendamento venceu, excluindo as ja cobradas pelo gateway, as ja decididas pelo webhook e as
+ * de retry marcadas para o futuro. Usa o Postgres do docker-compose (porta 5433, banco {@code
+ * pagamento}).
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = Replace.NONE)
@@ -61,6 +63,63 @@ class TentativaCobrancaRepositoryTest {
         .as("Apenas a tentativa sem payment id e elegivel")
         .extracting(TentativaCobranca::getRenovacaoId)
         .containsExactly("ren-A");
+  }
+
+  @Test
+  @DisplayName("Nao deve retornar a tentativa de retry antes da data agendada")
+  void naoDeveRetornarTentativaDeRetryAntesDaDataAgendada() {
+    TentativaCobranca agendadaNoFuturo = new TentativaCobranca("ren-futuro", 2);
+    agendadaNoFuturo.agendarPara(Instant.now().plus(3, ChronoUnit.DAYS));
+    tentativaCobrancaRepository.save(agendadaNoFuturo);
+    tentativaCobrancaRepository.flush();
+
+    List<TentativaCobranca> prontas = tentativaCobrancaRepository.buscarProntasParaCobrar();
+
+    assertThat(prontas).as("Backoff mantem a tentativa fora do lote ate a data marcada").isEmpty();
+  }
+
+  @Test
+  @DisplayName("Deve retornar a tentativa de retry quando a data agendada ja venceu")
+  void deveRetornarTentativaDeRetryQuandoDataAgendadaVenceu() {
+    TentativaCobranca vencida = new TentativaCobranca("ren-vencida", 2);
+    vencida.agendarPara(Instant.now().minus(1, ChronoUnit.MINUTES));
+    tentativaCobrancaRepository.save(vencida);
+    tentativaCobrancaRepository.flush();
+
+    List<TentativaCobranca> prontas = tentativaCobrancaRepository.buscarProntasParaCobrar();
+
+    assertThat(prontas)
+        .as("Tentativa agendada e elegivel assim que a data vence")
+        .extracting(TentativaCobranca::getRenovacaoId)
+        .containsExactly("ren-vencida");
+  }
+
+  @Test
+  @DisplayName("Nao deve retornar a tentativa ja decidida pelo webhook")
+  void naoDeveRetornarTentativaJaDecidida() {
+    TentativaCobranca recusada = new TentativaCobranca("ren-recusada", 1);
+    recusada.recusar();
+    tentativaCobrancaRepository.save(recusada);
+    tentativaCobrancaRepository.flush();
+
+    List<TentativaCobranca> prontas = tentativaCobrancaRepository.buscarProntasParaCobrar();
+
+    assertThat(prontas).as("Tentativa fora de PENDENTE nao volta para o lote").isEmpty();
+  }
+
+  @Test
+  @DisplayName("Deve limitar o lote selecionado em um unico ciclo")
+  void deveLimitarLoteSelecionadoEmUmUnicoCiclo() {
+    for (int i = 0; i < 205; i++) {
+      tentativaCobrancaRepository.save(new TentativaCobranca("ren-lote-" + i, 1));
+    }
+    tentativaCobrancaRepository.flush();
+
+    List<TentativaCobranca> prontas = tentativaCobrancaRepository.buscarProntasParaCobrar();
+
+    assertThat(prontas)
+        .as("Lote limitado para nao segurar a transacao do scheduler por tentativas demais")
+        .hasSize(200);
   }
 
   @Test

@@ -2,6 +2,8 @@ package com.globo.pagamento.webhook;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -57,6 +59,21 @@ class WebhookPagamentoControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.received").value(true))
         .andExpect(jsonPath("$.eventId").value(EVENT_ID.toString()));
+  }
+
+  @Test
+  @DisplayName("Deve retornar 401 quando o event id do header diverge do corpo assinado")
+  void deveRetornar401QuandoEventIdDoHeaderDivergeDoCorpo() throws Exception {
+    mockMvc
+        .perform(
+            post("/webhooks/payments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("X-Mock-Event-Id", EVENT_ID.toString())
+                .header("X-Mock-Signature", "sha256=abc")
+                .content(corpoComOutroEventId()))
+        .andExpect(status().isUnauthorized())
+        .andExpect(content().json("{\"erro\":\"assinatura_hmac_invalida\"}"));
+    verify(command, never()).processar(any(), any(), any(), any(), any());
   }
 
   @Test
@@ -153,6 +170,16 @@ class WebhookPagamentoControllerTest {
     return jsonMapper.writeValueAsString(
         new WebhookEvent(
             EVENT_ID,
+            "payment.updated",
+            new WebhookData(
+                UUID.fromString("00000000-0000-0000-0000-000000000021"),
+                UUID.fromString("00000000-0000-0000-0000-000000000011"))));
+  }
+
+  private String corpoComOutroEventId() {
+    return jsonMapper.writeValueAsString(
+        new WebhookEvent(
+            UUID.fromString("00000000-0000-0000-0000-000000000098"),
             "payment.updated",
             new WebhookData(
                 UUID.fromString("00000000-0000-0000-0000-000000000021"),

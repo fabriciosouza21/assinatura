@@ -6,7 +6,10 @@ import com.globo.pagamento.gateway.GatewayPagamentoClient;
 import com.globo.pagamento.gateway.StatusGateway;
 import com.globo.pagamento.messaging.event.PagamentoStatusAtualizado;
 import com.globo.pagamento.messaging.event.StatusPagamento;
+import com.globo.pagamento.renovacao.PagamentoRenovacao;
+import com.globo.pagamento.renovacao.PagamentoRenovacaoRepository;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import org.slf4j.Logger;
@@ -19,8 +22,13 @@ import tools.jackson.databind.ObjectMapper;
  * Command que processa uma notificacao de webhook do gateway.
  *
  * <p>Orquestra a autenticacao HMAC, a idempotencia por {@code eventId}, a consulta do status
- * oficial no gateway, a normalizacao, a atualizacao da cobranca e a publicacao publish-then-ACK. O
- * {@code eventId} so e gravado como processado apos o Kafka confirmar a publicacao, nunca antes.
+ * oficial no gateway, a normalizacao e a publicacao publish-then-ACK. O {@code eventId} so e
+ * gravado como processado apos o Kafka confirmar a publicacao, nunca antes.
+ *
+ * <p>Um unico endpoint atende dois fluxos, distinguidos pelo {@code externalReference} da
+ * notificacao: quando ele resolve um {@link PagamentoRenovacao} conhecido, a decisao e delegada a
+ * {@link ProcessarWebhookRenovacao}; caso contrario, o {@code externalReference} e o {@code
+ * assinaturaId} da adesao e o fluxo publica {@link PagamentoStatusAtualizado}.
  */
 public class ProcessarWebhookPagamento {
 
@@ -30,8 +38,10 @@ public class ProcessarWebhookPagamento {
   private final HmacSignatureValidator hmacValidator;
   private final WebhookEventoProcessadoRepository eventoRepository;
   private final CobrancaRepository cobrancaRepository;
+  private final PagamentoRenovacaoRepository pagamentoRenovacaoRepository;
   private final GatewayPagamentoClient gatewayClient;
   private final NormalizadorStatus normalizador;
+  private final ProcessarWebhookRenovacao processarRenovacao;
   private final KafkaTemplate<String, String> kafkaTemplate;
   private final String topico;
 
@@ -42,8 +52,10 @@ public class ProcessarWebhookPagamento {
    * @param hmacValidator validador da assinatura HMAC do corpo
    * @param eventoRepository repositorio de eventos processados (dedup por eventId)
    * @param cobrancaRepository repositorio de cobrancas
+   * @param pagamentoRenovacaoRepository repositorio de pagamentos de renovacao, usado no despacho
    * @param gatewayClient client de consulta de status no gateway
    * @param normalizador normalizador de status do gateway para o dominio publicado
+   * @param processarRenovacao command que decide o resultado de uma cobranca de renovacao
    * @param kafkaTemplate template de publicacao no Kafka
    * @param topico topico de {@code pagamento-status-atualizado}
    */
@@ -52,16 +64,20 @@ public class ProcessarWebhookPagamento {
       HmacSignatureValidator hmacValidator,
       WebhookEventoProcessadoRepository eventoRepository,
       CobrancaRepository cobrancaRepository,
+      PagamentoRenovacaoRepository pagamentoRenovacaoRepository,
       GatewayPagamentoClient gatewayClient,
       NormalizadorStatus normalizador,
+      ProcessarWebhookRenovacao processarRenovacao,
       KafkaTemplate<String, String> kafkaTemplate,
       String topico) {
     this.objectMapper = objectMapper;
     this.hmacValidator = hmacValidator;
     this.eventoRepository = eventoRepository;
     this.cobrancaRepository = cobrancaRepository;
+    this.pagamentoRenovacaoRepository = pagamentoRenovacaoRepository;
     this.gatewayClient = gatewayClient;
     this.normalizador = normalizador;
+    this.processarRenovacao = processarRenovacao;
     this.kafkaTemplate = kafkaTemplate;
     this.topico = topico;
   }
@@ -71,7 +87,8 @@ public class ProcessarWebhookPagamento {
    *
    * @param corpo corpo bruto da requisicao
    * @param eventId identificador unico do evento (= {@code X-Mock-Event-Id})
-   * @param assinaturaId uuid da assinatura (= {@code externalReference})
+   * @param externalReference referencia externa da cobranca: o {@code renovacaoId} numa renovacao,
+   *     o {@code assinaturaId} numa adesao
    * @param paymentId identificador da cobranca no gateway
    * @param assinatura valor do header {@code X-Mock-Signature}
    * @return o eventId processado
@@ -79,22 +96,37 @@ public class ProcessarWebhookPagamento {
    * @throws PublicacaoIndisponivelException se a consulta ao gateway ou a publicacao falharem
    */
   public UUID processar(
-      byte[] corpo, UUID eventId, UUID assinaturaId, UUID paymentId, String assinatura) {
+      byte[] corpo, UUID eventId, UUID externalReference, UUID paymentId, String assinatura) {
     if (!hmacValidator.valido(corpo, assinatura)) {
       throw new WebhookInvalidoException();
     }
     if (eventoRepository.existsByEventId(eventId)) {
+      log.atDebug()
+          .addKeyValue("event", "webhook_reenvio_ignorado")
+          .addKeyValue("eventId", eventId)
+          .addKeyValue("reasonCode", "event_id_ja_processado")
+          .log("Reenvio de webhook ja processado");
       return eventId;
     }
-    log.info(
-        "Webhook recebido para eventId={} assinaturaId={} paymentId={}",
-        eventId,
-        assinaturaId,
-        paymentId);
+    log.atInfo()
+        .addKeyValue("event", "webhook_recebido")
+        .addKeyValue("eventId", eventId)
+        .addKeyValue("externalReference", externalReference)
+        .addKeyValue("paymentId", paymentId)
+        .log("Webhook recebido");
     StatusGateway statusGateway = consultarStatus(paymentId);
     StatusPagamento status = normalizador.normalizar(statusGateway);
-    atualizarCobranca(paymentId, status);
-    publicar(eventId, assinaturaId, paymentId, status);
+    Optional<PagamentoRenovacao> renovacao =
+        pagamentoRenovacaoRepository.findByRenovacaoId(externalReference.toString());
+    UUID assinaturaId = externalReference;
+    if (renovacao.isPresent()) {
+      PagamentoRenovacao pagamento = renovacao.get();
+      assinaturaId = UUID.fromString(pagamento.getAssinaturaId());
+      processarRenovacao.decidir(pagamento, eventId, paymentId.toString(), status);
+    } else {
+      atualizarCobranca(paymentId, status);
+      publicar(eventId, externalReference, paymentId, status);
+    }
     try {
       eventoRepository.save(new WebhookEventoProcessado(eventId, assinaturaId));
     } catch (DataIntegrityViolationException e) {

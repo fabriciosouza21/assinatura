@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -11,9 +12,14 @@ import static org.mockito.Mockito.when;
 
 import com.globo.pagamento.cobranca.Cobranca;
 import com.globo.pagamento.cobranca.CobrancaRepository;
+import com.globo.pagamento.cobranca.Plano;
 import com.globo.pagamento.cobranca.StatusCobranca;
 import com.globo.pagamento.gateway.GatewayPagamentoClient;
 import com.globo.pagamento.gateway.StatusGateway;
+import com.globo.pagamento.messaging.event.StatusPagamento;
+import com.globo.pagamento.renovacao.PagamentoRenovacao;
+import com.globo.pagamento.renovacao.PagamentoRenovacaoRepository;
+import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -22,6 +28,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -42,6 +49,7 @@ class ProcessarWebhookPagamentoTest {
 
   private static final String EVENT_ID = "00000000-0000-0000-0000-000000000099";
   private static final String ASSINATURA_ID = "00000000-0000-0000-0000-000000000011";
+  private static final String RENOVACAO_ID = "00000000-0000-0000-0000-000000000031";
   private static final String PAYMENT_ID = "00000000-0000-0000-0000-000000000021";
   private static final byte[] CORPO = "corpo-do-webhook".getBytes();
 
@@ -54,7 +62,9 @@ class ProcessarWebhookPagamentoTest {
   @Mock private HmacSignatureValidator hmacValidator;
   @Mock private WebhookEventoProcessadoRepository eventoRepository;
   @Mock private CobrancaRepository cobrancaRepository;
+  @Mock private PagamentoRenovacaoRepository pagamentoRenovacaoRepository;
   @Mock private GatewayPagamentoClient gatewayClient;
+  @Mock private ProcessarWebhookRenovacao processarRenovacao;
   @Mock private KafkaTemplate<String, String> kafkaTemplate;
 
   private NormalizadorStatus normalizador;
@@ -69,8 +79,10 @@ class ProcessarWebhookPagamentoTest {
             hmacValidator,
             eventoRepository,
             cobrancaRepository,
+            pagamentoRenovacaoRepository,
             gatewayClient,
             normalizador,
+            processarRenovacao,
             kafkaTemplate,
             "pagamento-status-atualizado");
   }
@@ -227,6 +239,92 @@ class ProcessarWebhookPagamentoTest {
   }
 
   @Test
+  @DisplayName("Deve delegar a decisao ao fluxo de renovacao quando a referencia externa resolve")
+  void deveDelegarAoFluxoDeRenovacaoQuandoReferenciaResolve() {
+    UUID eventId = UUID.fromString(EVENT_ID);
+    final UUID renovacaoId = UUID.fromString(RENOVACAO_ID);
+    final UUID paymentId = UUID.fromString(PAYMENT_ID);
+    PagamentoRenovacao pagamento = pagamentoRenovacao();
+    when(hmacValidator.valido(eq(CORPO), any())).thenReturn(true);
+    when(eventoRepository.existsByEventId(eventId)).thenReturn(false);
+    when(gatewayClient.consultarStatus(PAYMENT_ID)).thenReturn(StatusGateway.APPROVED);
+    when(pagamentoRenovacaoRepository.findByRenovacaoId(RENOVACAO_ID))
+        .thenReturn(Optional.of(pagamento));
+
+    command.processar(CORPO, eventId, renovacaoId, paymentId, "sha256=abc");
+
+    verify(processarRenovacao)
+        .decidir(eq(pagamento), eq(eventId), eq(PAYMENT_ID), eq(StatusPagamento.APPROVED));
+    verify(kafkaTemplate, never()).send(any(), any(), any());
+    verify(cobrancaRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("Deve propagar decisao indisponivel sem gravar o event id como processado")
+  void devePropagarDecisaoIndisponivelSemGravarDedup() {
+    UUID eventId = UUID.fromString(EVENT_ID);
+    when(hmacValidator.valido(eq(CORPO), any())).thenReturn(true);
+    when(eventoRepository.existsByEventId(eventId)).thenReturn(false);
+    when(gatewayClient.consultarStatus(PAYMENT_ID)).thenReturn(StatusGateway.APPROVED);
+    when(pagamentoRenovacaoRepository.findByRenovacaoId(RENOVACAO_ID))
+        .thenReturn(Optional.of(pagamentoRenovacao()));
+    doThrow(new DecisaoRenovacaoIndisponivelException())
+        .when(processarRenovacao)
+        .decidir(any(), any(), any(), any());
+
+    assertThatThrownBy(
+            () ->
+                command.processar(
+                    CORPO,
+                    eventId,
+                    UUID.fromString(RENOVACAO_ID),
+                    UUID.fromString(PAYMENT_ID),
+                    "sha256=abc"))
+        .as("Aguardar o reenvio exige que o event id nao entre na deduplicacao")
+        .isInstanceOf(DecisaoRenovacaoIndisponivelException.class);
+    verify(eventoRepository, never()).save(any());
+  }
+
+  @Test
+  @DisplayName("Deve gravar o eventId com o assinaturaId da renovacao no fluxo de renovacao")
+  void deveGravarEventIdComAssinaturaIdDaRenovacao() {
+    UUID eventId = UUID.fromString(EVENT_ID);
+    when(hmacValidator.valido(eq(CORPO), any())).thenReturn(true);
+    when(eventoRepository.existsByEventId(eventId)).thenReturn(false);
+    when(gatewayClient.consultarStatus(PAYMENT_ID)).thenReturn(StatusGateway.APPROVED);
+    when(pagamentoRenovacaoRepository.findByRenovacaoId(RENOVACAO_ID))
+        .thenReturn(Optional.of(pagamentoRenovacao()));
+    ArgumentCaptor<WebhookEventoProcessado> processadoCaptor =
+        ArgumentCaptor.forClass(WebhookEventoProcessado.class);
+
+    command.processar(
+        CORPO, eventId, UUID.fromString(RENOVACAO_ID), UUID.fromString(PAYMENT_ID), "sha256=abc");
+
+    verify(eventoRepository).save(processadoCaptor.capture());
+    assertThat(processadoCaptor.getValue().getAssinaturaId())
+        .as("Dedup registrada sob a assinatura renovada, nao sob a renovacao")
+        .isEqualTo(UUID.fromString(ASSINATURA_ID));
+  }
+
+  @Test
+  @DisplayName("Deve seguir o fluxo de adesao quando a referencia externa nao e uma renovacao")
+  void deveSeguirFluxoDeAdesaoQuandoReferenciaNaoEhRenovacao() {
+    UUID eventId = UUID.fromString(EVENT_ID);
+    final UUID assinaturaId = UUID.fromString(ASSINATURA_ID);
+    when(hmacValidator.valido(eq(CORPO), any())).thenReturn(true);
+    when(eventoRepository.existsByEventId(eventId)).thenReturn(false);
+    when(gatewayClient.consultarStatus(PAYMENT_ID)).thenReturn(StatusGateway.APPROVED);
+    when(pagamentoRenovacaoRepository.findByRenovacaoId(ASSINATURA_ID))
+        .thenReturn(Optional.empty());
+    when(kafkaTemplate.send(any(), any(), any())).thenReturn(PUBLICADO);
+
+    command.processar(CORPO, eventId, assinaturaId, UUID.fromString(PAYMENT_ID), "sha256=abc");
+
+    verify(kafkaTemplate).send(eq("pagamento-status-atualizado"), eq(ASSINATURA_ID), any());
+    verify(processarRenovacao, never()).decidir(any(), any(), any(), any());
+  }
+
+  @Test
   @DisplayName("Deve gravar o eventId somente apos a publicacao no Kafka confirmar")
   void deveGravarEventIdAposPublicacaoConfirmada() throws Exception {
     UUID eventId = UUID.fromString(EVENT_ID);
@@ -241,5 +339,45 @@ class ProcessarWebhookPagamentoTest {
     InOrder ordem = inOrder(kafkaTemplate, eventoRepository);
     ordem.verify(kafkaTemplate).send(eq("pagamento-status-atualizado"), eq(ASSINATURA_ID), any());
     ordem.verify(eventoRepository).save(any());
+  }
+
+  @Test
+  @DisplayName("Deve restaurar o flag de interrupcao quando o publish e interrompido")
+  void deveRestaurarFlagDeInterrupcaoQuandoPublishInterrompido() throws Exception {
+    UUID eventId = UUID.fromString(EVENT_ID);
+    when(hmacValidator.valido(eq(CORPO), any())).thenReturn(true);
+    when(eventoRepository.existsByEventId(eventId)).thenReturn(false);
+    when(gatewayClient.consultarStatus(PAYMENT_ID)).thenReturn(StatusGateway.APPROVED);
+    when(kafkaTemplate.send(any(), any(), any())).thenReturn(new FuturoInterrompido());
+
+    try {
+      assertThatThrownBy(
+              () ->
+                  command.processar(
+                      CORPO,
+                      eventId,
+                      UUID.fromString(ASSINATURA_ID),
+                      UUID.fromString(PAYMENT_ID),
+                      "sha256=abc"))
+          .as("Publish interrompido sinalizado como publicacao indisponivel")
+          .isInstanceOf(PublicacaoIndisponivelException.class);
+      assertThat(Thread.currentThread().isInterrupted())
+          .as("Flag de interrupcao restaurado para o chamador")
+          .isTrue();
+    } finally {
+      Thread.interrupted();
+    }
+  }
+
+  private static class FuturoInterrompido extends CompletableFuture<SendResult<String, String>> {
+    @Override
+    public SendResult<String, String> get() throws InterruptedException {
+      throw new InterruptedException();
+    }
+  }
+
+  private PagamentoRenovacao pagamentoRenovacao() {
+    return new PagamentoRenovacao(
+        RENOVACAO_ID, ASSINATURA_ID, Plano.BASICO, new BigDecimal("19.90"), 2);
   }
 }
