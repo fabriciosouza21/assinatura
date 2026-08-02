@@ -35,6 +35,7 @@ public class OutboxEvent {
 
   private Instant proximaTentativaEm;
   private Instant criadoEm;
+  private Instant publicadoEm;
 
   /** Construtor sem argumentos exigido pelo provedor JPA. */
   protected OutboxEvent() {}
@@ -78,6 +79,7 @@ public class OutboxEvent {
    */
   public void marcarPublicado(Instant publicadoEm) {
     this.status = OutboxStatus.PUBLICADO;
+    this.publicadoEm = publicadoEm;
   }
 
   /**
@@ -87,5 +89,14 @@ public class OutboxEvent {
    */
   public OutboxStatus getStatus() {
     return status;
+  }
+
+  /**
+   * Retorna o instante em que o evento foi publicado.
+   *
+   * @return instante da publicacao
+   */
+  public Instant getPublicadoEm() {
+    return publicadoEm;
   }
 }

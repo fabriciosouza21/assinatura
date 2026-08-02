@@ -32,4 +32,19 @@ class OutboxEventTest {
         .as("Status apos marcar como publicado")
         .isEqualTo(OutboxStatus.PUBLICADO);
   }
+
+  @Test
+  @DisplayName("Deve registrar instante de publicacao")
+  void deveRegistrarInstanteDePublicacao() {
+    Instant publicadoEm = Instant.parse("2026-08-01T12:00:00Z");
+    OutboxEvent evento =
+        OutboxEvent.criar(
+            UUID.randomUUID(), "Cobranca", UUID.randomUUID(), "PagamentoStatusAtualizado", "{}");
+
+    evento.marcarPublicado(publicadoEm);
+
+    assertThat(evento.getPublicadoEm())
+        .as("Instante de publicacao registrado")
+        .isEqualTo(publicadoEm);
+  }
 }
