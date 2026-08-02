@@ -312,4 +312,24 @@ class AssinaturaTest {
         .as("Status permanece cancelada apos nova solicitacao")
         .isEqualTo(StatusAssinatura.CANCELADA);
   }
+
+  @Test
+  @DisplayName("Deve manter cancelamento agendado ao solicitar novamente em assinatura ativa")
+  void deveManterCancelamentoAgendadoAoSolicitarNovamenteEmAssinaturaAtiva() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.solicitarCancelamento();
+
+    EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
+
+    assertThat(efeito)
+        .as("Efeito da segunda solicitacao de cancelamento agendado")
+        .isEqualTo(EfeitoCancelamento.IDEMPOTENTE);
+    assertThat(assinatura.getStatus())
+        .as("Status permanece ativa apos nova solicitacao")
+        .isEqualTo(StatusAssinatura.ATIVA);
+    assertThat(assinatura.isRenovacaoAutomatica())
+        .as("Renovacao automatica permanece desligada")
+        .isFalse();
+  }
 }
