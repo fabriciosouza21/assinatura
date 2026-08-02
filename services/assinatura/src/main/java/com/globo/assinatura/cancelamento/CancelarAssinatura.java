@@ -13,6 +13,7 @@ import com.globo.assinatura.shared.contrato.AssinaturaCancelada;
 import com.globo.assinatura.shared.contrato.CancelamentoAgendado;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -35,24 +36,28 @@ public class CancelarAssinatura {
   private final UsuarioRepository usuarioRepository;
   private final OutboxRepository outboxRepository;
   private final JsonMapper jsonMapper;
+  private final Clock clock;
 
   /**
-   * Constroi o command com os repositorios e o serializador JSON injetados.
+   * Constroi o command com os repositorios, o serializador JSON e o relogio injetados.
    *
    * @param assinaturaRepository repositorio de persistencia de assinaturas
    * @param usuarioRepository repositorio de persistencia de usuarios
    * @param outboxRepository repositorio de persistencia da outbox
    * @param jsonMapper serializador JSON dos eventos de dominio
+   * @param clock relogio para carimbar o instante dos eventos
    */
   public CancelarAssinatura(
       AssinaturaRepository assinaturaRepository,
       UsuarioRepository usuarioRepository,
       OutboxRepository outboxRepository,
-      JsonMapper jsonMapper) {
+      JsonMapper jsonMapper,
+      Clock clock) {
     this.assinaturaRepository = assinaturaRepository;
     this.usuarioRepository = usuarioRepository;
     this.outboxRepository = outboxRepository;
     this.jsonMapper = jsonMapper;
+    this.clock = clock;
   }
 
   /**
@@ -109,7 +114,7 @@ public class CancelarAssinatura {
     CancelamentoAgendado evento =
         new CancelamentoAgendado(
             UUID.randomUUID(),
-            Instant.now(),
+            Instant.now(clock),
             UUID.fromString(assinatura.getUuid()),
             assinatura.getStatus(),
             assinatura.getFimCiclo());
@@ -142,7 +147,7 @@ public class CancelarAssinatura {
     AssinaturaCancelada evento =
         new AssinaturaCancelada(
             UUID.randomUUID(),
-            Instant.now(),
+            Instant.now(clock),
             UUID.fromString(assinatura.getUuid()),
             assinatura.getStatus(),
             assinatura.getFimCiclo());

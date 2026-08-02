@@ -21,7 +21,10 @@ import com.globo.assinatura.shared.contrato.AssinaturaCancelada;
 import com.globo.assinatura.shared.contrato.CancelamentoAgendado;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,7 +54,44 @@ class CancelarAssinaturaTest {
   void setUp() {
     command =
         new CancelarAssinatura(
-            assinaturaRepository, usuarioRepository, outboxRepository, jsonMapper);
+            assinaturaRepository,
+            usuarioRepository,
+            outboxRepository,
+            jsonMapper,
+            Clock.systemUTC());
+  }
+
+  @Test
+  @DisplayName("Deve carimbar o instante do evento com o relogio injetado")
+  void deveCarimbarInstanteDoEventoComRelogioInjetado() throws Exception {
+    Assinatura assinatura = new Assinatura(42L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    Usuario dono = new Usuario("Fulano", "fulano@example.com");
+    dono.setId(42L);
+    dono.setUuid("11111111-1111-1111-1111-111111111111");
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.of(dono));
+    Instant instanteFixo = Instant.parse("2026-01-15T10:00:00Z");
+    command =
+        new CancelarAssinatura(
+            assinaturaRepository,
+            usuarioRepository,
+            outboxRepository,
+            jsonMapper,
+            Clock.fixed(instanteFixo, ZoneOffset.UTC));
+
+    UsuarioAutenticado principal =
+        new UsuarioAutenticado("fulano@example.com", dono.getUuid(), "ROLE_USUARIO");
+    command.executar(assinatura.getUuid(), principal);
+
+    ArgumentCaptor<OutboxEvent> capturado = ArgumentCaptor.forClass(OutboxEvent.class);
+    verify(outboxRepository).save(capturado.capture());
+    CancelamentoAgendado evento =
+        jsonMapper.readValue(capturado.getValue().getPayload(), CancelamentoAgendado.class);
+    assertThat(evento.ocorridoEm())
+        .as("Instante do evento carimbado pelo relogio injetado")
+        .isEqualTo(instanteFixo);
   }
 
   @Test
