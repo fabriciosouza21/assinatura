@@ -104,8 +104,8 @@ O ciclo de renovação é disparado pelo Assinatura Service quando
 O teste gira em torno de duas variáveis:
 
 - `APP_RENOVACAO_CICLO_MS`: duração do ciclo de renovação (default 1 minuto;
-  produção usa 30 dias). Valores **menores que um dia** fazem a renovação vencer
-  no próprio dia da ativação e disparar no próximo ciclo do scheduler.
+  produção usa 30 dias). Com valor **menor que um dia**, a janela `ATIVA` dura
+  exatamente `cicloMs` reais e a renovação dispara logo após vencer.
 - `APP_RENOVACAO_TENTATIVAS_BACKOFF_DIAS`: espera entre tentativas de cobrança
   recusadas (default `1,3`). Com `0,0`, as recusas são imediatas e o esgotamento
   de tentativas acontece em segundos.
@@ -122,11 +122,12 @@ APP_RENOVACAO_TENTATIVAS_BACKOFF_DIAS=0,0
 APP_OUTBOX_INTERVALO_MS=1000
 ```
 
-> O `proxima_renovacao_em` é uma **data** (DATE): com ciclo menor que um dia a
-> renovação vence "hoje" e dispara no próximo sweep (~1s). Como a renovação
-> aprovada avança o ciclo no mesmo dia, cada aprovação gera imediatamente o
-> próximo ciclo: o loop só para quando você para de aprovar (ou quando as
-> tentativas se esgotam). Ciclos de um dia ou mais aguardam dias reais.
+> O `proxima_renovacao_em` é um **instante** (timestamptz): com ciclo menor que
+> um dia a janela `ATIVA` dura exatamente `cicloMs` reais e a renovação dispara
+> no sweep seguinte (~1s). Aprovada, a assinatura volta a `ATIVA` com o instante
+> avançado em mais um ciclo: aprovar → conferir `ATIVA` estável → aguardar
+> `EM_RENOVACAO` no ciclo seguinte. Ciclos de um dia ou mais aguardam dias
+> reais.
 
 ### Fluxo de aprovação
 
@@ -134,15 +135,18 @@ Partindo do **fluxo encadeado completo** (assinatura `ATIVA`, ciclo 1 em
 andamento). A pasta `bruno/fluxo/renovacao/` já traz os requests em ordem para
 este caminho:
 
-1. Aguarde a renovação disparar (~2s com o perfil rápido).
+1. Aguarde a renovação disparar (~2s com o perfil rápido): a assinatura fica
+   `EM_RENOVACAO` até a decisão da cobrança.
 2. **Consultar renovação** (`fluxo/renovacao/consultar-renovacao`) → usa o
    `assinaturaId` capturado e devolve o `paymentId` da cobrança de renovação;
    captura `paymentId` e `renovacaoId`.
 3. **Simular aprovação** (`fluxo/renovacao/simular-aprovacao`) → força
-   `APPROVED` no payment da renovação; o webhook aprova a tentativa e o próximo
-   ciclo inicia.
+   `APPROVED` no payment da renovação; o webhook aprova a tentativa e a
+   assinatura volta a `ATIVA` com o próximo instante agendado.
 4. **Consultar assinatura** (`fluxo/renovacao/consultar-assinatura`) → status
-   `ATIVA` de volta, `proximaRenovacaoEm` avançada.
+   `ATIVA` estável por um ciclo (`proximaRenovacaoEm` avançada).
+5. Aguarde o ciclo vencer (~60s com o perfil rápido) → `EM_RENOVACAO` de novo:
+   repetir os passos 2-4 mantém o ciclo rodando.
 
 > `consultar-renovacao` responde `404` enquanto a renovação não disparou: é o
 > sinal de que você chegou cedo demais. Após aprovar, um novo `renovacaoId`

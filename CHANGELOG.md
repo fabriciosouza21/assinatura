@@ -40,6 +40,11 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
   incluindo consulta de renovação no Pagamento Service.
 
 ### Alterado
+- **Precisão de tempo na renovação** (Assinatura Service): `proximaRenovacaoEm`
+  deixa de ser `DATE` e vira instante preciso (`timestamptz`); com ciclo
+  sub-diário, a janela `ATIVA` dura exatamente `APP_RENOVACAO_CICLO_MS` reais,
+  e a consulta passa a expor o campo como `date-time` ISO-8601. Entra no 0.3.0,
+  sem bump separado.
 - **Rotas de assinatura exigem JWT** (ADR 0003, supersede a ADR 0001): `POST
   /assinaturas` e `GET /assinaturas/{uuid}` deixam de ser públicos. Sem token,
   ou com token inválido, a resposta é `401`.

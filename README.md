@@ -34,6 +34,8 @@ assinatura  ──AssinaturaSolicitada──▶  kafka  ──▶  pagamento  �
   `RenovacaoSolicitada` via outbox; consome o resultado e avança o ciclo ou
   suspende após tentativas esgotadas. A duração do ciclo é configurável via
   `APP_RENOVACAO_CICLO_MS` (default 1 minuto; produção usa 30 dias).
+  `proxima_renovacao_em` é um instante preciso (timestamptz): com ciclo
+  sub-diário, a janela `ATIVA` dura exatamente `cicloMs` reais.
 - **Cancelamento de assinatura**: `POST /assinaturas/{uuid}/cancelamento`
   (JWT do dono) encerra o contrato e publica `CancelamentoAgendado`; quem
   desabilita a renovação automática também é cancelado no vencimento do ciclo.
@@ -92,10 +94,11 @@ APP_RENOVACAO_TENTATIVAS_BACKOFF_DIAS=0,0
 APP_OUTBOX_INTERVALO_MS=1000
 ```
 
-> `proxima_renovacao_em` é uma data (DATE): com ciclo menor que um dia, a
-> renovação vence "hoje" e dispara no próximo sweep (~1s). Cada aprovação
-> encadeia o ciclo seguinte imediatamente; ciclos de um dia ou mais aguardam
-> dias reais.
+> `proxima_renovacao_em` é um instante preciso (timestamptz): com ciclo menor
+> que um dia, a janela `ATIVA` dura exatamente `cicloMs` reais e a renovação
+> dispara no sweep seguinte (~1s); após aprovar, a assinatura volta a `ATIVA`
+> estável até o ciclo seguinte vencer. Ciclos de um dia ou mais aguardam dias
+> reais.
 
 ## Como rodar
 
