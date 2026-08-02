@@ -79,10 +79,10 @@ app:
   renovacao:
     intervalo-ms: ${APP_RENOVACAO_INTERVALO_MS:60000}
     tamanho-lote: ${APP_RENOVACAO_TAMANHO_LOTE:100}
-    # Duracao do ciclo de renovacao, em milissegundos. Default: 30 dias.
-    # Menos de um dia faz a renovacao vencer no proprio dia da ativacao (proxima_renovacao_em
-    # e DATE), disparando no proximo ciclo do scheduler: util para testar o fluxo via Bruno.
-    ciclo-ms: ${APP_RENOVACAO_CICLO_MS:2592000000}
+    # Duracao do ciclo de renovacao, em milissegundos. Default: 1 minuto (60000).
+    # Menos de um dia faz a renovacao vencer no proprio dia da ativacao, disparando no
+    # proximo ciclo do scheduler: util para testar o fluxo via Bruno. Producao: 30 dias.
+    ciclo-ms: ${APP_RENOVACAO_CICLO_MS:60000}
 
 management:
   endpoints:

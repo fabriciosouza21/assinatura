@@ -103,9 +103,9 @@ O ciclo de renovação é disparado pelo Assinatura Service quando
 `proxima_renovacao_em` vence, e a cobrança é decidida no mock, como na adesão.
 O teste gira em torno de duas variáveis:
 
-- `APP_RENOVACAO_CICLO_MS`: duração do ciclo de renovação (default 30 dias).
-  Valores **menores que um dia** fazem a renovação vencer no próprio dia da
-  ativação e disparar no próximo ciclo do scheduler.
+- `APP_RENOVACAO_CICLO_MS`: duração do ciclo de renovação (default 1 minuto;
+  produção usa 30 dias). Valores **menores que um dia** fazem a renovação vencer
+  no próprio dia da ativação e disparar no próximo ciclo do scheduler.
 - `APP_RENOVACAO_TENTATIVAS_BACKOFF_DIAS`: espera entre tentativas de cobrança
   recusadas (default `1,3`). Com `0,0`, as recusas são imediatas e o esgotamento
   de tentativas acontece em segundos.

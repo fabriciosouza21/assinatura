@@ -33,7 +33,7 @@ assinatura  ──AssinaturaSolicitada──▶  kafka  ──▶  pagamento  �
   com `proxima_renovacao_em` vencida, cria a renovação e publica
   `RenovacaoSolicitada` via outbox; consome o resultado e avança o ciclo ou
   suspende após tentativas esgotadas. A duração do ciclo é configurável via
-  `APP_RENOVACAO_CICLO_MS` (default 30 dias).
+  `APP_RENOVACAO_CICLO_MS` (default 1 minuto; produção usa 30 dias).
 - **Cancelamento de assinatura**: `POST /assinaturas/{uuid}/cancelamento`
   (JWT do dono) encerra o contrato e publica `CancelamentoAgendado`; quem
   desabilita a renovação automática também é cancelado no vencimento do ciclo.
