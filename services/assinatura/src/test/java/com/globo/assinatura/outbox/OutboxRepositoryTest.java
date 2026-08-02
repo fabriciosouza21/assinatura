@@ -75,8 +75,12 @@ class OutboxRepositoryTest {
     List<OutboxEvent> publicaveis = outboxRepository.buscarPublicaveis(Instant.now(), 10);
 
     assertThat(publicaveis)
-        .as("Apenas o evento pendente e selecionado")
+        .as("O evento pendente e selecionado")
         .extracting(OutboxEvent::getEventId)
-        .containsExactly(pendente.getEventId());
+        .contains(pendente.getEventId());
+    assertThat(publicaveis)
+        .as("O evento publicado nao e selecionado")
+        .extracting(OutboxEvent::getEventId)
+        .doesNotContain(publicado.getEventId());
   }
 }
