@@ -3,6 +3,7 @@ package com.globo.assinatura.cancelamento.api;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -26,6 +27,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -116,5 +118,27 @@ class CancelamentoControllerTest {
                 .with(csrf()))
         .andExpect(status().isForbidden())
         .andExpect(content().string(""));
+  }
+
+  @Test
+  @DisplayName("Deve retornar 400 ao cancelar assinatura com uuid malformado")
+  void deveRetornarBadRequestAoCancelarAssinaturaComUuidMalformado() throws Exception {
+    UsuarioAutenticado principal =
+        new UsuarioAutenticado("cliente@example.com", USUARIO_UUID, "ROLE_CLIENT");
+    Authentication cliente =
+        new UsernamePasswordAuthenticationToken(
+            principal, null, List.of(new SimpleGrantedAuthority(principal.role())));
+
+    mockMvc
+        .perform(
+            post("/assinaturas/nao-e-uuid/cancelamento").with(authentication(cliente)).with(csrf()))
+        .andExpect(status().isBadRequest())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.title").value("Requisicao invalida"))
+        .andExpect(jsonPath("$.errors[0].campo").value("uuid"))
+        .andExpect(jsonPath("$.errors[0].motivo").value("deve ser um uuid valido"));
+
+    verifyNoInteractions(cancelarAssinatura);
   }
 }
