@@ -209,4 +209,22 @@ class AssinaturaTest {
         .as("Suspender assinatura ativa e transicao invalida")
         .isInstanceOf(IllegalStateException.class);
   }
+
+  @Test
+  @DisplayName("Deve agendar o cancelamento ao solicitar em assinatura ativa")
+  void deveAgendarCancelamentoAoSolicitarCancelamento() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
+
+    assertThat(efeito)
+        .as("Efeito do cancelamento em assinatura ativa")
+        .isEqualTo(EfeitoCancelamento.AGENDADO);
+    assertThat(assinatura.isRenovacaoAutomatica())
+        .as("Renovacao automatica desligada ao agendar cancelamento")
+        .isFalse();
+    assertThat(assinatura.getStatus())
+        .as("Status permanece ativa ate o fim do ciclo")
+        .isEqualTo(StatusAssinatura.ATIVA);
+  }
 }

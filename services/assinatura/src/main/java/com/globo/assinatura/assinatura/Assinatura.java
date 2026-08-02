@@ -165,6 +165,20 @@ public class Assinatura {
   }
 
   /**
+   * Agenda o cancelamento da assinatura no fim do ciclo vigente.
+   *
+   * @return efeito do cancelamento solicitado
+   * @throws IllegalStateException se a assinatura nao estiver ativa
+   */
+  public EfeitoCancelamento solicitarCancelamento() {
+    if (this.status != StatusAssinatura.ATIVA) {
+      throw new IllegalStateException("nao e possivel cancelar uma assinatura que nao esta ativa");
+    }
+    this.renovacaoAutomatica = false;
+    return EfeitoCancelamento.AGENDADO;
+  }
+
+  /**
    * Transita o ciclo de vida para ativa apos a aprovacao do pagamento.
    *
    * <p>Apenas assinaturas aguardando pagamento podem ser ativadas. Eventos de aprovacao tardios ou
