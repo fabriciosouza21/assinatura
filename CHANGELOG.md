@@ -5,6 +5,40 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
 
 ## [Não publicado]
 
+### Adicionado
+- **Renovação automática** (Assinatura Service): assinatura ganha ciclo
+  (`inicioCiclo`, `fimCiclo`, `proximaRenovacaoEm`, `renovacaoAutomatica`),
+  status `EM_RENOVACAO`, `SUSPENSA` e `CANCELADA`, registro de renovação por
+  ciclo e agendador que varre vencimentos com `FOR UPDATE SKIP LOCKED`. A
+  duração do ciclo é configurável via `APP_RENOVACAO_CICLO_MS`.
+- **Outbox publica pelo tipo do evento**: a rota `eventType → tópico` sai de
+  configuração, permitindo eventos de renovação e cancelamento em tópicos
+  próprios.
+- **Resultado de renovação**: o Assinatura Service consome
+  `PagamentoRenovacaoAprovado` e `RenovacaoTentativasEsgotadas` com dedup por
+  `eventId`; aprovação rola o ciclo, três recusas suspendem a assinatura.
+- **Pagamento Service publica resultados via outbox**: `PagamentoStatusAtualizado`,
+  `PagamentoRenovacaoAprovado` e `RenovacaoTentativasEsgotadas` saem da outbox
+  com retry, backoff com jitter e DLQ.
+- **Cobrança de renovação no Pagamento Service**: consome `RenovacaoSolicitada`,
+  cria pagamento no gateway com idempotência e agenda novas tentativas após
+  recusa (`APP_RENOVACAO_TENTATIVAS_BACKOFF_DIAS`); falha técnica do gateway
+  não consome tentativa.
+- **Webhook decide a renovação**: o webhook do gateway com assinatura HMAC
+  publica o resultado da cobrança de renovação antes de confirmar o gateway.
+- **Consulta de renovação**: `GET /renovacoes/{assinaturaId}` no Pagamento
+  Service retorna o pagamento de renovação mais recente de uma assinatura
+  (`paymentId` e status da tentativa corrente).
+- **Consulta de assinatura expõe o ciclo de renovação** (`inicioCiclo`,
+  `fimCiclo`, `proximaRenovacaoEm`, `renovacaoAutomatica`).
+- **Cancelamento de assinatura**: `POST /assinaturas/{uuid}/cancelamento`
+  (JWT do dono) publica `CancelamentoAgendado` (cancela no fim do ciclo, para
+  assinatura com vigência ativa) ou `AssinaturaCancelada` (imediato, para os
+  demais status). O Pagamento Service consome o evento com dedup e abandona
+  tentativas de cobrança pendentes.
+- Collection do Bruno com fluxos de renovação (aprovação e esgotamento),
+  incluindo consulta de renovação no Pagamento Service.
+
 ### Alterado
 - **Rotas de assinatura exigem JWT** (ADR 0003, supersede a ADR 0001): `POST
   /assinaturas` e `GET /assinaturas/{uuid}` deixam de ser públicos. Sem token,
@@ -19,6 +53,9 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
   `ROLE_USER`, o que passa a distinguir cliente de administrador.
 - Collection do Bruno: cadastro → login (como o cliente cadastrado) →
   assinatura, com `Authorization: Bearer` nas rotas de assinatura.
+- **Pacotes reorganizados por capacidade de negócio** (ADR 0002): `adesao`,
+  `cadastro`, `renovacao`, `cancelamento` etc. nos dois serviços, com regra de
+  dependência `capacidade → núcleo → shared` protegida por testes ArchUnit.
 
 ## [0.1.0] - 2026-07-29
 

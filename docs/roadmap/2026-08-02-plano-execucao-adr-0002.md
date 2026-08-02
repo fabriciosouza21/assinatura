@@ -244,7 +244,7 @@ antecipadas ou renumeradas durante este trabalho.
 - [x] Os testes de integração passam via `make test-integration`.
 - [x] Não houve alteração de comportamento, schema, contratos, versão ou
   `CHANGELOG.md`.
-- [ ] A ADR será marcada como `Accepted` após o merge.
+- [x] ADR 0002 marcada como `Accepted` após o merge (PR #25).
 
 ## Ordem dos entregáveis
 
