@@ -200,7 +200,7 @@ paths:
                     status: ATIVA
                     inicioCiclo: "2025-03-10"
                     fimCiclo: "2025-04-09"
-                    proximaRenovacaoEm: "2025-04-10"
+                    proximaRenovacaoEm: "2025-04-09T12:00:00Z"
                     renovacaoAutomatica: true
         '401':
           description: Token ausente, expirado ou invalido. Corpo vazio.
@@ -316,9 +316,9 @@ components:
           description: Fim do ciclo de renovacao corrente. Nulo antes da ativacao.
         proximaRenovacaoEm:
           type: string
-          format: date
+          format: date-time
           nullable: true
-          description: Data da proxima renovacao. Nula antes da ativacao.
+          description: Instante da proxima renovacao. Nulo antes da ativacao.
         renovacaoAutomatica:
           type: boolean
           description: |
