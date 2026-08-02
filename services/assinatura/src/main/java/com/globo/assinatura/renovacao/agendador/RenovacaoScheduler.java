@@ -4,11 +4,13 @@ import com.globo.assinatura.assinatura.Assinatura;
 import com.globo.assinatura.assinatura.AssinaturaRepository;
 import com.globo.assinatura.renovacao.Renovacao;
 import com.globo.assinatura.renovacao.RenovacaoRepository;
+import com.globo.assinatura.shared.cache.CacheVersionado;
 import com.globo.assinatura.shared.contrato.AssinaturaCancelada;
 import com.globo.assinatura.shared.contrato.RenovacaoSolicitada;
 import com.globo.assinatura.shared.contrato.StatusAssinatura;
 import com.globo.assinatura.shared.outbox.OutboxEvent;
 import com.globo.assinatura.shared.outbox.OutboxRepository;
+import com.globo.assinatura.usuario.UsuarioRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -46,6 +48,8 @@ public class RenovacaoScheduler {
   private final RenovacaoRepository renovacaoRepository;
   private final OutboxRepository outboxRepository;
   private final JsonMapper jsonMapper;
+  private final UsuarioRepository usuarioRepository;
+  private final CacheVersionado cacheVersionado;
   private final int tamanhoLote;
   private final Clock clock;
 
@@ -57,6 +61,8 @@ public class RenovacaoScheduler {
    * @param renovacaoRepository repositorio de persistencia de renovacoes
    * @param outboxRepository repositorio de persistencia da outbox
    * @param jsonMapper serializador JSON do evento de dominio
+   * @param usuarioRepository repositorio de persistencia de usuarios
+   * @param cacheVersionado primitivas do cache distribuido para invalidar a listagem
    * @param tamanhoLote maximo de assinaturas processadas por ciclo
    * @param clock relogio para calculo do instante de vencimento e do instante do evento
    */
@@ -65,12 +71,16 @@ public class RenovacaoScheduler {
       RenovacaoRepository renovacaoRepository,
       OutboxRepository outboxRepository,
       JsonMapper jsonMapper,
+      UsuarioRepository usuarioRepository,
+      CacheVersionado cacheVersionado,
       @Value("${app.renovacao.tamanho-lote}") int tamanhoLote,
       Clock clock) {
     this.assinaturaRepository = assinaturaRepository;
     this.renovacaoRepository = renovacaoRepository;
     this.outboxRepository = outboxRepository;
     this.jsonMapper = jsonMapper;
+    this.usuarioRepository = usuarioRepository;
+    this.cacheVersionado = cacheVersionado;
     this.tamanhoLote = tamanhoLote;
     this.clock = clock;
   }
@@ -112,6 +122,7 @@ public class RenovacaoScheduler {
     if (!assinatura.isRenovacaoAutomatica()) {
       assinatura.cancelar();
       gravarEventoAssinaturaCancelada(assinatura);
+      invalidarCache(assinatura);
       log.atInfo()
           .addKeyValue("event", "assinatura_cancelada_opt_out")
           .addKeyValue("assinaturaId", assinatura.getUuid())
@@ -132,12 +143,26 @@ public class RenovacaoScheduler {
         renovacaoRepository.save(new Renovacao(assinatura.getId(), cicloReferencia, numeroCiclo));
     assinatura.iniciarRenovacao();
     gravarEvento(assinatura, renovacao);
+    invalidarCache(assinatura);
     log.atInfo()
         .addKeyValue("event", "renovacao_criada")
         .addKeyValue("renovacaoId", renovacao.getUuid())
         .addKeyValue("assinaturaId", assinatura.getUuid())
         .addKeyValue("ciclo", numeroCiclo)
         .log("Renovacao criada");
+  }
+
+  private void invalidarCache(Assinatura assinatura) {
+    usuarioRepository
+        .findById(assinatura.getUsuarioId())
+        .ifPresent(
+            usuario -> {
+              cacheVersionado.invalidarAposCommit("assinatura:list:versao:" + usuario.getUuid());
+              log.atInfo()
+                  .addKeyValue("event", "assinatura_lista_cache_invalidada")
+                  .addKeyValue("usuarioId", usuario.getUuid())
+                  .log("Cache de listagem invalidado apos a varredura de vencimentos");
+            });
   }
 
   private void gravarEvento(Assinatura assinatura, Renovacao renovacao) {

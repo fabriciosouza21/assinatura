@@ -4,12 +4,14 @@ import com.globo.assinatura.assinatura.Assinatura;
 import com.globo.assinatura.assinatura.AssinaturaRepository;
 import com.globo.assinatura.renovacao.idempotencia.RenovacaoEventoProcessado;
 import com.globo.assinatura.renovacao.idempotencia.RenovacaoEventoProcessadoRepository;
+import com.globo.assinatura.shared.cache.CacheVersionado;
 import com.globo.assinatura.shared.contrato.AssinaturaRenovada;
 import com.globo.assinatura.shared.contrato.AssinaturaSuspensa;
 import com.globo.assinatura.shared.contrato.PagamentoRenovacaoAprovado;
 import com.globo.assinatura.shared.contrato.RenovacaoTentativasEsgotadas;
 import com.globo.assinatura.shared.outbox.OutboxEvent;
 import com.globo.assinatura.shared.outbox.OutboxRepository;
+import com.globo.assinatura.usuario.UsuarioRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -44,6 +46,8 @@ public class ProcessarRenovacaoResultado {
   private final RenovacaoRepository renovacaoRepository;
   private final AssinaturaRepository assinaturaRepository;
   private final RenovacaoEventoProcessadoRepository renovacaoEventoProcessadoRepository;
+  private final UsuarioRepository usuarioRepository;
+  private final CacheVersionado cacheVersionado;
   private final OutboxRepository outboxRepository;
   private final JsonMapper jsonMapper;
   private final Clock clock;
@@ -56,6 +60,8 @@ public class ProcessarRenovacaoResultado {
    * @param renovacaoRepository repositorio de persistencia de renovacoes
    * @param assinaturaRepository repositorio de persistencia de assinaturas
    * @param renovacaoEventoProcessadoRepository repositorio de idempotencia de eventos de renovacao
+   * @param usuarioRepository repositorio de persistencia de usuarios
+   * @param cacheVersionado primitivas do cache distribuido para invalidar a listagem
    * @param outboxRepository repositorio de persistencia da outbox
    * @param jsonMapper serializador JSON do evento de dominio
    * @param clock relogio para calculo do instante do evento
@@ -65,6 +71,8 @@ public class ProcessarRenovacaoResultado {
       RenovacaoRepository renovacaoRepository,
       AssinaturaRepository assinaturaRepository,
       RenovacaoEventoProcessadoRepository renovacaoEventoProcessadoRepository,
+      UsuarioRepository usuarioRepository,
+      CacheVersionado cacheVersionado,
       OutboxRepository outboxRepository,
       JsonMapper jsonMapper,
       Clock clock,
@@ -72,6 +80,8 @@ public class ProcessarRenovacaoResultado {
     this.renovacaoRepository = renovacaoRepository;
     this.assinaturaRepository = assinaturaRepository;
     this.renovacaoEventoProcessadoRepository = renovacaoEventoProcessadoRepository;
+    this.usuarioRepository = usuarioRepository;
+    this.cacheVersionado = cacheVersionado;
     this.outboxRepository = outboxRepository;
     this.jsonMapper = jsonMapper;
     this.clock = clock;
@@ -140,6 +150,7 @@ public class ProcessarRenovacaoResultado {
     assinatura.renovar(novoFimCiclo, Instant.now(clock).plusMillis(cicloMs));
     gravarEvento(assinatura, renovacao, evento);
     registrarIdempotencia(evento.eventId(), renovacao.getUuid());
+    invalidarCache(assinatura);
   }
 
   /**
@@ -200,6 +211,20 @@ public class ProcessarRenovacaoResultado {
     assinatura.suspender();
     gravarEventoSuspensao(assinatura, renovacao);
     registrarIdempotencia(evento.eventId(), renovacao.getUuid());
+    invalidarCache(assinatura);
+  }
+
+  private void invalidarCache(Assinatura assinatura) {
+    usuarioRepository
+        .findById(assinatura.getUsuarioId())
+        .ifPresent(
+            usuario -> {
+              cacheVersionado.invalidarAposCommit("assinatura:list:versao:" + usuario.getUuid());
+              log.atInfo()
+                  .addKeyValue("event", "assinatura_lista_cache_invalidada")
+                  .addKeyValue("usuarioId", usuario.getUuid())
+                  .log("Cache de listagem invalidado apos o resultado de renovacao");
+            });
   }
 
   private void registrarIdempotencia(UUID eventId, String renovacaoUuid) {

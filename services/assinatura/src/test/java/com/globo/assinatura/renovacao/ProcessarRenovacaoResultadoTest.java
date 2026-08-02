@@ -13,11 +13,14 @@ import com.globo.assinatura.assinatura.Plano;
 import com.globo.assinatura.assinatura.StatusAssinatura;
 import com.globo.assinatura.renovacao.idempotencia.RenovacaoEventoProcessado;
 import com.globo.assinatura.renovacao.idempotencia.RenovacaoEventoProcessadoRepository;
+import com.globo.assinatura.shared.cache.CacheVersionado;
 import com.globo.assinatura.shared.contrato.AssinaturaRenovada;
 import com.globo.assinatura.shared.contrato.PagamentoRenovacaoAprovado;
 import com.globo.assinatura.shared.contrato.RenovacaoTentativasEsgotadas;
 import com.globo.assinatura.shared.outbox.OutboxEvent;
 import com.globo.assinatura.shared.outbox.OutboxRepository;
+import com.globo.assinatura.usuario.Usuario;
+import com.globo.assinatura.usuario.UsuarioRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -48,6 +51,8 @@ class ProcessarRenovacaoResultadoTest {
   @Mock private AssinaturaRepository assinaturaRepository;
   @Mock private RenovacaoEventoProcessadoRepository renovacaoEventoProcessadoRepository;
   @Mock private OutboxRepository outboxRepository;
+  @Mock private UsuarioRepository usuarioRepository;
+  @Mock private CacheVersionado cacheVersionado;
 
   private JsonMapper jsonMapper;
   private Clock relogio;
@@ -62,6 +67,8 @@ class ProcessarRenovacaoResultadoTest {
             renovacaoRepository,
             assinaturaRepository,
             renovacaoEventoProcessadoRepository,
+            usuarioRepository,
+            cacheVersionado,
             outboxRepository,
             jsonMapper,
             relogio,
@@ -125,6 +132,8 @@ class ProcessarRenovacaoResultadoTest {
             renovacaoRepository,
             assinaturaRepository,
             renovacaoEventoProcessadoRepository,
+            usuarioRepository,
+            cacheVersionado,
             outboxRepository,
             jsonMapper,
             Clock.fixed(instanteFixo, ZoneOffset.UTC),
@@ -160,6 +169,8 @@ class ProcessarRenovacaoResultadoTest {
             renovacaoRepository,
             assinaturaRepository,
             renovacaoEventoProcessadoRepository,
+            usuarioRepository,
+            cacheVersionado,
             outboxRepository,
             jsonMapper,
             Clock.fixed(instanteFixo, ZoneOffset.UTC),
@@ -338,6 +349,8 @@ class ProcessarRenovacaoResultadoTest {
             renovacaoRepository,
             assinaturaRepository,
             renovacaoEventoProcessadoRepository,
+            usuarioRepository,
+            cacheVersionado,
             outboxRepository,
             jsonMapper,
             relogioFixo,
@@ -631,5 +644,108 @@ class ProcessarRenovacaoResultadoTest {
             "violacao do indice unico no save concorrente deve ser absorvida como no-op"
                 + " idempotente, sem propagar para o consumer Kafka")
         .doesNotThrowAnyException();
+  }
+
+  @Test
+  @DisplayName("Deve invalidar o cache da listagem do dono ao aprovar a renovacao")
+  void deveInvalidarCacheDaListagemAoAprovarRenovacao() {
+    Assinatura assinatura = assinaturaDona();
+    Usuario dono = dono(7L);
+    Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
+        .thenReturn(Optional.of(renovacao));
+    when(assinaturaRepository.findById(42L)).thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(7L)).thenReturn(Optional.of(dono));
+    PagamentoRenovacaoAprovado evento =
+        new PagamentoRenovacaoAprovado(
+            UUID.randomUUID(),
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString(renovacao.getUuid()),
+            UUID.randomUUID(),
+            "pay_123",
+            2);
+
+    command.executar(evento);
+
+    verify(cacheVersionado).invalidarAposCommit("assinatura:list:versao:" + dono.getUuid());
+  }
+
+  @Test
+  @DisplayName("Deve invalidar o cache da listagem do dono ao esgotar as tentativas")
+  void deveInvalidarCacheDaListagemAoEsgotarTentativas() {
+    Assinatura assinatura = assinaturaDona();
+    Usuario dono = dono(7L);
+    Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
+        .thenReturn(Optional.of(renovacao));
+    when(assinaturaRepository.findById(42L)).thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(7L)).thenReturn(Optional.of(dono));
+    RenovacaoTentativasEsgotadas evento =
+        new RenovacaoTentativasEsgotadas(
+            UUID.randomUUID(),
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString(renovacao.getUuid()),
+            UUID.fromString(assinatura.getUuid()),
+            3);
+
+    command.executar(evento);
+
+    verify(cacheVersionado).invalidarAposCommit("assinatura:list:versao:" + dono.getUuid());
+  }
+
+  @Test
+  @DisplayName("Nao deve invalidar o cache em redelivery de evento ja processado")
+  void naoDeveInvalidarCacheEmRedelivery() {
+    UUID eventId = UUID.randomUUID();
+    when(renovacaoEventoProcessadoRepository.existsByEventId(eventId)).thenReturn(true);
+    PagamentoRenovacaoAprovado evento =
+        new PagamentoRenovacaoAprovado(
+            eventId,
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString("55555555-5555-5555-5555-555555555555"),
+            UUID.randomUUID(),
+            "pay_123",
+            2);
+
+    command.executar(evento);
+
+    verify(cacheVersionado, never()).invalidarAposCommit(any());
+  }
+
+  @Test
+  @DisplayName("Nao deve invalidar o cache para assinatura dona inexistente")
+  void naoDeveInvalidarCacheParaAssinaturaDonaInexistente() {
+    Renovacao renovacao = new Renovacao(42L, LocalDate.of(2026, 2, 15), 2);
+    when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
+        .thenReturn(Optional.of(renovacao));
+    when(assinaturaRepository.findById(42L)).thenReturn(Optional.empty());
+    PagamentoRenovacaoAprovado evento =
+        new PagamentoRenovacaoAprovado(
+            UUID.randomUUID(),
+            Instant.parse("2026-02-15T12:00:00Z"),
+            UUID.fromString(renovacao.getUuid()),
+            UUID.randomUUID(),
+            "pay_123",
+            2);
+
+    command.executar(evento);
+
+    verify(cacheVersionado, never()).invalidarAposCommit(any());
+  }
+
+  private Assinatura assinaturaDona() {
+    Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 15),
+        LocalDate.of(2026, 2, 15),
+        Instant.parse("2026-02-15T00:00:00Z"));
+    assinatura.iniciarRenovacao();
+    return assinatura;
+  }
+
+  private static Usuario dono(Long id) {
+    Usuario usuario = new Usuario("Fulano", "fulano@example.com");
+    usuario.setId(id);
+    return usuario;
   }
 }

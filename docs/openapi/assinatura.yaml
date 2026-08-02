@@ -75,12 +75,20 @@ paths:
                     dataInicio: "2025-03-10"
                     dataExpiracao: "2025-04-10"
                     status: ATIVA
+                    inicioCiclo: "2025-03-10"
+                    fimCiclo: "2025-04-10"
+                    proximaRenovacaoEm: "2025-04-10"
+                    renovacaoAutomatica: true
                   - id: "660e8400-e29b-41d4-a716-446655440000"
                     usuarioId: "550e8400-e29b-41d4-a716-446655440000"
                     plano: BASICO
                     dataInicio: "2025-01-10"
                     dataExpiracao: "2025-02-10"
                     status: CANCELADA
+                    inicioCiclo: "2025-01-10"
+                    fimCiclo: "2025-02-10"
+                    proximaRenovacaoEm: "2025-02-10"
+                    renovacaoAutomatica: true
                 page: 0
                 size: 20
                 total: 2

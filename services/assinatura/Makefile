@@ -37,9 +37,9 @@ test-integration-clean: ## Derruba o Postgres do docker-compose e remove o volum
 	@echo "==> docker compose down -v --remove-orphans"
 	@$(COMPOSE) down -v --remove-orphans
 
-test-integration-up: ## Sobe o Postgres do docker-compose (porta 5433) e aguarda a porta host aceitar TCP
-	@echo "==> docker compose up -d --wait postgres"
-	@$(COMPOSE) up -d --wait postgres
+test-integration-up: ## Sobe o Postgres (porta 5433) e o Redis do docker-compose e aguarda a porta 5433 aceitar TCP
+	@echo "==> docker compose up -d --wait postgres redis"
+	@$(COMPOSE) up -d --wait postgres redis
 	@echo "==> aguardando porta 5433 no host aceitar conexoes..."
 	@for i in 1 2 3 4 5 6 7 8 9 10; do \
 		nc -z -w2 localhost 5433 >/dev/null 2>&1 && { echo "    pronto"; exit 0; }; \
@@ -47,11 +47,11 @@ test-integration-up: ## Sobe o Postgres do docker-compose (porta 5433) e aguarda
 	done; \
 	echo "porta 5433 nao abriu a tempo"; exit 1
 
-test-integration-down: ## Derruba o Postgres do docker-compose e remove o volume
+test-integration-down: ## Derruba o Postgres e o Redis do docker-compose e remove o volume
 	@echo "==> docker compose down -v --remove-orphans"
 	@$(COMPOSE) down -v --remove-orphans
 
-test-integration: ## Roda os testes de integracao (@Tag("integration")); recria o Postgres do zero
+test-integration: ## Roda os testes de integracao (@Tag("integration")); recria Postgres e Redis do zero
 	@echo "==> test-integration"
 	@$(MAKE) test-integration-clean
 	@$(MAKE) test-integration-up

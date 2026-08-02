@@ -18,17 +18,21 @@ import com.globo.assinatura.assinatura.StatusAssinatura;
 import com.globo.assinatura.renovacao.Renovacao;
 import com.globo.assinatura.renovacao.RenovacaoRepository;
 import com.globo.assinatura.renovacao.StatusRenovacao;
+import com.globo.assinatura.shared.cache.CacheVersionado;
 import com.globo.assinatura.shared.contrato.AssinaturaCancelada;
 import com.globo.assinatura.shared.contrato.RenovacaoSolicitada;
 import com.globo.assinatura.shared.outbox.OutboxEvent;
 import com.globo.assinatura.shared.outbox.OutboxRepository;
 import com.globo.assinatura.shared.outbox.OutboxStatus;
+import com.globo.assinatura.usuario.Usuario;
+import com.globo.assinatura.usuario.UsuarioRepository;
 import java.lang.reflect.Field;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,6 +55,8 @@ class RenovacaoSchedulerTest {
   @Mock private AssinaturaRepository assinaturaRepository;
   @Mock private RenovacaoRepository renovacaoRepository;
   @Mock private OutboxRepository outboxRepository;
+  @Mock private UsuarioRepository usuarioRepository;
+  @Mock private CacheVersionado cacheVersionado;
 
   private RenovacaoScheduler scheduler;
 
@@ -62,6 +68,8 @@ class RenovacaoSchedulerTest {
             renovacaoRepository,
             outboxRepository,
             JsonMapper.builder().build(),
+            usuarioRepository,
+            cacheVersionado,
             100,
             Clock.systemUTC());
   }
@@ -218,6 +226,8 @@ class RenovacaoSchedulerTest {
         renovacaoRepository,
         outboxRepository,
         JsonMapper.builder().build(),
+        usuarioRepository,
+        cacheVersionado,
         100,
         relogioFixo);
   }
@@ -259,6 +269,58 @@ class RenovacaoSchedulerTest {
       desabilitarRenovacaoAutomatica(assinatura);
     }
     return assinatura;
+  }
+
+  @Test
+  @DisplayName("Deve invalidar o cache do dono ao criar renovacao na varredura")
+  void deveInvalidarCacheDoDonoAoCriarRenovacao() {
+    Assinatura assinatura = assinaturaAtivaVencida(true);
+    Usuario dono = donoDaAssinatura();
+    when(assinaturaRepository.buscarVencidasParaRenovacao(any(), anyInt()))
+        .thenReturn(List.of(assinatura));
+    when(renovacaoRepository.existsByAssinaturaIdAndCicloReferencia(anyLong(), any()))
+        .thenReturn(false);
+    when(renovacaoRepository.countByAssinaturaId(anyLong())).thenReturn(0L);
+    when(renovacaoRepository.save(any(Renovacao.class))).thenAnswer(inv -> inv.getArgument(0));
+    when(usuarioRepository.findById(1L)).thenReturn(Optional.of(dono));
+
+    scheduler.varrerVencimentos();
+
+    verify(cacheVersionado).invalidarAposCommit("assinatura:list:versao:" + dono.getUuid());
+  }
+
+  @Test
+  @DisplayName("Deve invalidar o cache do dono ao cancelar por opt-out na varredura")
+  void deveInvalidarCacheDoDonoAoCancelarPorOptOut() {
+    Assinatura assinatura = assinaturaAtivaVencida(false);
+    Usuario dono = donoDaAssinatura();
+    when(assinaturaRepository.buscarVencidasParaRenovacao(any(), anyInt()))
+        .thenReturn(List.of(assinatura));
+    when(usuarioRepository.findById(1L)).thenReturn(Optional.of(dono));
+
+    scheduler.varrerVencimentos();
+
+    verify(cacheVersionado).invalidarAposCommit("assinatura:list:versao:" + dono.getUuid());
+  }
+
+  @Test
+  @DisplayName("Nao deve invalidar o cache quando a renovacao do ciclo ja foi iniciada")
+  void naoDeveInvalidarCacheQuandoRenovacaoDoCicloJaIniciada() {
+    Assinatura assinatura = assinaturaAtivaVencida(true);
+    when(assinaturaRepository.buscarVencidasParaRenovacao(any(), anyInt()))
+        .thenReturn(List.of(assinatura));
+    when(renovacaoRepository.existsByAssinaturaIdAndCicloReferencia(anyLong(), any()))
+        .thenReturn(true);
+
+    scheduler.varrerVencimentos();
+
+    verify(cacheVersionado, never()).invalidarAposCommit(any());
+  }
+
+  private Usuario donoDaAssinatura() {
+    Usuario dono = new Usuario("Fulano", "fulano@example.com");
+    dono.setId(1L);
+    return dono;
   }
 
   private static void setId(Assinatura assinatura, Long id) {

@@ -13,8 +13,11 @@ import com.globo.assinatura.assinatura.Assinatura;
 import com.globo.assinatura.assinatura.AssinaturaRepository;
 import com.globo.assinatura.assinatura.Plano;
 import com.globo.assinatura.assinatura.StatusAssinatura;
+import com.globo.assinatura.shared.cache.CacheVersionado;
 import com.globo.assinatura.shared.contrato.PagamentoStatusAtualizado;
 import com.globo.assinatura.shared.contrato.StatusPagamento;
+import com.globo.assinatura.usuario.Usuario;
+import com.globo.assinatura.usuario.UsuarioRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -42,6 +45,8 @@ class ConfirmarPagamentoAdesaoTest {
 
   @Mock private AssinaturaRepository assinaturaRepository;
   @Mock private PagamentoEventoProcessadoRepository pagamentoEventoProcessadoRepository;
+  @Mock private UsuarioRepository usuarioRepository;
+  @Mock private CacheVersionado cacheVersionado;
 
   private Clock relogio;
   private ConfirmarPagamentoAdesao command;
@@ -51,7 +56,12 @@ class ConfirmarPagamentoAdesaoTest {
     relogio = Clock.systemDefaultZone();
     command =
         new ConfirmarPagamentoAdesao(
-            assinaturaRepository, pagamentoEventoProcessadoRepository, relogio, CICLO_MS_PADRAO);
+            assinaturaRepository,
+            pagamentoEventoProcessadoRepository,
+            usuarioRepository,
+            cacheVersionado,
+            relogio,
+            CICLO_MS_PADRAO);
   }
 
   @Test
@@ -110,7 +120,12 @@ class ConfirmarPagamentoAdesaoTest {
     relogio = Clock.fixed(Instant.parse("2026-01-15T10:00:00Z"), ZoneOffset.UTC);
     command =
         new ConfirmarPagamentoAdesao(
-            assinaturaRepository, pagamentoEventoProcessadoRepository, relogio, CICLO_MS_PADRAO);
+            assinaturaRepository,
+            pagamentoEventoProcessadoRepository,
+            usuarioRepository,
+            cacheVersionado,
+            relogio,
+            CICLO_MS_PADRAO);
     PagamentoStatusAtualizado evento =
         new PagamentoStatusAtualizado(
             UUID.fromString("11111111-1111-1111-1111-111111111111"),
@@ -145,7 +160,12 @@ class ConfirmarPagamentoAdesaoTest {
     relogio = Clock.fixed(Instant.parse("2026-01-15T10:00:00Z"), ZoneOffset.UTC);
     command =
         new ConfirmarPagamentoAdesao(
-            assinaturaRepository, pagamentoEventoProcessadoRepository, relogio, CICLO_MS_PADRAO);
+            assinaturaRepository,
+            pagamentoEventoProcessadoRepository,
+            usuarioRepository,
+            cacheVersionado,
+            relogio,
+            CICLO_MS_PADRAO);
 
     command.executar(evento);
 
@@ -170,7 +190,12 @@ class ConfirmarPagamentoAdesaoTest {
     relogio = Clock.fixed(Instant.parse("2026-01-15T10:00:00Z"), ZoneOffset.UTC);
     command =
         new ConfirmarPagamentoAdesao(
-            assinaturaRepository, pagamentoEventoProcessadoRepository, relogio, CICLO_MS_PADRAO);
+            assinaturaRepository,
+            pagamentoEventoProcessadoRepository,
+            usuarioRepository,
+            cacheVersionado,
+            relogio,
+            CICLO_MS_PADRAO);
 
     command.executar(evento);
 
@@ -189,7 +214,12 @@ class ConfirmarPagamentoAdesaoTest {
     relogio = Clock.fixed(instanteFixo, ZoneOffset.UTC);
     command =
         new ConfirmarPagamentoAdesao(
-            assinaturaRepository, pagamentoEventoProcessadoRepository, relogio, 60_000L);
+            assinaturaRepository,
+            pagamentoEventoProcessadoRepository,
+            usuarioRepository,
+            cacheVersionado,
+            relogio,
+            60_000L);
     PagamentoStatusAtualizado evento =
         new PagamentoStatusAtualizado(
             UUID.randomUUID(),
@@ -351,5 +381,125 @@ class ConfirmarPagamentoAdesaoTest {
     assertThat(assinatura.getStatus())
         .as("evento tardio nao deve reverter assinatura ja ativa")
         .isEqualTo(StatusAssinatura.ATIVA);
+  }
+
+  @Test
+  @DisplayName("Deve invalidar o cache da listagem do dono ao aprovar o pagamento")
+  void deveInvalidarCacheDaListagemAoAprovarPagamento() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    Usuario dono = donoDaAssinatura();
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.of(dono));
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            UUID.randomUUID(),
+            Instant.now(),
+            UUID.fromString(assinatura.getUuid()),
+            StatusPagamento.APPROVED,
+            UUID.randomUUID());
+
+    command.executar(evento);
+
+    verify(cacheVersionado).invalidarAposCommit("assinatura:list:versao:" + dono.getUuid());
+  }
+
+  @Test
+  @DisplayName("Deve invalidar o cache da listagem do dono ao recusar o pagamento")
+  void deveInvalidarCacheDaListagemAoRecusarPagamento() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    Usuario dono = donoDaAssinatura();
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.of(dono));
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            UUID.randomUUID(),
+            Instant.now(),
+            UUID.fromString(assinatura.getUuid()),
+            StatusPagamento.REJECTED,
+            UUID.randomUUID());
+
+    command.executar(evento);
+
+    verify(cacheVersionado).invalidarAposCommit("assinatura:list:versao:" + dono.getUuid());
+  }
+
+  @Test
+  @DisplayName("Nao deve invalidar o cache para evento pendente")
+  void naoDeveInvalidarCacheParaEventoPendente() {
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            UUID.randomUUID(),
+            Instant.now(),
+            UUID.fromString("55555555-5555-5555-5555-555555555555"),
+            StatusPagamento.PENDING,
+            UUID.randomUUID());
+
+    command.executar(evento);
+
+    verify(cacheVersionado, never()).invalidarAposCommit(any());
+  }
+
+  @Test
+  @DisplayName("Nao deve invalidar o cache em redelivery de evento ja processado")
+  void naoDeveInvalidarCacheEmRedelivery() {
+    UUID eventId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    when(pagamentoEventoProcessadoRepository.existsByEventId(eventId)).thenReturn(true);
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            eventId,
+            Instant.now(),
+            UUID.fromString("55555555-5555-5555-5555-555555555555"),
+            StatusPagamento.APPROVED,
+            UUID.randomUUID());
+
+    command.executar(evento);
+
+    verify(cacheVersionado, never()).invalidarAposCommit(any());
+  }
+
+  @Test
+  @DisplayName("Nao deve invalidar o cache para assinatura desconhecida")
+  void naoDeveInvalidarCacheParaAssinaturaDesconhecida() {
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(any(String.class)))
+        .thenReturn(Optional.empty());
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            UUID.randomUUID(),
+            Instant.now(),
+            UUID.randomUUID(),
+            StatusPagamento.APPROVED,
+            UUID.randomUUID());
+
+    command.executar(evento);
+
+    verify(cacheVersionado, never()).invalidarAposCommit(any());
+  }
+
+  @Test
+  @DisplayName("Nao deve invalidar o cache quando o dono da assinatura nao existe")
+  void naoDeveInvalidarCacheQuandoDonoNaoExiste() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.empty());
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            UUID.randomUUID(),
+            Instant.now(),
+            UUID.fromString(assinatura.getUuid()),
+            StatusPagamento.APPROVED,
+            UUID.randomUUID());
+
+    command.executar(evento);
+
+    verify(cacheVersionado, never()).invalidarAposCommit(any());
+  }
+
+  private Usuario donoDaAssinatura() {
+    Usuario dono = new Usuario("Fulano", "fulano@example.com");
+    dono.setId(42L);
+    return dono;
   }
 }

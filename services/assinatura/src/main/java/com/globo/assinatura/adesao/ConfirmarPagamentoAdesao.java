@@ -4,8 +4,10 @@ import com.globo.assinatura.adesao.idempotencia.PagamentoEventoProcessado;
 import com.globo.assinatura.adesao.idempotencia.PagamentoEventoProcessadoRepository;
 import com.globo.assinatura.assinatura.Assinatura;
 import com.globo.assinatura.assinatura.AssinaturaRepository;
+import com.globo.assinatura.shared.cache.CacheVersionado;
 import com.globo.assinatura.shared.contrato.PagamentoStatusAtualizado;
 import com.globo.assinatura.shared.contrato.StatusPagamento;
+import com.globo.assinatura.usuario.UsuarioRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -32,6 +34,8 @@ public class ConfirmarPagamentoAdesao {
 
   private final AssinaturaRepository assinaturaRepository;
   private final PagamentoEventoProcessadoRepository pagamentoEventoProcessadoRepository;
+  private final UsuarioRepository usuarioRepository;
+  private final CacheVersionado cacheVersionado;
   private final Clock clock;
   private final long cicloMs;
 
@@ -40,16 +44,22 @@ public class ConfirmarPagamentoAdesao {
    *
    * @param assinaturaRepository repositorio de persistencia de assinaturas
    * @param pagamentoEventoProcessadoRepository repositorio de eventos de pagamento processados
+   * @param usuarioRepository repositorio de persistencia de usuarios
+   * @param cacheVersionado primitivas do cache distribuido para invalidar a listagem
    * @param clock relogio para calculo das datas de vigencia
    * @param cicloMs duracao do ciclo de renovacao em milissegundos
    */
   public ConfirmarPagamentoAdesao(
       AssinaturaRepository assinaturaRepository,
       PagamentoEventoProcessadoRepository pagamentoEventoProcessadoRepository,
+      UsuarioRepository usuarioRepository,
+      CacheVersionado cacheVersionado,
       Clock clock,
       @Value("${app.renovacao.ciclo-ms}") long cicloMs) {
     this.assinaturaRepository = assinaturaRepository;
     this.pagamentoEventoProcessadoRepository = pagamentoEventoProcessadoRepository;
+    this.usuarioRepository = usuarioRepository;
+    this.cacheVersionado = cacheVersionado;
     this.clock = clock;
     this.cicloMs = cicloMs;
   }
@@ -113,5 +123,19 @@ public class ConfirmarPagamentoAdesao {
           .addKeyValue("reasonCode", "violacao_constraint_concorrente")
           .log("Evento de pagamento ja registrado por transacao concorrente");
     }
+    invalidarCache(assinatura);
+  }
+
+  private void invalidarCache(Assinatura assinatura) {
+    usuarioRepository
+        .findById(assinatura.getUsuarioId())
+        .ifPresent(
+            usuario -> {
+              cacheVersionado.invalidarAposCommit("assinatura:list:versao:" + usuario.getUuid());
+              log.atInfo()
+                  .addKeyValue("event", "assinatura_lista_cache_invalidada")
+                  .addKeyValue("usuarioId", usuario.getUuid())
+                  .log("Cache de listagem invalidado apos o status de pagamento");
+            });
   }
 }

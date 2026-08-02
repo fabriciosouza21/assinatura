@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -32,6 +34,18 @@ public interface AssinaturaRepository extends JpaRepository<Assinatura, Long> {
    * @return a assinatura encontrada, ou vazio se nao existir
    */
   Optional<Assinatura> findByUuid(String uuid);
+
+  /**
+   * Busca as assinaturas de um usuario paginadas, da mais recente para a mais antiga.
+   *
+   * <p>A ordenacao pelo identificador tecnico, monotonico com a criacao, cobre tanto assinaturas
+   * ainda sem vigencia quanto as que ja tem {@code dataInicio} definida.
+   *
+   * @param usuarioId identificador interno do usuario dono
+   * @param pageable paginacao e ordenacao
+   * @return pagina de assinaturas do usuario
+   */
+  Page<Assinatura> findByUsuarioIdOrderByIdDesc(Long usuarioId, Pageable pageable);
 
   /**
    * Busca uma assinatura pelo uuid publico adquirindo um lock pessimista de escrita.

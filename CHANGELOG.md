@@ -62,6 +62,21 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
   `cadastro`, `renovacao`, `cancelamento` etc. nos dois serviços, com regra de
   dependência `capacidade → núcleo → shared` protegida por testes ArchUnit.
 
+## [0.4.0] - 2026-08-02
+
+### Adicionado
+- **Listagem paginada de assinaturas**: `GET /assinaturas` autenticado lista
+  as assinaturas do dono do token com `page` (default 0) e `size` (default 20,
+  máx. 100), ordenadas por `id DESC` e paginadas em `AssinaturaLista`
+  (`items` + `page` + `size` + `total`). `401` sem token, `403` para
+  administrador. Índice `(usuario_id, id DESC)` na migration `V10`.
+- **Cache Redis na listagem**: cache-aside com chave versionada
+  `assinatura:list:{usuarioUuid}:v{n}:{page}:{size}` e contador INCR por
+  usuário, TTL configurável (default 5 min) via `APP_CACHE_ASSINATURA_LISTA_TTL_MS`.
+  A versão é invalidada after-commit nos 5 fluxos de escrita (solicitação,
+  confirmação de pagamento, resultado de renovação, scheduler e cancelamento).
+  Redis indisponível degrada para o banco com `WARN`, sem derrubar a listagem.
+
 ## [0.1.0] - 2026-07-29
 
 Primeiro milestone: ambiente local completo sobe com `docker compose up`.

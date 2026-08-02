@@ -20,36 +20,41 @@ control "Scheduler de\nRenovação" as SCHED
 
 == 1. Listagem com cache (cache-aside) ==
 
-CLI -> AS: GET /assinaturas\n(token JWT do dono)
-AS -> REDIS: GET assinatura:list:{usuarioUuid}
+CLI -> AS: GET /assinaturas?page=&size=\n(token JWT do dono)
+AS -> REDIS: GET assinatura:list:versao:{usuarioUuid}\n(contador de versão)
+AS -> REDIS: GET assinatura:list:{usuarioUuid}:v{versao}:{page}:{size}
 
 alt cache hit
     REDIS --> AS: Lista de assinaturas
 else cache miss
-    AS -> DBAS: Busca assinaturas do usuário
+    AS -> DBAS: Busca assinaturas do usuário (id DESC)
     DBAS --> AS: Lista completa
-    AS -> REDIS: SET assinatura:list:{usuarioUuid}\nTTL de segurança (ex.: 5 min)
+    AS -> REDIS: SET assinatura:list:{usuarioUuid}:v{versao}:{page}:{size}\nTTL de segurança (ex.: 5 min)
 end
 
-AS --> CLI: 200 OK\n{assinaturas: [...]}
+AS --> CLI: 200 OK\n{items, page, size, total}
 
 note over REDIS
-  A chave é por usuário: a listagem só
-  enxerga as assinaturas do dono autenticado.
-  TTL funciona como rede de segurança caso
-  alguma invalidação falhe.
+  Chave versionada por usuário, versão,
+  página e tamanho. A versão vem do
+  contador; a invalidação faz INCR no
+  contador e a página antiga vira
+  inalcançável, expirando no TTL.
+  TTL funciona como rede de segurança
+  caso alguma invalidação falhe.
 end note
 
 == 2. Invalidação ao solicitar assinatura (síncrono) ==
 
-CLI -> AS: POST /assinaturas\n{usuarioId, plano}
+CLI -> AS: POST /assinaturas\n{plano}
 AS -> DBAS: Grava assinatura (AGUARDANDO_PAGAMENTO)\ne evento AssinaturaSolicitada na outbox
-AS -> REDIS: DEL assinatura:list:{usuarioUuid}
+AS -> REDIS: INCR assinatura:list:versao:{usuarioUuid}
 
 note over AS
   A invalidação acontece após o commit
-  da transação (invalidate-on-write).
-  Só remove a chave do usuário dono;
+  da transação (invalidate-on-write):
+  transação que falha não invalida.
+  Só toca o contador do usuário dono;
   a regra de "uma assinatura aberta"
   continua sendo decidida no banco.
 end note
@@ -60,7 +65,7 @@ AS --> CLI: 202 Accepted\n{assinaturaId, status}
 
 KAFKA -> AS: Consumir PagamentoStatusAtualizado\n{assinaturaId, status}
 AS -> DBAS: Atualizar status (ATIVA ou\nPAGAMENTO_RECUSADO)
-AS -> REDIS: DEL assinatura:list:{usuarioUuid}
+AS -> REDIS: INCR assinatura:list:versao:{usuarioUuid}
 
 note over AS, REDIS
   O consumer continua lendo o banco sob
@@ -73,12 +78,12 @@ end note
 
 KAFKA -> AS: Consumir PagamentoRenovacaoAprovado\nou RenovacaoTentativasEsgotadas
 AS -> DBAS: Renovar ciclo (fimCiclo +1)\nou suspender assinatura
-AS -> REDIS: DEL assinatura:list:{usuarioUuid}
+AS -> REDIS: INCR assinatura:list:versao:{usuarioUuid}
 
 note over AS, REDIS
   Renovação altera dataExpiracao e status:
-  a lista cacheada ficaria defasada se a
-  chave não fosse removida aqui.
+  a lista cacheada ficaria defasada se o
+  contador não fosse incrementado aqui.
 end note
 
 == 5. Invalidação no scheduler (opt-out no vencimento) ==
@@ -89,19 +94,19 @@ AS -> DBAS: Seleciona ciclos vencidos, com lock
 loop Para cada assinatura vencida
     alt renovacao_automatica = false
         AS -> DBAS: Marca assinatura como CANCELADA
-        AS -> REDIS: DEL assinatura:list:{usuarioUuid}
+        AS -> REDIS: INCR assinatura:list:versao:{usuarioUuid}
     else renovacao_automatica = true
         AS -> DBAS: Cria renovação e grava\nRenovacaoSolicitada na outbox
-        AS -> REDIS: DEL assinatura:list:{usuarioUuid}
+        AS -> REDIS: INCR assinatura:list:versao:{usuarioUuid}
     end
 end
 
 note over AS, REDIS
   O cancelamento agendado via HTTP
-  (POST /assinaturas/{uuid}/cancelamento),
-  quando implementado, segue o mesmo
-  padrão: DEL após o commit, em cada
-  ramo que altera a assinatura.
+  (POST /assinaturas/{uuid}/cancelamento)
+  segue o mesmo padrão: INCR do contador
+  após o commit, em cada ramo que altera
+  a assinatura.
 end note
 
 == Garantias do padrão ==
@@ -113,7 +118,7 @@ note over AS, REDIS
     transação falhar, o cache permanece
     válido.
   - TTL como fallback para a janela
-    entre commit e DEL.
+    entre commit e INCR.
   - Leituras transacionais (consumers,
     regra de unicidade) seguem no banco.
 end note
