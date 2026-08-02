@@ -120,10 +120,8 @@ paths:
                     dataInicio: null
                     dataExpiracao: null
                     status: AGUARDANDO_PAGAMENTO
-                    renovacaoAutomatica: true
-                    acessoAte: null
                 ativa:
-                  summary: Assinatura ativa, renovando ao fim do ciclo
+                  summary: Assinatura ativa
                   value:
                     id: "770e8400-e29b-41d4-a716-446655440000"
                     usuarioId: "550e8400-e29b-41d4-a716-446655440000"
@@ -131,30 +129,6 @@ paths:
                     dataInicio: "2025-03-10"
                     dataExpiracao: "2025-04-10"
                     status: ATIVA
-                    renovacaoAutomatica: true
-                    acessoAte: "2025-04-10"
-                cancelamentoAgendado:
-                  summary: Cancelada pelo cliente, acesso ate o fim do ciclo
-                  value:
-                    id: "770e8400-e29b-41d4-a716-446655440000"
-                    usuarioId: "550e8400-e29b-41d4-a716-446655440000"
-                    plano: PREMIUM
-                    dataInicio: "2025-03-10"
-                    dataExpiracao: "2025-04-10"
-                    status: ATIVA
-                    renovacaoAutomatica: false
-                    acessoAte: "2025-04-10"
-                cancelada:
-                  summary: Cancelamento efetivado no vencimento
-                  value:
-                    id: "770e8400-e29b-41d4-a716-446655440000"
-                    usuarioId: "550e8400-e29b-41d4-a716-446655440000"
-                    plano: PREMIUM
-                    dataInicio: "2025-03-10"
-                    dataExpiracao: "2025-04-10"
-                    status: CANCELADA
-                    renovacaoAutomatica: false
-                    acessoAte: "2025-04-10"
         '401':
           description: Token ausente, expirado ou invalido. Corpo vazio.
         '403':
@@ -233,7 +207,7 @@ components:
     Assinatura:
       type: object
       description: Representacao completa da assinatura (GET).
-      required: [id, usuarioId, plano, status, renovacaoAutomatica]
+      required: [id, usuarioId, plano, status]
       properties:
         id:
           type: string
@@ -257,20 +231,6 @@ components:
           description: Definida na ativacao. Nula enquanto aguarda pagamento.
         status:
           $ref: '#/components/schemas/StatusAssinatura'
-        renovacaoAutomatica:
-          type: boolean
-          description: |
-            `true` enquanto a assinatura renova ao fim de cada ciclo. Vira
-            `false` no cancelamento e nunca volta a `true`.
-        acessoAte:
-          type: string
-          format: date
-          nullable: true
-          description: |
-            Fim do ciclo corrente (`fimCiclo`), ate quando o servico permanece
-            disponivel. Nulo antes da primeira ativacao. Com status ATIVA e
-            `renovacaoAutomatica: false`, e a data em que o cancelamento e
-            efetivado pela varredura de vencimentos.
     Problem:
       type: object
       description: |
