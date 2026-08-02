@@ -9,9 +9,9 @@ import org.springframework.kafka.config.TopicBuilder;
  * Declaracao dos topicos Kafka do Pagamento Service.
  *
  * <p>Garante a existencia dos topicos consumidos ({@code assinatura-solicitada} e {@code
- * renovacao-solicitada}) e de suas DLQs, alem dos topicos produzidos ({@code
- * pagamento-status-atualizado} e {@code renovacao-resultado}), para nao depender de auto-create do
- * broker.
+ * renovacao-solicitada}, {@code cancelamento-agendado} e {@code assinatura-cancelada}) e de suas
+ * DLQs, alem dos topicos produzidos ({@code pagamento-status-atualizado} e {@code
+ * renovacao-resultado}), para nao depender de auto-create do broker.
  */
 @Configuration
 public class KafkaTopicsConfig {
@@ -84,5 +84,45 @@ public class KafkaTopicsConfig {
   @Bean
   public NewTopic renovacaoResultadoDlq() {
     return TopicBuilder.name("renovacao-resultado-dlq").build();
+  }
+
+  /**
+   * Declara o topico consumido de cancelamento agendado.
+   *
+   * @return topico {@code cancelamento-agendado}
+   */
+  @Bean
+  public NewTopic cancelamentoAgendado() {
+    return TopicBuilder.name("cancelamento-agendado").build();
+  }
+
+  /**
+   * Declara a DLQ do topico consumido de cancelamento agendado.
+   *
+   * @return topico {@code cancelamento-agendado-dlq}
+   */
+  @Bean
+  public NewTopic cancelamentoAgendadoDlq() {
+    return TopicBuilder.name("cancelamento-agendado-dlq").build();
+  }
+
+  /**
+   * Declara o topico consumido de assinatura cancelada.
+   *
+   * @return topico {@code assinatura-cancelada}
+   */
+  @Bean
+  public NewTopic assinaturaCancelada() {
+    return TopicBuilder.name("assinatura-cancelada").build();
+  }
+
+  /**
+   * Declara a DLQ do topico consumido de assinatura cancelada.
+   *
+   * @return topico {@code assinatura-cancelada-dlq}
+   */
+  @Bean
+  public NewTopic assinaturaCanceladaDlq() {
+    return TopicBuilder.name("assinatura-cancelada-dlq").build();
   }
 }
