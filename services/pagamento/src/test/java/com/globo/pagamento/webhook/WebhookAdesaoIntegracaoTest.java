@@ -5,12 +5,9 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.globo.pagamento.cobranca.Plano;
+import com.globo.pagamento.cobranca.StatusCobranca;
 import com.globo.pagamento.gateway.GatewayPagamentoClient;
 import com.globo.pagamento.gateway.StatusGateway;
-import com.globo.pagamento.renovacao.StatusTentativa;
-import com.globo.pagamento.renovacao.TentativaCobrancaRepository;
-import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.HashMap;
@@ -42,14 +39,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Teste de integracao ponta-a-ponta do webhook de renovacao contra o Postgres real e o broker
+ * Teste de integracao ponta-a-ponta do webhook de adesao contra o Postgres real e o broker
  * EmbeddedKafka.
  *
- * <p>Exercita {@code POST /webhooks/payments} com assinatura HMAC real, passando pelo despacho
- * adesao-vs-renovacao, pela decisao (com lock pessimista), pela gravacao do evento na outbox na
- * mesma transacao e pela publicacao no topico {@code renovacao-resultado} via {@link
- * com.globo.pagamento.outbox.OutboxPublisher}. O gateway de pagamento e substituido por um mock
- * para isolar a rede.
+ * <p>Exercita {@code POST /webhooks/payments} com assinatura HMAC real no ramo de adesao:
+ * atualizacao da cobranca, gravacao do evento na outbox na mesma transacao e publicacao no topico
+ * {@code pagamento-status-atualizado} via {@link com.globo.pagamento.outbox.OutboxPublisher}. O
+ * gateway de pagamento e substituido por um mock para isolar a rede.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -73,17 +69,15 @@ import tools.jackson.databind.json.JsonMapper;
       "app.renovacao.scheduler-delay-inicial-ms=3600000",
       "app.outbox.intervalo-ms=100",
     })
-class WebhookRenovacaoIntegracaoTest {
+class WebhookAdesaoIntegracaoTest {
 
-  private static final String TOPICO_RENOVACAO_RESULTADO = "renovacao-resultado";
+  private static final String TOPICO_PAGAMENTO_STATUS = "pagamento-status-atualizado";
   private static final String SECRET = "mock-webhook-secret";
-  private static final String RENOVACAO_ID = "00000000-0000-0000-0000-000000000031";
   private static final String ASSINATURA_ID = "00000000-0000-0000-0000-000000000011";
   private static final String PAYMENT_ID = "00000000-0000-0000-0000-000000000021";
   private static final UUID EVENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000099");
 
   @Autowired private MockMvc mockMvc;
-  @Autowired private TentativaCobrancaRepository tentativaCobrancaRepository;
   @Autowired private WebhookEventoProcessadoRepository eventoRepository;
   @Autowired private EmbeddedKafkaBroker embeddedKafka;
   @Autowired private JdbcTemplate jdbcTemplate;
@@ -92,10 +86,10 @@ class WebhookRenovacaoIntegracaoTest {
   private final JsonMapper jsonMapper = JsonMapper.builder().findAndAddModules().build();
 
   @Test
-  @DisplayName("Deve aprovar a renovacao, publicar no topico e gravar o event id apos o ACK")
-  void deveAprovarPublicarEgravarEventId() throws Exception {
+  @DisplayName("Deve aprovar a cobranca da adesao, publicar no topico e gravar o dedup")
+  void deveAprovarPublicarEgravarDedup() throws Exception {
     when(gateway.consultarStatus(PAYMENT_ID)).thenReturn(StatusGateway.APPROVED);
-    semearPagamentoComTentativaCobrada();
+    semearCobrancaPendente();
 
     try (KafkaConsumer<String, String> consumer = consumidorDoTopico()) {
       consumer.poll(Duration.ofSeconds(1));
@@ -109,9 +103,11 @@ class WebhookRenovacaoIntegracaoTest {
                   .content(corpo()))
           .andExpect(status().isOk());
 
-      assertThat(tentativaCobrancaRepository.findAll().getFirst().getStatus())
-          .as("Tentativa aprovada pela decisao")
-          .isEqualTo(StatusTentativa.APROVADA);
+      assertThat(
+              jdbcTemplate.queryForObject(
+                  "SELECT status FROM cobranca WHERE payment_id = ?", String.class, PAYMENT_ID))
+          .as("Cobranca da adesao aprovada pela decisao")
+          .isEqualTo(StatusCobranca.APPROVED.name());
       assertThat(eventoRepository.findAll().getFirst().getEventId())
           .as("Event id gravado na mesma transacao da decisao")
           .isEqualTo(EVENT_ID);
@@ -122,21 +118,20 @@ class WebhookRenovacaoIntegracaoTest {
               () -> {
                 ConsumerRecords<String, String> registros = consumer.poll(Duration.ofSeconds(1));
                 assertThat(registros)
-                    .as("Topico de renovacao-resultado recebeu o evento de aprovacao")
+                    .as("Topico de pagamento-status-atualizado recebeu o evento da adesao")
                     .extracting(ConsumerRecord::value)
                     .anyMatch(
                         valor ->
-                            valor.contains("\"renovacaoId\":\"" + RENOVACAO_ID + "\"")
+                            valor.contains("\"assinaturaId\":\"" + ASSINATURA_ID + "\"")
                                 && valor.contains("\"paymentId\":\"" + PAYMENT_ID + "\""));
               });
     }
   }
 
   @Test
-  @DisplayName("Deve devolver 503 sem gravar o event id quando a decisao ainda nao e possivel")
-  void deveDevolver503SemGravarEventIdQuandoDecisaoIndisponivel() throws Exception {
-    when(gateway.consultarStatus(PAYMENT_ID)).thenReturn(StatusGateway.APPROVED);
-    semearPagamentoSemTentativaCobrada();
+  @DisplayName("Deve devolver 503 quando a consulta ao gateway falha")
+  void deveDevolver503QuandoGatewayFalha() throws Exception {
+    when(gateway.consultarStatus(PAYMENT_ID)).thenThrow(new RuntimeException("gateway fora do ar"));
 
     mockMvc
         .perform(
@@ -152,30 +147,12 @@ class WebhookRenovacaoIntegracaoTest {
         .isEmpty();
   }
 
-  private void semearPagamentoComTentativaCobrada() {
-    semearPagamento();
+  private void semearCobrancaPendente() {
     jdbcTemplate.update(
-        "INSERT INTO tentativa_cobranca (renovacao_id, numero, status, payment_id)"
-            + " VALUES (?, ?, ?, ?)",
-        RENOVACAO_ID,
-        1,
-        StatusTentativa.PENDENTE.name(),
-        PAYMENT_ID);
-  }
-
-  private void semearPagamentoSemTentativaCobrada() {
-    semearPagamento();
-  }
-
-  private void semearPagamento() {
-    jdbcTemplate.update(
-        "INSERT INTO pagamento_renovacao (renovacao_id, assinatura_id, plano, valor,"
-            + " ciclo_referencia) VALUES (?, ?, ?, ?, ?)",
-        RENOVACAO_ID,
+        "INSERT INTO cobranca (assinatura_uuid, payment_id, status) VALUES (?, ?, ?)",
         ASSINATURA_ID,
-        Plano.BASICO.name(),
-        new BigDecimal("19.90"),
-        2);
+        PAYMENT_ID,
+        StatusCobranca.PENDING.name());
   }
 
   private String corpo() {
@@ -183,7 +160,7 @@ class WebhookRenovacaoIntegracaoTest {
         new WebhookEvent(
             EVENT_ID,
             "payment.updated",
-            new WebhookData(UUID.fromString(PAYMENT_ID), UUID.fromString(RENOVACAO_ID))));
+            new WebhookData(UUID.fromString(PAYMENT_ID), UUID.fromString(ASSINATURA_ID))));
   }
 
   private String assinar(String corpo) throws Exception {
@@ -194,14 +171,14 @@ class WebhookRenovacaoIntegracaoTest {
   }
 
   private KafkaConsumer<String, String> consumidorDoTopico() {
-    String groupId = "teste-webhook-renovacao-" + System.currentTimeMillis();
+    String groupId = "teste-webhook-adesao-" + System.currentTimeMillis();
     Map<String, Object> props =
         new HashMap<>(KafkaTestUtils.consumerProps(groupId, "true", embeddedKafka));
     props.put("auto.offset.reset", "earliest");
     props.put("key.deserializer", StringDeserializer.class.getName());
     props.put("value.deserializer", StringDeserializer.class.getName());
     KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
-    consumer.subscribe(List.of(TOPICO_RENOVACAO_RESULTADO));
+    consumer.subscribe(List.of(TOPICO_PAGAMENTO_STATUS));
     return consumer;
   }
 
@@ -209,7 +186,6 @@ class WebhookRenovacaoIntegracaoTest {
   void limparTabelas() {
     jdbcTemplate.update("DELETE FROM webhook_evento_processado");
     jdbcTemplate.update("DELETE FROM outbox");
-    jdbcTemplate.update("DELETE FROM tentativa_cobranca");
-    jdbcTemplate.update("DELETE FROM pagamento_renovacao");
+    jdbcTemplate.update("DELETE FROM cobranca");
   }
 }
