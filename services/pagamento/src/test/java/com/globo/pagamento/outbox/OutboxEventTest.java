@@ -73,4 +73,19 @@ class OutboxEventTest {
 
     assertThat(evento.getUltimoErro()).as("Ultimo erro registrado").isEqualTo("falha de rede");
   }
+
+  @Test
+  @DisplayName("Deve agendar a proxima tentativa de publicacao")
+  void deveAgendarProximaTentativa() {
+    Instant proximaTentativa = Instant.parse("2026-08-01T12:05:00Z");
+    OutboxEvent evento =
+        OutboxEvent.criar(
+            UUID.randomUUID(), "Cobranca", UUID.randomUUID(), "PagamentoStatusAtualizado", "{}");
+
+    evento.registrarFalha("falha de rede", proximaTentativa);
+
+    assertThat(evento.getProximaTentativaEm())
+        .as("Instante agendado para a proxima tentativa")
+        .isEqualTo(proximaTentativa);
+  }
 }

@@ -88,7 +88,8 @@ public class OutboxEvent {
   /**
    * Registra uma falha de publicacao mantendo o evento pendente para a proxima tentativa.
    *
-   * <p>Incrementa o contador de tentativas e registra a mensagem de erro.
+   * <p>Incrementa o contador de tentativas, registra a mensagem de erro e agenda a proxima
+   * tentativa.
    *
    * @param erro mensagem do erro ocorrido
    * @param proximaTentativa instante agendado para a proxima tentativa
@@ -96,6 +97,7 @@ public class OutboxEvent {
   public void registrarFalha(String erro, Instant proximaTentativa) {
     this.tentativas++;
     this.ultimoErro = erro;
+    this.proximaTentativaEm = proximaTentativa;
   }
 
   /**
@@ -132,5 +134,14 @@ public class OutboxEvent {
    */
   public String getUltimoErro() {
     return ultimoErro;
+  }
+
+  /**
+   * Retorna o instante agendado para a proxima tentativa de publicacao.
+   *
+   * @return instante agendado
+   */
+  public Instant getProximaTentativaEm() {
+    return proximaTentativaEm;
   }
 }
