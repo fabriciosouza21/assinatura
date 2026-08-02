@@ -116,6 +116,15 @@ public class OutboxEvent {
   }
 
   /**
+   * Retorna o identificador unico do evento.
+   *
+   * @return identificador do evento
+   */
+  public UUID getEventId() {
+    return eventId;
+  }
+
+  /**
    * Retorna a situacao atual do evento.
    *
    * @return situacao do evento
