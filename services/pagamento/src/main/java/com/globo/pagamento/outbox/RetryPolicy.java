@@ -1,26 +1,29 @@
 package com.globo.pagamento.outbox;
 
 import java.time.Duration;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * Politica de retry com backoff exponencial para reagenda a proxima tentativa de publicacao de um
- * evento da outbox.
+ * Politica de retry com backoff exponencial e jitter para reagenda a proxima tentativa de
+ * publicacao de um evento da outbox.
  */
 public class RetryPolicy {
 
   private final int maximoTentativas;
   private final Duration backoffInicial;
+  private final Duration jitter;
 
   /**
    * Constroi a politica de retry.
    *
    * @param maximoTentativas numero maximo de tentativas antes de marcar o evento como falha
    * @param backoffInicial atraso base da primeira tentativa, dobrando a cada tentativa seguinte
-   * @param jitter amplitude maxima do jitter
+   * @param jitter amplitude maxima do jitter adicionado ao atraso calculado
    */
   public RetryPolicy(int maximoTentativas, Duration backoffInicial, Duration jitter) {
     this.maximoTentativas = maximoTentativas;
     this.backoffInicial = backoffInicial;
+    this.jitter = jitter;
   }
 
   /**
@@ -34,13 +37,17 @@ public class RetryPolicy {
   }
 
   /**
-   * Calcula o atraso base com backoff exponencial para a proxima tentativa apos {@code tentativas}
-   * falhas.
+   * Calcula o atraso para a proxima tentativa apos {@code tentativas} falhas.
+   *
+   * <p>O atraso base cresce exponencialmente com o numero da tentativa e recebe um jitter aleatorio
+   * em {@code [0, jitter]} para evitar thundering herd entre instancias do publisher.
    *
    * @param tentativas numero de tentativas ja realizadas (base 1 para a primeira falha)
-   * @return atraso com backoff exponencial
+   * @return atraso com backoff exponencial e jitter aleatorio
    */
   public Duration calcularProximoAtraso(int tentativas) {
-    return backoffInicial.multipliedBy((long) Math.pow(2, tentativas - 1));
+    Duration backoff = backoffInicial.multipliedBy((long) Math.pow(2, tentativas - 1));
+    long jitterMillis = ThreadLocalRandom.current().nextLong(0, jitter.toMillis() + 1);
+    return backoff.plus(Duration.ofMillis(jitterMillis));
   }
 }
