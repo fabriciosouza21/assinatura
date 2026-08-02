@@ -171,7 +171,8 @@ public class Assinatura {
    * @throws IllegalStateException se a assinatura estiver em um status nao cancelavel
    */
   public EfeitoCancelamento solicitarCancelamento() {
-    if (this.status == StatusAssinatura.ATIVA) {
+    if (this.status == StatusAssinatura.ATIVA
+        || this.status == StatusAssinatura.EM_RENOVACAO) {
       this.renovacaoAutomatica = false;
       return EfeitoCancelamento.AGENDADO;
     }

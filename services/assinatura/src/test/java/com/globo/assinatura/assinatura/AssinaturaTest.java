@@ -276,4 +276,24 @@ class AssinaturaTest {
         .as("Status transita para cancelada imediatamente")
         .isEqualTo(StatusAssinatura.CANCELADA);
   }
+
+  @Test
+  @DisplayName("Deve agendar cancelamento ao solicitar em assinatura em renovacao")
+  void deveAgendarCancelamentoAoSolicitarCancelamentoEmAssinaturaEmRenovacao() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.iniciarRenovacao();
+
+    EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
+
+    assertThat(efeito)
+        .as("Efeito do cancelamento em assinatura em renovacao")
+        .isEqualTo(EfeitoCancelamento.AGENDADO);
+    assertThat(assinatura.isRenovacaoAutomatica())
+        .as("Renovacao automatica desligada ao agendar cancelamento")
+        .isFalse();
+    assertThat(assinatura.getStatus())
+        .as("Status permanece em renovacao ate a conclusao da cobranca")
+        .isEqualTo(StatusAssinatura.EM_RENOVACAO);
+  }
 }
