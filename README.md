@@ -39,6 +39,8 @@ assinatura  ──AssinaturaSolicitada──▶  kafka  ──▶  pagamento  �
 - **Mock do gateway**: cria pagamento (idempotente), consulta status, simula
   aprovação/recusa, dispara webhook assíncrono com assinatura HMAC.
 - **Outbox**: eventos de domínio publicados via outbox com retry e DLQ.
+- **Listagem de assinaturas**: `GET /assinaturas` paginado (dono do token), com
+  cache Redis cache-aside e invalidação por versão nos fluxos de escrita.
 - **Testes**: unitários por serviço, testes de integração isolados, arquitetura
   (ArchUnit) e checkstyle/spotless no pipeline.
 
@@ -47,6 +49,30 @@ assinatura  ──AssinaturaSolicitada──▶  kafka  ──▶  pagamento  �
 - Endpoint de cancelamento (o opt-out no vencimento existe no domínio).
 
 A íntegra do escopo e do andamento está em `docs/roadmap/`.
+
+## Cache da listagem de assinaturas
+
+O `GET /assinaturas` é cache-aside com **chave versionada por usuário**:
+`assinatura:list:{usuarioUuid}:v{n}:{page}:{size}`, com TTL padrão de 5
+minutos (`APP_CACHE_ASSINATURA_LISTA_TTL`).
+
+A invalidação não apaga chave: ela é um **contador INCR por usuário**
+(`assinatura:list:versao:{usuarioUuid}`) no Redis. Cada fluxo de escrita
+(solicitação, confirmação de pagamento, resultado de renovação, scheduler e
+cancelamento) incrementa o contador após o commit da transação. Como a leitura
+monta a chave com a versão corrente, a geração anterior fica inalcançável e
+expira no TTL.
+
+Essa estratégia é segura com o cache distribuído entre réplicas: o `INCR` é
+atômico no servidor Redis (compartilhado por todas as instâncias), a versão só
+aumenta, e um leitor atrasado que grave dado velho o faz em uma chave órfã,
+nunca servida. Elimina a corrida de repopulação do `DEL` (apagar + outra
+instância recachear dado velho) sem lock distribuído — em vez de excluir
+escritas concorrentes, garante que só a geração mais nova seja lida.
+
+Se o Redis falhar, a leitura degrada para o banco com `WARN` e a escrita de
+invalidação é coberta pelo TTL: consistência eventual em segundos, nunca erro
+da request.
 
 ## Como testar via Bruno
 
