@@ -13,6 +13,7 @@ import com.globo.assinatura.outbox.OutboxEvent;
 import com.globo.assinatura.outbox.OutboxRepository;
 import com.globo.assinatura.outbox.OutboxStatus;
 import com.globo.assinatura.security.UsuarioAutenticado;
+import com.globo.assinatura.shared.contrato.AssinaturaCancelada;
 import com.globo.assinatura.shared.contrato.CancelamentoAgendado;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
@@ -90,5 +91,47 @@ class CancelarAssinaturaTest {
         .isEqualTo(UUID.fromString(assinatura.getUuid()));
     assertThat(evento.fimCiclo()).as("Fim do ciclo preservado no evento").isEqualTo(fimCiclo);
     assertThat(evento.status()).as("Status preservado no evento").isEqualTo(StatusAssinatura.ATIVA);
+  }
+
+  @Test
+  @DisplayName("Deve cancelar imediatamente assinatura aguardando pagamento do proprio dono")
+  void deveCancelarImediatamenteAssinaturaAguardandoPagamentoDoProprioDono() throws Exception {
+    Assinatura assinatura = new Assinatura(42L, Plano.BASICO);
+    Usuario dono = new Usuario("Fulano", "fulano@example.com");
+    dono.setId(42L);
+    dono.setUuid("11111111-1111-1111-1111-111111111111");
+    UsuarioAutenticado principal =
+        new UsuarioAutenticado("fulano@example.com", dono.getUuid(), "ROLE_USUARIO");
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.of(dono));
+
+    CancelamentoResponse resposta = command.executar(assinatura.getUuid(), principal);
+
+    assertThat(resposta.status())
+        .as("Status apos o cancelamento imediato")
+        .isEqualTo(StatusAssinatura.CANCELADA);
+    assertThat(resposta.renovacaoAutomatica()).as("Renovacao automatica desligada").isFalse();
+    assertThat(resposta.acessoAte()).as("Sem acesso preservado sem ciclo pago").isNull();
+
+    ArgumentCaptor<OutboxEvent> capturado = ArgumentCaptor.forClass(OutboxEvent.class);
+    verify(outboxRepository).save(capturado.capture());
+    OutboxEvent outboxEvent = capturado.getValue();
+    assertThat(outboxEvent.getEventType())
+        .as("Tipo do evento do cancelamento imediato")
+        .isEqualTo("AssinaturaCancelada");
+    assertThat(outboxEvent.getStatus())
+        .as("Evento nasce pendente")
+        .isEqualTo(OutboxStatus.PENDENTE);
+
+    AssinaturaCancelada evento =
+        jsonMapper.readValue(outboxEvent.getPayload(), AssinaturaCancelada.class);
+    assertThat(evento.assinaturaId())
+        .as("Assinatura identificada no evento")
+        .isEqualTo(UUID.fromString(assinatura.getUuid()));
+    assertThat(evento.status())
+        .as("Status cancelado no evento")
+        .isEqualTo(StatusAssinatura.CANCELADA);
+    assertThat(evento.fimCiclo()).as("Sem fim de ciclo no evento").isNull();
   }
 }

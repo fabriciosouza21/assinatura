@@ -9,6 +9,7 @@ import com.globo.assinatura.cancelamento.api.CancelamentoResponse;
 import com.globo.assinatura.outbox.OutboxEvent;
 import com.globo.assinatura.outbox.OutboxRepository;
 import com.globo.assinatura.security.UsuarioAutenticado;
+import com.globo.assinatura.shared.contrato.AssinaturaCancelada;
 import com.globo.assinatura.shared.contrato.CancelamentoAgendado;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
@@ -25,6 +26,7 @@ public class CancelarAssinatura {
 
   private static final String AGGREGATE_TYPE = "Assinatura";
   private static final String EVENT_TYPE_CANCELAMENTO_AGENDADO = "CancelamentoAgendado";
+  private static final String EVENT_TYPE_ASSINATURA_CANCELADA = "AssinaturaCancelada";
 
   private final AssinaturaRepository assinaturaRepository;
   private final UsuarioRepository usuarioRepository;
@@ -77,6 +79,9 @@ public class CancelarAssinatura {
     if (efeito == EfeitoCancelamento.AGENDADO) {
       gravarEventoCancelamentoAgendado(assinatura);
     }
+    if (efeito == EfeitoCancelamento.IMEDIATO) {
+      gravarEventoAssinaturaCancelada(assinatura);
+    }
 
     return new CancelamentoResponse(
         assinatura.getUuid(),
@@ -108,5 +113,30 @@ public class CancelarAssinatura {
     } catch (JacksonException e) {
       throw new IllegalStateException("Falha ao serializar evento CancelamentoAgendado", e);
     }
+  }
+
+  private String serializar(AssinaturaCancelada evento) {
+    try {
+      return jsonMapper.writeValueAsString(evento);
+    } catch (JacksonException e) {
+      throw new IllegalStateException("Falha ao serializar evento AssinaturaCancelada", e);
+    }
+  }
+
+  private void gravarEventoAssinaturaCancelada(Assinatura assinatura) {
+    AssinaturaCancelada evento =
+        new AssinaturaCancelada(
+            UUID.randomUUID(),
+            Instant.now(),
+            UUID.fromString(assinatura.getUuid()),
+            assinatura.getStatus(),
+            assinatura.getFimCiclo());
+    outboxRepository.save(
+        OutboxEvent.criar(
+            evento.eventId(),
+            AGGREGATE_TYPE,
+            evento.assinaturaId(),
+            EVENT_TYPE_ASSINATURA_CANCELADA,
+            serializar(evento)));
   }
 }
