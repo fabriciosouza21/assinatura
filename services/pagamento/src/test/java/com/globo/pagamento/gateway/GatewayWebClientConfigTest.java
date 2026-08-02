@@ -6,7 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.globo.pagamento.webhook.HmacSignatureValidator;
+import com.globo.pagamento.webhook.api.HmacSignatureValidator;
+import com.globo.pagamento.webhook.api.WebhookConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,9 +37,7 @@ class GatewayWebClientConfigTest {
     when(environment.getActiveProfiles()).thenReturn(new String[] {"prod"});
 
     assertThatThrownBy(
-            () ->
-                new GatewayWebClientConfig()
-                    .hmacSignatureValidator("mock-webhook-secret", environment))
+            () -> new WebhookConfig().hmacSignatureValidator("mock-webhook-secret", environment))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("webhook-secret");
   }
@@ -49,7 +48,7 @@ class GatewayWebClientConfigTest {
     when(environment.getActiveProfiles()).thenReturn(new String[] {"dev"});
 
     HmacSignatureValidator validator =
-        new GatewayWebClientConfig().hmacSignatureValidator("mock-webhook-secret", environment);
+        new WebhookConfig().hmacSignatureValidator("mock-webhook-secret", environment);
 
     assertThat(validator).as("Validador criado com o secret default no perfil dev").isNotNull();
   }

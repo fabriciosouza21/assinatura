@@ -330,6 +330,10 @@ infraestrutura interna. Internamente é plano — não é capacidade, não tem s
    `adesao/api/AdesaoControllerTest`, `adesao/evento/PagamentoAdesaoConsumerTest`.
    O `@Tag("integration")` continua marcando o corte de execução, não o pacote.
 
+10. **A outbox do Pagamento Service também é infraestrutura técnica.** Ela fica
+    em `pagamento/shared/outbox/`, junto das demais capacidades técnicas do
+    serviço, sem criar dependência com uma capacidade de negócio específica.
+
 ### O que substitui o `package-private`
 
 Subpacote em Java não herda visibilidade: com `api/` chamando a raiz, os casos

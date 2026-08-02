@@ -68,3 +68,70 @@ id do passo seguinte via `after-response`.
 > `paymentId` fica preso no Pagamento Service e não há como aprovar a cobrança
 > no mock. O `assinaturaId` é o uuid público da assinatura, o mesmo valor usado
 > como `Idempotency-Key` e `externalReference` no fluxo do mock.
+
+## Fluxo de renovação automática
+
+O ciclo de renovação é disparado pelo Assinatura Service quando
+`proxima_renovacao_em` vence, e a cobrança é decidida no mock, como na adesão.
+O teste gira em torno de duas variáveis:
+
+- `APP_RENOVACAO_CICLO_MS`: duração do ciclo de renovação (default 30 dias).
+  Valores **menores que um dia** fazem a renovação vencer no próprio dia da
+  ativação e disparar no próximo ciclo do scheduler.
+- `APP_RENOVACAO_TENTATIVAS_BACKOFF_DIAS`: espera entre tentativas de cobrança
+  recusadas (default `1,3`). Com `0,0`, as recusas são imediatas e o esgotamento
+  de tentativas acontece em segundos.
+
+### Perfil de teste rápido
+
+No `.env` (a partir de `.env.example`), acelere os schedulers e o ciclo:
+
+```
+APP_RENOVACAO_CICLO_MS=60000
+APP_RENOVACAO_INTERVALO_MS=1000
+APP_RENOVACAO_SCHEDULER_INTERVALO_MS=1000
+APP_RENOVACAO_TENTATIVAS_BACKOFF_DIAS=0,0
+APP_OUTBOX_INTERVALO_MS=1000
+```
+
+> O `proxima_renovacao_em` é uma **data** (DATE): com ciclo menor que um dia a
+> renovação vence "hoje" e dispara no próximo sweep (~1s). Como a renovação
+> aprovada avança o ciclo no mesmo dia, cada aprovação gera imediatamente o
+> próximo ciclo: o loop só para quando você para de aprovar (ou quando as
+> tentativas se esgotam). Ciclos de um dia ou mais aguardam dias reais.
+
+### Fluxo de aprovação
+
+Partindo do **fluxo encadeado completo** (assinatura `ATIVA`, ciclo 1 em
+andamento):
+
+1. Aguarde a renovação disparar (~2s com o perfil rápido).
+2. **Consultar renovação** (`renovacao/consultar-renovacao`) → usa o
+   `assinaturaId` capturado e devolve o `paymentId` da cobrança de renovação;
+   captura `paymentId` e `renovacaoId`.
+3. **Simular aprovação** (`mock-gateway/simular-aprovacao`) → força `APPROVED`
+   no payment da renovação; o webhook aprova a tentativa e o próximo ciclo
+   inicia.
+4. **Consultar assinatura (renovação)** (`renovacao/consultar-assinatura`) →
+   status `ATIVA` de volta, `proximaRenovacaoEm` avançada.
+
+> `consultar-renovacao` responde `404` enquanto a renovação não disparou: é o
+> sinal de que você chegou cedo demais. Após aprovar, um novo `renovacaoId`
+> aparece no passo 2: cada ciclo é uma renovação distinta.
+>
+> O `assinatura/consultar-assinatura` do fluxo de adesão exige `ATIVA` e serve
+> para validar a ativação; o `renovacao/consultar-assinatura` aceita também
+> `EM_RENOVACAO` e `SUSPENSA`, porque o ciclo fica `EM_RENOVACAO` entre o
+> disparo e a decisão da cobrança.
+
+### Fluxo de esgotamento (suspensão)
+
+Com `APP_RENOVACAO_TENTATIVAS_BACKOFF_DIAS=0,0` (3 tentativas em sequência
+rápida), o mesmo caminho com recusas suspende a assinatura:
+
+1. Aguarde a renovação disparar.
+2. **Consultar renovação** → captura `paymentId`.
+3. **Simular recusa** (`mock-gateway/simular-recusa`) → `REJECTED`; o webhook
+   agenda a próxima tentativa imediatamente.
+4. Repita até a terceira tentativa: **Consultar assinatura (renovação)** →
+   status `SUSPENSA`.

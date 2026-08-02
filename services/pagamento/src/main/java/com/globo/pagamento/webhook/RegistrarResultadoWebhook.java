@@ -2,11 +2,13 @@ package com.globo.pagamento.webhook;
 
 import com.globo.pagamento.cobranca.CobrancaRepository;
 import com.globo.pagamento.cobranca.StatusCobranca;
-import com.globo.pagamento.messaging.event.PagamentoStatusAtualizado;
-import com.globo.pagamento.messaging.event.StatusPagamento;
-import com.globo.pagamento.outbox.OutboxEvent;
-import com.globo.pagamento.outbox.OutboxRepository;
 import com.globo.pagamento.renovacao.PagamentoRenovacao;
+import com.globo.pagamento.shared.contrato.PagamentoStatusAtualizado;
+import com.globo.pagamento.shared.contrato.StatusPagamento;
+import com.globo.pagamento.shared.outbox.OutboxEvent;
+import com.globo.pagamento.shared.outbox.OutboxRepository;
+import com.globo.pagamento.webhook.idempotencia.WebhookEventoProcessado;
+import com.globo.pagamento.webhook.idempotencia.WebhookEventoProcessadoRepository;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;

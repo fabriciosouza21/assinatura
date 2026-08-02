@@ -1,13 +1,13 @@
 package com.globo.pagamento.webhook;
 
-import com.globo.pagamento.messaging.event.PagamentoRenovacaoAprovado;
-import com.globo.pagamento.messaging.event.RenovacaoTentativasEsgotadas;
-import com.globo.pagamento.messaging.event.StatusPagamento;
-import com.globo.pagamento.outbox.OutboxEvent;
-import com.globo.pagamento.outbox.OutboxRepository;
 import com.globo.pagamento.renovacao.PagamentoRenovacao;
 import com.globo.pagamento.renovacao.TentativaCobranca;
 import com.globo.pagamento.renovacao.TentativaCobrancaRepository;
+import com.globo.pagamento.shared.contrato.PagamentoRenovacaoAprovado;
+import com.globo.pagamento.shared.contrato.RenovacaoTentativasEsgotadas;
+import com.globo.pagamento.shared.contrato.StatusPagamento;
+import com.globo.pagamento.shared.outbox.OutboxEvent;
+import com.globo.pagamento.shared.outbox.OutboxRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -30,8 +30,8 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>A decisao e a gravacao na outbox acontecem na mesma transacao: se a transacao voltar, o evento
  * nao existe. O ack do Kafka sai do caminho do cliente e fica com o {@link
- * com.globo.pagamento.outbox.OutboxPublisher}. Uma tentativa ja decidida e ignorada, o que absorve
- * o reprocesso de um webhook cuja decisao anterior ja tinha sido persistida.
+ * com.globo.pagamento.shared.outbox.OutboxPublisher}. Uma tentativa ja decidida e ignorada, o que
+ * absorve o reprocesso de um webhook cuja decisao anterior ja tinha sido persistida.
  */
 public class ProcessarWebhookRenovacao {
 

@@ -1,0 +1,121 @@
+@startuml
+title Listagem de assinaturas com cache distribuído (Redis) e invalidação no write
+
+autonumber
+hide footbox
+
+skinparam backgroundColor #FFFFFF
+skinparam ParticipantPadding 24
+skinparam BoxPadding 10
+skinparam maxMessageSize 110
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor "Cliente" as CLI
+control "Assinatura\nService" as AS
+database "Redis\n(cache)" as REDIS
+database "DB\nAssinaturas" as DBAS
+queue "Kafka" as KAFKA
+control "Scheduler de\nRenovação" as SCHED
+
+== 1. Listagem com cache (cache-aside) ==
+
+CLI -> AS: GET /assinaturas\n(token JWT do dono)
+AS -> REDIS: GET assinatura:list:{usuarioUuid}
+
+alt cache hit
+    REDIS --> AS: Lista de assinaturas
+else cache miss
+    AS -> DBAS: Busca assinaturas do usuário
+    DBAS --> AS: Lista completa
+    AS -> REDIS: SET assinatura:list:{usuarioUuid}\nTTL de segurança (ex.: 5 min)
+end
+
+AS --> CLI: 200 OK\n{assinaturas: [...]}
+
+note over REDIS
+  A chave é por usuário: a listagem só
+  enxerga as assinaturas do dono autenticado.
+  TTL funciona como rede de segurança caso
+  alguma invalidação falhe.
+end note
+
+== 2. Invalidação ao solicitar assinatura (síncrono) ==
+
+CLI -> AS: POST /assinaturas\n{usuarioId, plano}
+AS -> DBAS: Grava assinatura (AGUARDANDO_PAGAMENTO)\ne evento AssinaturaSolicitada na outbox
+AS -> REDIS: DEL assinatura:list:{usuarioUuid}
+
+note over AS
+  A invalidação acontece após o commit
+  da transação (invalidate-on-write).
+  Só remove a chave do usuário dono;
+  a regra de "uma assinatura aberta"
+  continua sendo decidida no banco.
+end note
+
+AS --> CLI: 202 Accepted\n{assinaturaId, status}
+
+== 3. Invalidação ao processar status de pagamento (Kafka) ==
+
+KAFKA -> AS: Consumir PagamentoStatusAtualizado\n{assinaturaId, status}
+AS -> DBAS: Atualizar status (ATIVA ou\nPAGAMENTO_RECUSADO)
+AS -> REDIS: DEL assinatura:list:{usuarioUuid}
+
+note over AS, REDIS
+  O consumer continua lendo o banco sob
+  lock pessimista (idempotência). O cache
+  só é tocado na invalidação, nunca na
+  leitura do processamento.
+end note
+
+== 4. Invalidação ao processar resultado de renovação (Kafka) ==
+
+KAFKA -> AS: Consumir PagamentoRenovacaoAprovado\nou RenovacaoTentativasEsgotadas
+AS -> DBAS: Renovar ciclo (fimCiclo +1)\nou suspender assinatura
+AS -> REDIS: DEL assinatura:list:{usuarioUuid}
+
+note over AS, REDIS
+  Renovação altera dataExpiracao e status:
+  a lista cacheada ficaria defasada se a
+  chave não fosse removida aqui.
+end note
+
+== 5. Invalidação no scheduler (opt-out no vencimento) ==
+
+SCHED -> AS: Executar varredura de vencimentos
+AS -> DBAS: Seleciona ciclos vencidos, com lock
+
+loop Para cada assinatura vencida
+    alt renovacao_automatica = false
+        AS -> DBAS: Marca assinatura como CANCELADA
+        AS -> REDIS: DEL assinatura:list:{usuarioUuid}
+    else renovacao_automatica = true
+        AS -> DBAS: Cria renovação e grava\nRenovacaoSolicitada na outbox
+        AS -> REDIS: DEL assinatura:list:{usuarioUuid}
+    end
+end
+
+note over AS, REDIS
+  O cancelamento agendado via HTTP
+  (POST /assinaturas/{uuid}/cancelamento),
+  quando implementado, segue o mesmo
+  padrão: DEL após o commit, em cada
+  ramo que altera a assinatura.
+end note
+
+== Garantias do padrão ==
+
+note over AS, REDIS
+  - Invalidação somente no write, nunca
+    update do cache (evita corrida).
+  - Invalidação após o commit: se a
+    transação falhar, o cache permanece
+    válido.
+  - TTL como fallback para a janela
+    entre commit e DEL.
+  - Leituras transacionais (consumers,
+    regra de unicidade) seguem no banco.
+end note
+
+@enduml

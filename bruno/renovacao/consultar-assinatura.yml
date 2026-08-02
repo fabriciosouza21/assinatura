@@ -1,0 +1,31 @@
+info:
+  name: Consultar assinatura (renovação)
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{assinaturaUrl}}/assinaturas/{{assinaturaId}}"
+  headers:
+    - name: Authorization
+      value: "Bearer {{token}}"
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        expect(res.getStatus()).to.equal(200);
+        expect(res.body.id).to.equal(bru.getVar("assinaturaId"));
+        expect(res.body.status, "status de renovação").to.be.oneOf([
+          "ATIVA", "EM_RENOVACAO", "SUSPENSA"
+        ]);
+        expect(res.body.inicioCiclo, "inicio do ciclo de renovação").to.be.a('string');
+        expect(res.body.fimCiclo, "fim do ciclo de renovação").to.be.a('string');
+        expect(res.body.proximaRenovacaoEm, "data da próxima renovação").to.be.a('string');
+        expect(res.body.renovacaoAutomatica).to.equal(true);
+        bru.setVar("proximaRenovacaoEm", res.body.proximaRenovacaoEm);
+        bru.setVar("fimCiclo", res.body.fimCiclo);
+        bru.setVar("statusAssinatura", res.body.status);
+
+settings:
+  encodeUrl: true

@@ -1,0 +1,80 @@
+package com.globo.pagamento.webhook.api;
+
+import com.globo.pagamento.webhook.DecisaoRenovacaoIndisponivelException;
+import com.globo.pagamento.webhook.PublicacaoIndisponivelException;
+import com.globo.pagamento.webhook.WebhookInvalidoException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+/**
+ * Tratamento de excecoes do endpoint de webhook, mapeando-as para os codigos HTTP do contrato
+ * ({@code 401} para assinatura invalida, {@code 503} para falha de publicacao e para decisao ainda
+ * indisponivel, e {@code 500} para excecoes nao tratadas).
+ */
+@RestControllerAdvice(assignableTypes = WebhookPagamentoController.class)
+public class WebhookExceptionHandler {
+
+  private static final Logger log = LoggerFactory.getLogger(WebhookExceptionHandler.class);
+
+  /**
+   * Trata a assinatura HMAC invalida.
+   *
+   * @param e excecao lancada
+   * @return resposta {@code 401} com o codigo do erro
+   */
+  @ExceptionHandler(WebhookInvalidoException.class)
+  public ResponseEntity<Erro> handleInvalido(WebhookInvalidoException e) {
+    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new Erro(e.getMessage()));
+  }
+
+  /**
+   * Trata a falha de publicacao ou de consulta ao gateway, registrando-a em nivel ERROR por ser uma
+   * falha de sistema que deve disparar alertas.
+   *
+   * @param e excecao lancada
+   * @return resposta {@code 503} com o codigo do erro
+   */
+  @ExceptionHandler(PublicacaoIndisponivelException.class)
+  public ResponseEntity<Erro> handleIndisponivel(PublicacaoIndisponivelException e) {
+    log.atError()
+        .addKeyValue("event", "webhook_publicacao_falhou")
+        .setCause(e)
+        .log("Falha de publicacao ou consulta ao gateway");
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new Erro(e.getMessage()));
+  }
+
+  /**
+   * Trata a notificacao que chegou antes de a tentativa cobrada estar visivel, devolvendo {@code
+   * 503} para o gateway reenviar.
+   *
+   * <p>O registro em WARN com o contexto completo acontece no command, no ponto em que a decisao
+   * falha; aqui apenas o codigo HTTP e mapeado.
+   *
+   * @param e excecao lancada
+   * @return resposta {@code 503} com o codigo do erro
+   */
+  @ExceptionHandler(DecisaoRenovacaoIndisponivelException.class)
+  public ResponseEntity<Erro> handleDecisaoIndisponivel(DecisaoRenovacaoIndisponivelException e) {
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new Erro(e.getMessage()));
+  }
+
+  /**
+   * Trata excecoes nao tratadas que escapam dos handlers especificos, registrando-as em nivel ERROR
+   * com o stack completo antes de devolver {@code 500}.
+   *
+   * @param e excecao nao tratada
+   * @return resposta {@code 500} com o codigo do erro
+   */
+  @ExceptionHandler(Exception.class)
+  public ResponseEntity<Erro> handleNaoTratada(Exception e) {
+    log.atError()
+        .addKeyValue("event", "erro_nao_tratado_webhook")
+        .setCause(e)
+        .log("Excecao nao tratada no processamento do webhook");
+    return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new Erro("erro_interno"));
+  }
+}
