@@ -194,6 +194,58 @@ class CancelamentoConsumerTest {
                                     && "tentativas_canceladas".equals(par.value)));
   }
 
+  @Test
+  @DisplayName("Deve rejeitar cancelamento agendado com payload nao json")
+  void deveRejeitarCancelamentoAgendadoComPayloadNaoJson() {
+    assertThatThrownBy(() -> consumer.consumirCancelamentoAgendado("nao-e-json"))
+        .as("Payload nao json rejeitado")
+        .isInstanceOf(EventoInvalidoException.class);
+
+    verifyNoInteractions(eventoProcessadoRepository, cancelarTentativasPendentes);
+  }
+
+  @Test
+  @DisplayName("Deve rejeitar cancelamento agendado com uuid invalido")
+  void deveRejeitarCancelamentoAgendadoComUuidInvalido() {
+    String payload =
+        """
+        {
+          "eventId": "00000000-0000-0000-0000-000000000001",
+          "ocorridoEm": "2026-08-02T12:00:00Z",
+          "assinaturaId": "nao-e-um-uuid",
+          "status": "ATIVA",
+          "fimCiclo": "2026-09-01"
+        }
+        """;
+
+    assertThatThrownBy(() -> consumer.consumirCancelamentoAgendado(payload))
+        .as("Uuid invalido rejeitado na desserializacao")
+        .isInstanceOf(EventoInvalidoException.class);
+
+    verifyNoInteractions(eventoProcessadoRepository, cancelarTentativasPendentes);
+  }
+
+  @Test
+  @DisplayName("Deve rejeitar cancelamento agendado com status desconhecido")
+  void deveRejeitarCancelamentoAgendadoComStatusDesconhecido() {
+    String payload =
+        """
+        {
+          "eventId": "00000000-0000-0000-0000-000000000001",
+          "ocorridoEm": "2026-08-02T12:00:00Z",
+          "assinaturaId": "00000000-0000-0000-0000-000000000011",
+          "status": "DESCONHECIDO",
+          "fimCiclo": "2026-09-01"
+        }
+        """;
+
+    assertThatThrownBy(() -> consumer.consumirCancelamentoAgendado(payload))
+        .as("Status desconhecido rejeitado na desserializacao")
+        .isInstanceOf(EventoInvalidoException.class);
+
+    verifyNoInteractions(eventoProcessadoRepository, cancelarTentativasPendentes);
+  }
+
   @ParameterizedTest(name = "Campo obrigatorio ausente: {0}")
   @MethodSource("payloadsSemCamposObrigatorios")
   @DisplayName("Deve rejeitar cancelamento agendado sem campo obrigatorio")

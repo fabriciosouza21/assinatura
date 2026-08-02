@@ -1,14 +1,19 @@
 package com.globo.assinatura.cancelamento;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.globo.assinatura.assinatura.AcessoNegadoException;
 import com.globo.assinatura.assinatura.Assinatura;
+import com.globo.assinatura.assinatura.AssinaturaNaoEncontradaException;
 import com.globo.assinatura.assinatura.AssinaturaRepository;
 import com.globo.assinatura.assinatura.Plano;
 import com.globo.assinatura.assinatura.StatusAssinatura;
@@ -238,6 +243,62 @@ class CancelarAssinaturaTest {
                             par ->
                                 "event".equals(par.key)
                                     && "cancelamento_idempotente".equals(par.value)));
+  }
+
+  @Test
+  @DisplayName("Nao deve gravar evento ao cancelar assinatura ja cancelada")
+  void naoDeveGravarEventoAoCancelarAssinaturaJaCancelada() {
+    Assinatura assinatura = new Assinatura(42L, Plano.BASICO);
+    assinatura.solicitarCancelamento();
+    Usuario dono = new Usuario("Fulano", "fulano@example.com");
+    dono.setId(42L);
+    dono.setUuid("11111111-1111-1111-1111-111111111111");
+    UsuarioAutenticado principal =
+        new UsuarioAutenticado("fulano@example.com", dono.getUuid(), "ROLE_USUARIO");
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.of(dono));
+
+    CancelamentoResponse resposta = command.executar(assinatura.getUuid(), principal);
+
+    assertThat(resposta.status())
+        .as("Status apos o cancelamento idempotente")
+        .isEqualTo(StatusAssinatura.CANCELADA);
+    verifyNoInteractions(outboxRepository);
+  }
+
+  @Test
+  @DisplayName("Deve negar acesso ao cancelar assinatura de outro usuario")
+  void deveNegarAcessoAoCancelarAssinaturaDeOutroUsuario() {
+    Assinatura assinatura = new Assinatura(42L, Plano.BASICO);
+    Usuario dono = new Usuario("Fulano", "fulano@example.com");
+    dono.setId(42L);
+    dono.setUuid("11111111-1111-1111-1111-111111111111");
+    UsuarioAutenticado invasor =
+        new UsuarioAutenticado(
+            "invasor@example.com", "22222222-2222-2222-2222-222222222222", "ROLE_USUARIO");
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.of(dono));
+
+    assertThatThrownBy(() -> command.executar(assinatura.getUuid(), invasor))
+        .as("Cancelamento de assinatura alheia negado")
+        .isInstanceOf(AcessoNegadoException.class);
+    verifyNoInteractions(outboxRepository);
+  }
+
+  @Test
+  @DisplayName("Deve lancar excecao ao cancelar assinatura inexistente")
+  void deveLancarExcecaoAoCancelarAssinaturaInexistente() {
+    UsuarioAutenticado principal =
+        new UsuarioAutenticado(
+            "fulano@example.com", "11111111-1111-1111-1111-111111111111", "ROLE_USUARIO");
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(any())).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> command.executar("99999999-9999-9999-9999-999999999999", principal))
+        .as("Cancelamento de assinatura inexistente negado")
+        .isInstanceOf(AssinaturaNaoEncontradaException.class);
+    verifyNoInteractions(outboxRepository);
   }
 
   @Test
