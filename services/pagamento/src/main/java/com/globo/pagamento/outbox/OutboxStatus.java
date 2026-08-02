@@ -7,5 +7,7 @@ package com.globo.pagamento.outbox;
  * registradas no {@link OutboxEvent}.
  */
 public enum OutboxStatus {
-  PENDENTE
+  PENDENTE,
+  /** Publicado e confirmado pelo Kafka. */
+  PUBLICADO
 }

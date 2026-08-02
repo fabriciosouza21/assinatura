@@ -72,6 +72,15 @@ public class OutboxEvent {
   }
 
   /**
+   * Marca o evento como publicado apos confirmacao do Kafka.
+   *
+   * @param publicadoEm instante da confirmacao
+   */
+  public void marcarPublicado(Instant publicadoEm) {
+    this.status = OutboxStatus.PUBLICADO;
+  }
+
+  /**
    * Retorna a situacao atual do evento.
    *
    * @return situacao do evento
