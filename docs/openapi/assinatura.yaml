@@ -26,6 +26,71 @@ security:
 
 paths:
   /assinaturas:
+    get:
+      tags: [Assinatura]
+      summary: Lista as assinaturas do usuario autenticado
+      description: |
+        Devolve as assinaturas do usuario do token, paginadas, da mais recente
+        para a mais antiga (dataInicio desc, com fallback para a mais
+        recentemente criada). Usuario sem assinaturas recebe lista vazia com
+        `total` zero. O administrador, sem `usuarioId` no token, recebe 403.
+
+        A resposta pode vir do cache Redis (cache-aside por usuario e pagina,
+        TTL de 5 minutos). Mudancas em assinaturas invalidam o cache apos o
+        commit da escrita; nos fluxos assincronos (pagamento, renovacao) a
+        lista reflete o estado persistido em poucos segundos.
+      operationId: listarAssinaturas
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: Pagina a retornar, comecando em 0.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          example: 0
+        - name: size
+          in: query
+          required: false
+          description: Quantidade de itens por pagina (maximo 100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          example: 20
+      responses:
+        '200':
+          description: Pagina de assinaturas do usuario autenticado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssinaturaLista'
+              example:
+                items:
+                  - id: "770e8400-e29b-41d4-a716-446655440000"
+                    usuarioId: "550e8400-e29b-41d4-a716-446655440000"
+                    plano: PREMIUM
+                    dataInicio: "2025-03-10"
+                    dataExpiracao: "2025-04-10"
+                    status: ATIVA
+                  - id: "660e8400-e29b-41d4-a716-446655440000"
+                    usuarioId: "550e8400-e29b-41d4-a716-446655440000"
+                    plano: BASICO
+                    dataInicio: "2025-01-10"
+                    dataExpiracao: "2025-02-10"
+                    status: CANCELADA
+                page: 0
+                size: 20
+                total: 2
+        '401':
+          description: Token ausente, expirado ou invalido. Corpo vazio.
+        '403':
+          description: |
+            Token valido sem usuario de dominio ligado (por exemplo, o
+            administrador do seed), que portanto nao possui assinaturas a
+            listar. Corpo vazio.
     post:
       tags: [Assinatura]
       summary: Solicita uma assinatura
@@ -231,6 +296,29 @@ components:
           description: Definida na ativacao. Nula enquanto aguarda pagamento.
         status:
           $ref: '#/components/schemas/StatusAssinatura'
+    AssinaturaLista:
+      type: object
+      description: Pagina da listagem de assinaturas do usuario autenticado.
+      required: [items, page, size, total]
+      properties:
+        items:
+          type: array
+          description: |
+            Assinaturas da pagina, da mais recente para a mais antiga. Cada
+            item usa o mesmo schema da consulta pontual.
+          items:
+            $ref: '#/components/schemas/Assinatura'
+        page:
+          type: integer
+          description: Pagina corrente, comecando em 0.
+        size:
+          type: integer
+          description: Tamanho da pagina solicitado.
+        total:
+          type: integer
+          description: |
+            Total de assinaturas do usuario, ignorando a paginacao. Permite
+            montar a paginacao sem requisitar a ultima pagina.
     Problem:
       type: object
       description: |
