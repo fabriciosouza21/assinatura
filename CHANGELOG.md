@@ -3,6 +3,23 @@
 Todas as mudanças notáveis deste projeto serão documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
 
+## [Não publicado]
+
+### Alterado
+- **Rotas de assinatura exigem JWT** (ADR 0003, supersede a ADR 0001): `POST
+  /assinaturas` e `GET /assinaturas/{uuid}` deixam de ser públicos. Sem token,
+  ou com token inválido, a resposta é `401`.
+- **`POST /assinaturas` não recebe mais `usuarioId`**: o corpo carrega apenas
+  `plano` e o dono vem da claim `usuarioId` do token. *Quebra de contrato.*
+- **`GET /assinaturas/{uuid}` só devolve a assinatura ao dono**, com `403` para
+  assinatura de terceiro. `ROLE_ADMIN` consulta qualquer uma.
+- **Login emite a claim `usuarioId`** com o uuid público do `Usuario` ligado à
+  credencial, dispensando consulta ao banco na autorização de cada requisição.
+- **Filtro JWT deriva a authority da claim `role`**, em vez de fixar
+  `ROLE_USER`, o que passa a distinguir cliente de administrador.
+- Collection do Bruno: cadastro → login (como o cliente cadastrado) →
+  assinatura, com `Authorization: Bearer` nas rotas de assinatura.
+
 ## [0.1.0] - 2026-07-29
 
 Primeiro milestone: ambiente local completo sobe com `docker compose up`.

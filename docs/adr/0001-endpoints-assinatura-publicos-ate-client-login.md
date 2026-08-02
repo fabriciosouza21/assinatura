@@ -1,7 +1,7 @@
 # ADR 0001: Endpoints de assinatura públicos até login de cliente
 
 **Date:** 2026-07-30
-**Status:** Accepted
+**Status:** Superseded by [ADR 0003](0003-endpoints-assinatura-exigem-jwt-do-dono.md)
 **Contexto:** BE-2 do roadmap `docs/roadmap/2026-07-29-assinatura-fluxo-completo.md`
 
 ## Context
