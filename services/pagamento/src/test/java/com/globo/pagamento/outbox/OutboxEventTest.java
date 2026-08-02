@@ -102,4 +102,19 @@ class OutboxEventTest {
         .as("Status apos marcar falha definitiva")
         .isEqualTo(OutboxStatus.FALHA);
   }
+
+  @Test
+  @DisplayName("Deve registrar instante da falha definitiva")
+  void deveRegistrarInstanteDaFalhaDefinitiva() {
+    Instant falhouEm = Instant.parse("2026-08-01T12:10:00Z");
+    OutboxEvent evento =
+        OutboxEvent.criar(
+            UUID.randomUUID(), "Cobranca", UUID.randomUUID(), "PagamentoStatusAtualizado", "{}");
+
+    evento.marcarFalha("tentativas esgotadas", falhouEm);
+
+    assertThat(evento.getFalhouEm())
+        .as("Instante em que as tentativas se esgotaram")
+        .isEqualTo(falhouEm);
+  }
 }

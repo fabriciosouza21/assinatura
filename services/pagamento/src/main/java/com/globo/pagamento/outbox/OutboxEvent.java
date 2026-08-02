@@ -38,6 +38,7 @@ public class OutboxEvent {
   private Instant proximaTentativaEm;
   private Instant criadoEm;
   private Instant publicadoEm;
+  private Instant falhouEm;
   private String ultimoErro;
 
   /** Construtor sem argumentos exigido pelo provedor JPA. */
@@ -110,6 +111,7 @@ public class OutboxEvent {
    */
   public void marcarFalha(String erro, Instant falhouEm) {
     this.status = OutboxStatus.FALHA;
+    this.falhouEm = falhouEm;
   }
 
   /**
@@ -155,5 +157,14 @@ public class OutboxEvent {
    */
   public Instant getProximaTentativaEm() {
     return proximaTentativaEm;
+  }
+
+  /**
+   * Retorna o instante em que as tentativas se esgotaram.
+   *
+   * @return instante da falha definitiva
+   */
+  public Instant getFalhouEm() {
+    return falhouEm;
   }
 }
