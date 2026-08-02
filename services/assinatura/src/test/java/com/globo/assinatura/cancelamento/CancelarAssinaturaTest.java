@@ -11,19 +11,19 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import com.globo.assinatura.assinatura.AcessoNegadoException;
 import com.globo.assinatura.assinatura.Assinatura;
 import com.globo.assinatura.assinatura.AssinaturaNaoEncontradaException;
 import com.globo.assinatura.assinatura.AssinaturaRepository;
 import com.globo.assinatura.assinatura.Plano;
 import com.globo.assinatura.assinatura.StatusAssinatura;
 import com.globo.assinatura.cancelamento.api.CancelamentoResponse;
-import com.globo.assinatura.outbox.OutboxEvent;
-import com.globo.assinatura.outbox.OutboxRepository;
-import com.globo.assinatura.outbox.OutboxStatus;
-import com.globo.assinatura.security.UsuarioAutenticado;
 import com.globo.assinatura.shared.contrato.AssinaturaCancelada;
 import com.globo.assinatura.shared.contrato.CancelamentoAgendado;
+import com.globo.assinatura.shared.outbox.OutboxEvent;
+import com.globo.assinatura.shared.outbox.OutboxRepository;
+import com.globo.assinatura.shared.outbox.OutboxStatus;
+import com.globo.assinatura.shared.seguranca.AcessoNegadoException;
+import com.globo.assinatura.shared.seguranca.UsuarioAutenticado;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
 import java.time.Clock;
@@ -140,7 +140,9 @@ class CancelarAssinaturaTest {
         .as("Assinatura identificada no evento")
         .isEqualTo(UUID.fromString(assinatura.getUuid()));
     assertThat(evento.fimCiclo()).as("Fim do ciclo preservado no evento").isEqualTo(fimCiclo);
-    assertThat(evento.status()).as("Status preservado no evento").isEqualTo(StatusAssinatura.ATIVA);
+    assertThat(evento.status())
+        .as("Status preservado no evento")
+        .isEqualTo(com.globo.assinatura.shared.contrato.StatusAssinatura.ATIVA);
   }
 
   @Test
@@ -339,7 +341,7 @@ class CancelarAssinaturaTest {
         .isEqualTo(UUID.fromString(assinatura.getUuid()));
     assertThat(evento.status())
         .as("Status cancelado no evento")
-        .isEqualTo(StatusAssinatura.CANCELADA);
+        .isEqualTo(com.globo.assinatura.shared.contrato.StatusAssinatura.CANCELADA);
     assertThat(evento.fimCiclo()).as("Sem fim de ciclo no evento").isNull();
   }
 }

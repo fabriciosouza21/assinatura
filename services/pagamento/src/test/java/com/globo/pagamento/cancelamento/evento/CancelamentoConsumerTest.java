@@ -13,7 +13,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.globo.pagamento.cancelamento.CancelarTentativasPendentes;
 import com.globo.pagamento.cancelamento.idempotencia.CancelamentoEventoProcessadoRepository;
-import com.globo.pagamento.messaging.EventoInvalidoException;
+import com.globo.pagamento.shared.kafka.EventoInvalidoException;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;

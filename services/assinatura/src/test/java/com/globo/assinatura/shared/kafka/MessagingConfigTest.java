@@ -1,4 +1,4 @@
-package com.globo.assinatura.messaging;
+package com.globo.assinatura.shared.kafka;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

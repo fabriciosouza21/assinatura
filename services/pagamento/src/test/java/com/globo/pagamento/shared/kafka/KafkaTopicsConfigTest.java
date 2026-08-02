@@ -1,4 +1,4 @@
-package com.globo.pagamento.messaging;
+package com.globo.pagamento.shared.kafka;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

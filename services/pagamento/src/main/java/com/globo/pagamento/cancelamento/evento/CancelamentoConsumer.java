@@ -2,9 +2,9 @@ package com.globo.pagamento.cancelamento.evento;
 
 import com.globo.pagamento.cancelamento.CancelarTentativasPendentes;
 import com.globo.pagamento.cancelamento.idempotencia.CancelamentoEventoProcessadoRepository;
-import com.globo.pagamento.messaging.EventoInvalidoException;
 import com.globo.pagamento.shared.contrato.AssinaturaCancelada;
 import com.globo.pagamento.shared.contrato.CancelamentoAgendado;
+import com.globo.pagamento.shared.kafka.EventoInvalidoException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;

@@ -1,16 +1,17 @@
 package com.globo.assinatura.cancelamento;
 
-import com.globo.assinatura.assinatura.AcessoNegadoException;
 import com.globo.assinatura.assinatura.Assinatura;
 import com.globo.assinatura.assinatura.AssinaturaNaoEncontradaException;
 import com.globo.assinatura.assinatura.AssinaturaRepository;
 import com.globo.assinatura.assinatura.EfeitoCancelamento;
 import com.globo.assinatura.cancelamento.api.CancelamentoResponse;
-import com.globo.assinatura.outbox.OutboxEvent;
-import com.globo.assinatura.outbox.OutboxRepository;
-import com.globo.assinatura.security.UsuarioAutenticado;
 import com.globo.assinatura.shared.contrato.AssinaturaCancelada;
 import com.globo.assinatura.shared.contrato.CancelamentoAgendado;
+import com.globo.assinatura.shared.contrato.StatusAssinatura;
+import com.globo.assinatura.shared.outbox.OutboxEvent;
+import com.globo.assinatura.shared.outbox.OutboxRepository;
+import com.globo.assinatura.shared.seguranca.AcessoNegadoException;
+import com.globo.assinatura.shared.seguranca.UsuarioAutenticado;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
 import java.time.Clock;
@@ -116,7 +117,7 @@ public class CancelarAssinatura {
             UUID.randomUUID(),
             Instant.now(clock),
             UUID.fromString(assinatura.getUuid()),
-            assinatura.getStatus(),
+            StatusAssinatura.valueOf(assinatura.getStatus().name()),
             assinatura.getFimCiclo());
     outboxRepository.save(
         OutboxEvent.criar(
@@ -149,7 +150,7 @@ public class CancelarAssinatura {
             UUID.randomUUID(),
             Instant.now(clock),
             UUID.fromString(assinatura.getUuid()),
-            assinatura.getStatus(),
+            StatusAssinatura.valueOf(assinatura.getStatus().name()),
             assinatura.getFimCiclo());
     outboxRepository.save(
         OutboxEvent.criar(

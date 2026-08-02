@@ -1,6 +1,5 @@
 package com.globo.assinatura.shared.contrato;
 
-import com.globo.assinatura.assinatura.StatusAssinatura;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;

@@ -130,7 +130,7 @@ class RenovacaoSchedulerTest {
         jsonMapper().readValue(outboxEvent.getPayload(), AssinaturaCancelada.class);
     assertThat(evento.status())
         .as("Status cancelado no evento")
-        .isEqualTo(StatusAssinatura.CANCELADA);
+        .isEqualTo(com.globo.assinatura.shared.contrato.StatusAssinatura.CANCELADA);
     assertThat(evento.fimCiclo())
         .as("Fim do ciclo encerrado no evento")
         .isEqualTo(LocalDate.of(2026, 2, 1));

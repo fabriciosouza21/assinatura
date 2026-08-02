@@ -6,6 +6,7 @@ import com.globo.assinatura.renovacao.Renovacao;
 import com.globo.assinatura.renovacao.RenovacaoRepository;
 import com.globo.assinatura.shared.contrato.AssinaturaCancelada;
 import com.globo.assinatura.shared.contrato.RenovacaoSolicitada;
+import com.globo.assinatura.shared.contrato.StatusAssinatura;
 import com.globo.assinatura.shared.outbox.OutboxEvent;
 import com.globo.assinatura.shared.outbox.OutboxRepository;
 import java.time.Clock;
@@ -180,7 +181,7 @@ public class RenovacaoScheduler {
             UUID.randomUUID(),
             Instant.now(clock),
             UUID.fromString(assinatura.getUuid()),
-            assinatura.getStatus(),
+            StatusAssinatura.valueOf(assinatura.getStatus().name()),
             assinatura.getFimCiclo());
     outboxRepository.save(
         OutboxEvent.criar(

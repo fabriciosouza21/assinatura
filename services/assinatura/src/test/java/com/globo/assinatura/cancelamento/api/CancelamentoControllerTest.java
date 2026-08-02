@@ -12,12 +12,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.globo.assinatura.assinatura.AcessoNegadoException;
 import com.globo.assinatura.assinatura.AssinaturaNaoEncontradaException;
 import com.globo.assinatura.assinatura.StatusAssinatura;
 import com.globo.assinatura.cancelamento.CancelarAssinatura;
-import com.globo.assinatura.security.UsuarioAutenticado;
-import com.globo.assinatura.web.ProblemExceptionHandler;
+import com.globo.assinatura.shared.seguranca.AcessoNegadoException;
+import com.globo.assinatura.shared.seguranca.UsuarioAutenticado;
+import com.globo.assinatura.shared.web.ProblemExceptionHandler;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -39,7 +39,7 @@ import org.springframework.test.web.servlet.MockMvc;
     excludeFilters =
         @ComponentScan.Filter(
             type = FilterType.REGEX,
-            pattern = {"com\\.globo\\.assinatura\\.security\\..*"}))
+            pattern = "com\\.globo\\.assinatura\\.shared\\.seguranca\\..*"))
 @Import(ProblemExceptionHandler.class)
 class CancelamentoControllerTest {
 
