@@ -94,6 +94,37 @@ class CancelarAssinaturaTest {
   }
 
   @Test
+  @DisplayName("Deve cancelar imediatamente assinatura suspensa sem preservar o acesso")
+  void deveCancelarImediatamenteAssinaturaSuspensaSemPreservarAcesso() throws Exception {
+    Assinatura assinatura = new Assinatura(42L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.iniciarRenovacao();
+    assinatura.suspender();
+    Usuario dono = new Usuario("Fulano", "fulano@example.com");
+    dono.setId(42L);
+    dono.setUuid("11111111-1111-1111-1111-111111111111");
+    UsuarioAutenticado principal =
+        new UsuarioAutenticado("fulano@example.com", dono.getUuid(), "ROLE_USUARIO");
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    when(usuarioRepository.findById(42L)).thenReturn(Optional.of(dono));
+
+    CancelamentoResponse resposta = command.executar(assinatura.getUuid(), principal);
+
+    assertThat(resposta.status())
+        .as("Status apos o cancelamento imediato")
+        .isEqualTo(StatusAssinatura.CANCELADA);
+    assertThat(resposta.acessoAte()).as("Sem acesso a preservar no cancelamento imediato").isNull();
+
+    ArgumentCaptor<OutboxEvent> capturado = ArgumentCaptor.forClass(OutboxEvent.class);
+    verify(outboxRepository).save(capturado.capture());
+    OutboxEvent outboxEvent = capturado.getValue();
+    AssinaturaCancelada evento =
+        jsonMapper.readValue(outboxEvent.getPayload(), AssinaturaCancelada.class);
+    assertThat(evento.fimCiclo()).as("Sem fim de ciclo no evento").isNull();
+  }
+
+  @Test
   @DisplayName("Deve cancelar imediatamente assinatura aguardando pagamento do proprio dono")
   void deveCancelarImediatamenteAssinaturaAguardandoPagamentoDoProprioDono() throws Exception {
     Assinatura assinatura = new Assinatura(42L, Plano.BASICO);

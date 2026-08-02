@@ -247,6 +247,22 @@ class AssinaturaTest {
   }
 
   @Test
+  @DisplayName("Deve limpar o fim do ciclo ao cancelar imediatamente assinatura suspensa")
+  void deveLimparFimDoCicloAoCancelarImediatamenteAssinaturaSuspensa() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.iniciarRenovacao();
+    assinatura.suspender();
+
+    assinatura.solicitarCancelamento();
+
+    assertThat(assinatura.getFimCiclo()).as("Fim do ciclo limpo no cancelamento imediato").isNull();
+    assertThat(assinatura.getProximaRenovacaoEm())
+        .as("Proxima renovacao limpa no cancelamento imediato")
+        .isNull();
+  }
+
+  @Test
   @DisplayName("Deve cancelar imediatamente ao solicitar em assinatura aguardando pagamento")
   void deveCancelarImediatamenteAoSolicitarCancelamentoEmAssinaturaAguardandoPagamento() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);

@@ -168,7 +168,8 @@ public class Assinatura {
    * Solicita o cancelamento da assinatura, agendando-o para o fim do ciclo ou efetivando-o.
    *
    * <p>Solicitacoes para assinatura ja cancelada ou ativa sem renovacao automatica nao produzem
-   * alteracoes.
+   * alteracoes. No cancelamento imediato, o fim do ciclo e a proxima renovacao sao limpos: nao ha
+   * ciclo a preservar.
    *
    * @return efeito do cancelamento solicitado
    * @throws IllegalStateException se a assinatura estiver em um status nao cancelavel
@@ -189,6 +190,8 @@ public class Assinatura {
         || this.status == StatusAssinatura.PAGAMENTO_RECUSADO) {
       this.renovacaoAutomatica = false;
       this.status = StatusAssinatura.CANCELADA;
+      this.fimCiclo = null;
+      this.proximaRenovacaoEm = null;
       return EfeitoCancelamento.IMEDIATO;
     }
     throw new IllegalStateException("nao e possivel cancelar a assinatura neste status");
