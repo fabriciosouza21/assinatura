@@ -151,6 +151,34 @@ class TentativaCobrancaRepositoryTest {
     }
   }
 
+  @Test
+  @DisplayName("Deve pular no cancelamento a tentativa travada pelo scheduler")
+  @Transactional(propagation = Propagation.NEVER)
+  void devePularNoCancelamentoTentativaTravadaPeloScheduler() {
+    emSetup = emf.createEntityManager();
+    emT1 = emf.createEntityManager();
+    emT2 = emf.createEntityManager();
+    try {
+      persistirTentativaProntaCommitada();
+
+      TentativaCobrancaRepository repoT1 =
+          new JpaRepositoryFactory(emT1).getRepository(TentativaCobrancaRepository.class);
+      emT1.getTransaction().begin();
+      repoT1.buscarPendentesPorRenovacaoId("ren-lock");
+
+      TentativaCobrancaRepository repoT2 =
+          new JpaRepositoryFactory(emT2).getRepository(TentativaCobrancaRepository.class);
+      emT2.getTransaction().begin();
+      emT2.createNativeQuery("SET LOCAL lock_timeout = '2s'").executeUpdate();
+      List<TentativaCobranca> resultadoT2 = repoT2.buscarPendentesPorRenovacaoId("ren-lock");
+
+      assertThat(resultadoT2).as("T2 nao deve bloquear na tentativa travada por T1").isEmpty();
+    } finally {
+      rollbackAtivo(emT1);
+      rollbackAtivo(emT2);
+    }
+  }
+
   private void persistirTentativaProntaCommitada() {
     emSetup.getTransaction().begin();
     emSetup.persist(new TentativaCobranca("ren-lock", 1));
