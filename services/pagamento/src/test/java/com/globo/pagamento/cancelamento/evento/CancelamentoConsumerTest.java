@@ -47,8 +47,8 @@ class CancelamentoConsumerTest {
   }
 
   @Test
-  @DisplayName("Deve delegar o cancelamento agendado para as tentativas pendentes")
-  void deveDelegarCancelamentoAgendadoParaTentativasPendentes() {
+  @DisplayName("Nao deve cancelar tentativas ao receber cancelamento agendado")
+  void naoDeveCancelarTentativasNoCancelamentoAgendado() {
     UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
     UUID assinaturaId = UUID.fromString("00000000-0000-0000-0000-000000000011");
     String payload =
@@ -61,11 +61,10 @@ class CancelamentoConsumerTest {
           "fimCiclo": "2026-09-01"
         }
         """;
-    when(eventoProcessadoRepository.registrarSeNovo(eventId, assinaturaId)).thenReturn(1);
 
     consumer.consumirCancelamentoAgendado(payload);
 
-    verificarRegistroAntesDaDelegacao(eventId, assinaturaId);
+    verifyNoInteractions(eventoProcessadoRepository, cancelarTentativasPendentes);
   }
 
   @Test
@@ -88,29 +87,6 @@ class CancelamentoConsumerTest {
     consumer.consumirAssinaturaCancelada(payload);
 
     verificarRegistroAntesDaDelegacao(eventId, assinaturaId);
-  }
-
-  @Test
-  @DisplayName("Nao deve delegar cancelamento agendado duplicado")
-  void naoDeveDelegarCancelamentoAgendadoDuplicado() {
-    UUID eventId = UUID.fromString("00000000-0000-0000-0000-000000000001");
-    UUID assinaturaId = UUID.fromString("00000000-0000-0000-0000-000000000011");
-    String payload =
-        """
-        {
-          "eventId": "00000000-0000-0000-0000-000000000001",
-          "ocorridoEm": "2026-08-02T12:00:00Z",
-          "assinaturaId": "00000000-0000-0000-0000-000000000011",
-          "status": "ATIVA",
-          "fimCiclo": "2026-09-01"
-        }
-        """;
-    when(eventoProcessadoRepository.registrarSeNovo(eventId, assinaturaId)).thenReturn(0);
-
-    consumer.consumirCancelamentoAgendado(payload);
-
-    verifyNoInteractions(cancelarTentativasPendentes);
-    verificarEventoProcessado(eventId, assinaturaId);
   }
 
   @Test

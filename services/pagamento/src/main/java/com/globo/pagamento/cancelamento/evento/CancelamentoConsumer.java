@@ -5,7 +5,6 @@ import com.globo.pagamento.cancelamento.idempotencia.CancelamentoEventoProcessad
 import com.globo.pagamento.messaging.EventoInvalidoException;
 import com.globo.pagamento.shared.contrato.AssinaturaCancelada;
 import com.globo.pagamento.shared.contrato.CancelamentoAgendado;
-import java.util.UUID;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,8 +14,10 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Consumer dos eventos {@link CancelamentoAgendado} e {@link AssinaturaCancelada}.
  *
- * <p>Reserva o identificador do evento para processar cada cancelamento uma unica vez e cancela as
- * tentativas pendentes da assinatura.
+ * <p>O cancelamento agendado e apenas validado: a cobranca em curso do ciclo segue ate a decisao do
+ * gateway, e o encerramento no fim do ciclo e efetivado pelo scheduler de vencimentos do
+ * Assinatura. O cancelamento efetivado reserva o identificador do evento para processar cada
+ * cancelamento uma unica vez e cancela as tentativas pendentes da assinatura.
  */
 @Component
 public class CancelamentoConsumer {
@@ -44,18 +45,22 @@ public class CancelamentoConsumer {
   /**
    * Consome um evento do topico {@code cancelamento-agendado}.
    *
+   * <p>O cancelamento agendado nao altera o pagamento: a cobranca do ciclo em curso segue ate a
+   * decisao do gateway, e o encerramento da assinatura no fim do ciclo e efetivado pelo scheduler
+   * de vencimentos do Assinatura, que publica {@code AssinaturaCancelada}.
+   *
    * @param payload JSON do evento {@link CancelamentoAgendado}
    */
   @KafkaListener(topics = "cancelamento-agendado", groupId = "pagamento")
-  @Transactional
   public void consumirCancelamentoAgendado(String payload) {
-    CancelamentoAgendado evento = desserializar(payload);
-    validar(evento);
-    processar(evento.eventId(), evento.assinaturaId());
+    validar(desserializar(payload));
   }
 
   /**
    * Consome um evento do topico {@code assinatura-cancelada}.
+   *
+   * <p>Reserva o identificador do evento para processar cada cancelamento uma unica vez e, quando e
+   * uma ocorrencia nova, cancela as tentativas pendentes da assinatura na mesma transacao.
    *
    * @param payload JSON do evento {@link AssinaturaCancelada}
    */
@@ -64,7 +69,9 @@ public class CancelamentoConsumer {
   public void consumirAssinaturaCancelada(String payload) {
     AssinaturaCancelada evento = desserializarAssinaturaCancelada(payload);
     validar(evento);
-    processar(evento.eventId(), evento.assinaturaId());
+    if (eventoProcessadoRepository.registrarSeNovo(evento.eventId(), evento.assinaturaId()) == 1) {
+      cancelarTentativasPendentes.executar(evento.assinaturaId().toString());
+    }
   }
 
   private CancelamentoAgendado desserializar(String payload) {
@@ -110,12 +117,6 @@ public class CancelamentoConsumer {
     }
     if (evento.status() == null) {
       throw new EventoInvalidoException("status ausente");
-    }
-  }
-
-  private void processar(UUID eventId, UUID assinaturaId) {
-    if (eventoProcessadoRepository.registrarSeNovo(eventId, assinaturaId) == 1) {
-      cancelarTentativasPendentes.executar(assinaturaId.toString());
     }
   }
 }
