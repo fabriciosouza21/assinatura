@@ -152,6 +152,30 @@ class TentativaCobrancaRepositoryTest {
   }
 
   @Test
+  @DisplayName("Deve retornar apenas as tentativas pendentes sem payment id da renovacao")
+  void deveRetornarApenasTentativasPendentesSemPaymentIdDaRenovacao() {
+    TentativaCobranca pendente = new TentativaCobranca("ren-filtro", 1);
+    TentativaCobranca cobrada = new TentativaCobranca("ren-filtro", 2);
+    cobrada.registrarCobranca("pay-filtro");
+    TentativaCobranca recusada = new TentativaCobranca("ren-filtro", 3);
+    recusada.recusar();
+    TentativaCobranca outraRenovacao = new TentativaCobranca("ren-outra", 1);
+    tentativaCobrancaRepository.save(pendente);
+    tentativaCobrancaRepository.save(cobrada);
+    tentativaCobrancaRepository.save(recusada);
+    tentativaCobrancaRepository.save(outraRenovacao);
+    tentativaCobrancaRepository.flush();
+
+    List<TentativaCobranca> pendentes =
+        tentativaCobrancaRepository.buscarPendentesPorRenovacaoId("ren-filtro");
+
+    assertThat(pendentes)
+        .as("Apenas a tentativa pendente sem payment id da renovacao")
+        .extracting(TentativaCobranca::getNumero)
+        .containsExactly(1);
+  }
+
+  @Test
   @DisplayName("Deve pular no cancelamento a tentativa travada pelo scheduler")
   @Transactional(propagation = Propagation.NEVER)
   void devePularNoCancelamentoTentativaTravadaPeloScheduler() {
