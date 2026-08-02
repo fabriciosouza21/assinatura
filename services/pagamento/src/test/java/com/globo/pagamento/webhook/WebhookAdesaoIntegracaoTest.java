@@ -17,10 +17,8 @@ import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -36,6 +34,7 @@ import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -112,19 +111,14 @@ class WebhookAdesaoIntegracaoTest {
           .as("Event id gravado na mesma transacao da decisao")
           .isEqualTo(EVENT_ID);
 
-      Awaitility.await()
-          .atMost(Duration.ofSeconds(10))
-          .untilAsserted(
-              () -> {
-                ConsumerRecords<String, String> registros = consumer.poll(Duration.ofSeconds(1));
-                assertThat(registros)
-                    .as("Topico de pagamento-status-atualizado recebeu o evento da adesao")
-                    .extracting(ConsumerRecord::value)
-                    .anyMatch(
-                        valor ->
-                            valor.contains("\"assinaturaId\":\"" + ASSINATURA_ID + "\"")
-                                && valor.contains("\"paymentId\":\"" + PAYMENT_ID + "\""));
-              });
+      String valorEvento = aguardarEvento(consumer, "assinaturaId", ASSINATURA_ID);
+      JsonNode no = jsonMapper.readTree(valorEvento);
+      assertThat(no.get("assinaturaId").asText())
+          .as("Topico de pagamento-status-atualizado recebeu o evento da adesao")
+          .isEqualTo(ASSINATURA_ID);
+      assertThat(no.get("paymentId").asText())
+          .as("Pagamento da adesao no evento publicado")
+          .isEqualTo(PAYMENT_ID);
     }
   }
 
@@ -168,6 +162,20 @@ class WebhookAdesaoIntegracaoTest {
     mac.init(new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
     return "sha256="
         + java.util.HexFormat.of().formatHex(mac.doFinal(corpo.getBytes(StandardCharsets.UTF_8)));
+  }
+
+  private String aguardarEvento(
+      KafkaConsumer<String, String> consumer, String campo, String valorEsperado) {
+    long limite = System.currentTimeMillis() + Duration.ofSeconds(30).toMillis();
+    while (System.currentTimeMillis() < limite) {
+      for (ConsumerRecord<String, String> registro : consumer.poll(Duration.ofMillis(500))) {
+        JsonNode no = jsonMapper.readTree(registro.value());
+        if (no.has(campo) && valorEsperado.equals(no.get(campo).asText())) {
+          return registro.value();
+        }
+      }
+    }
+    return null;
   }
 
   private KafkaConsumer<String, String> consumidorDoTopico() {
