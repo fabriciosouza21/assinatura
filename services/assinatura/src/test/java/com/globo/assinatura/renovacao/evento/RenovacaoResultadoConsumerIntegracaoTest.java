@@ -109,8 +109,11 @@ class RenovacaoResultadoConsumerIntegracaoTest {
                   .as("Status transitou para ATIVA apos consumo do evento APROVADO")
                   .isEqualTo(StatusAssinatura.ATIVA);
               assertThat(assinaturaAtualizada.getFimCiclo())
-                  .as("Fim do ciclo avancado em uma duracao de ciclo")
-                  .isEqualTo(assinatura.getFimCiclo().plusDays(30));
+                  .as("Fim do ciclo preservado com ciclo sub-diario, sem avancar dias")
+                  .isEqualTo(assinatura.getFimCiclo());
+              assertThat(assinaturaAtualizada.getProximaRenovacaoEm())
+                  .as("Proxima renovacao agendada no futuro pelo instante do processamento")
+                  .isAfter(Instant.now());
 
               Renovacao renovacaoAtualizada =
                   renovacaoRepository.findById(renovacao.getId()).orElseThrow();
