@@ -9,5 +9,7 @@ package com.globo.pagamento.outbox;
 public enum OutboxStatus {
   PENDENTE,
   /** Publicado e confirmado pelo Kafka. */
-  PUBLICADO
+  PUBLICADO,
+  /** Falha definitiva apos esgotar as tentativas, aguardando reprocessamento manual. */
+  FALHA
 }

@@ -101,6 +101,18 @@ public class OutboxEvent {
   }
 
   /**
+   * Marca o evento como falha definitiva apos esgotar as tentativas.
+   *
+   * <p>O evento permanece persistido como DLQ para reprocessamento manual, sem retry automatico.
+   *
+   * @param erro mensagem do erro que esgotou as tentativas
+   * @param falhouEm instante em que as tentativas se esgotaram
+   */
+  public void marcarFalha(String erro, Instant falhouEm) {
+    this.status = OutboxStatus.FALHA;
+  }
+
+  /**
    * Retorna a situacao atual do evento.
    *
    * @return situacao do evento
