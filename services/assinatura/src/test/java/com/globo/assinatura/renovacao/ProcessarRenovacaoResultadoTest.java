@@ -72,7 +72,10 @@ class ProcessarRenovacaoResultadoTest {
   @DisplayName("Deve voltar a assinatura para ativa ao aprovar a renovacao")
   void deveVoltarAssinaturaParaAtivaAoAprovarRenovacao() {
     Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
-    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 15),
+        LocalDate.of(2026, 2, 15),
+        Instant.parse("2026-02-15T00:00:00Z"));
     assinatura.iniciarRenovacao();
     Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
     when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
@@ -98,7 +101,10 @@ class ProcessarRenovacaoResultadoTest {
   @DisplayName("Deve avancar o fim do ciclo em uma duracao de ciclo ao aprovar a renovacao")
   void deveAvancarFimCicloEmUmCicloAoAprovarRenovacao() {
     Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
-    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 15),
+        LocalDate.of(2026, 2, 15),
+        Instant.parse("2026-02-15T00:00:00Z"));
     assinatura.iniciarRenovacao();
     Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
     when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
@@ -124,7 +130,8 @@ class ProcessarRenovacaoResultadoTest {
         .isEqualTo(fimCicloAntes);
     assertThat(assinatura.getProximaRenovacaoEm())
         .as("proxima renovacao deve seguir o novo fim de ciclo")
-        .isEqualTo(fimCicloAntes.plusDays(CICLO_DIAS_PADRAO));
+        .isEqualTo(
+            fimCicloAntes.plusDays(CICLO_DIAS_PADRAO).atStartOfDay(ZoneOffset.UTC).toInstant());
   }
 
   @Test
@@ -171,7 +178,10 @@ class ProcessarRenovacaoResultadoTest {
   @DisplayName("Deve aprovar a renovacao ao processar evento de renovacao aprovada")
   void deveAprovarRenovacaoAoProcessarEventoAprovado() {
     Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
-    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 15),
+        LocalDate.of(2026, 2, 15),
+        Instant.parse("2026-02-15T00:00:00Z"));
     assinatura.iniciarRenovacao();
     Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
     when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
@@ -197,7 +207,10 @@ class ProcessarRenovacaoResultadoTest {
   @DisplayName("Deve tratar como no-op idempotente evento sobre renovacao ja aprovada")
   void deveTratarComoNoOpEventoSobreRenovacaoJaAprovada() {
     Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
-    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 15),
+        LocalDate.of(2026, 2, 15),
+        Instant.parse("2026-02-15T00:00:00Z"));
     assinatura.iniciarRenovacao();
     Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
     renovacao.aprovar();
@@ -223,7 +236,10 @@ class ProcessarRenovacaoResultadoTest {
   @DisplayName("Deve gravar AssinaturaRenovada na outbox ao aprovar a renovacao")
   void deveGravarAssinaturaRenovadaNaOutboxAoAprovarRenovacao() {
     Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
-    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 15),
+        LocalDate.of(2026, 2, 15),
+        Instant.parse("2026-02-15T00:00:00Z"));
     assinatura.iniciarRenovacao();
     Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
     when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
@@ -257,7 +273,10 @@ class ProcessarRenovacaoResultadoTest {
   @DisplayName("Deve carimbar o instante do evento de saida com o relogio injetado")
   void deveCarimbarInstanteDoEventoDeSaidaComRelogioInjetado() throws Exception {
     Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
-    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 15),
+        LocalDate.of(2026, 2, 15),
+        Instant.parse("2026-02-15T00:00:00Z"));
     assinatura.iniciarRenovacao();
     Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
     when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
@@ -298,7 +317,10 @@ class ProcessarRenovacaoResultadoTest {
   @DisplayName("Deve suspender a assinatura ao processar evento de tentativas esgotadas")
   void deveSuspenderAssinaturaAoProcessarEventoEsgotado() {
     Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
-    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 15),
+        LocalDate.of(2026, 2, 15),
+        Instant.parse("2026-02-15T00:00:00Z"));
     assinatura.iniciarRenovacao();
     Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
     when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
@@ -323,7 +345,10 @@ class ProcessarRenovacaoResultadoTest {
   @DisplayName("Deve esgotar as tentativas da renovacao ao processar evento esgotado")
   void deveEsgotarTentativasDaRenovacaoAoProcessarEventoEsgotado() {
     Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
-    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 15),
+        LocalDate.of(2026, 2, 15),
+        Instant.parse("2026-02-15T00:00:00Z"));
     assinatura.iniciarRenovacao();
     Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
     when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
@@ -348,7 +373,10 @@ class ProcessarRenovacaoResultadoTest {
   @DisplayName("Deve gravar AssinaturaSuspensa na outbox ao processar evento esgotado")
   void deveGravarAssinaturaSuspensaNaOutboxAoProcessarEventoEsgotado() {
     Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
-    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 15),
+        LocalDate.of(2026, 2, 15),
+        Instant.parse("2026-02-15T00:00:00Z"));
     assinatura.iniciarRenovacao();
     Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
     when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
@@ -381,7 +409,10 @@ class ProcessarRenovacaoResultadoTest {
   @DisplayName("Deve tratar como no-op idempotente evento esgotado sobre renovacao ja esgotada")
   void deveTratarComoNoOpEventoEsgotadoSobreRenovacaoJaEsgotada() {
     Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
-    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 15),
+        LocalDate.of(2026, 2, 15),
+        Instant.parse("2026-02-15T00:00:00Z"));
     assinatura.iniciarRenovacao();
     Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
     renovacao.esgotarTentativas();
@@ -406,7 +437,10 @@ class ProcessarRenovacaoResultadoTest {
   @DisplayName("Deve registrar o eventId processado apos aprovar a renovacao com sucesso")
   void deveRegistrarEventIdProcessadoAoAprovarRenovacao() {
     Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
-    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 15),
+        LocalDate.of(2026, 2, 15),
+        Instant.parse("2026-02-15T00:00:00Z"));
     assinatura.iniciarRenovacao();
     Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
     when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))
@@ -523,7 +557,10 @@ class ProcessarRenovacaoResultadoTest {
           + " (race de rebalance)")
   void deveTratarComoNoOpQuandoSaveDoEventoProcessadoViolaIndiceUnico() {
     Assinatura assinatura = new Assinatura(7L, Plano.PREMIUM);
-    assinatura.ativar(LocalDate.of(2026, 1, 15), LocalDate.of(2026, 2, 15));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 15),
+        LocalDate.of(2026, 2, 15),
+        Instant.parse("2026-02-15T00:00:00Z"));
     assinatura.iniciarRenovacao();
     Renovacao renovacao = new Renovacao(42L, assinatura.getFimCiclo(), 2);
     when(renovacaoRepository.buscarPorUuidParaAtualizacao(renovacao.getUuid()))

@@ -305,7 +305,8 @@ class ConfirmarPagamentoAdesaoTest {
   @DisplayName("Deve manter assinatura ativa ao receber evento tardio rejeitado")
   void deveManterAssinaturaAtivaAoReceberEventoTardioRejeitado() {
     Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
-    assinatura.ativar(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+    assinatura.ativar(
+        LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1), Instant.parse("2026-02-01T00:00:00Z"));
     when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
         .thenReturn(Optional.of(assinatura));
     PagamentoStatusAtualizado evento =

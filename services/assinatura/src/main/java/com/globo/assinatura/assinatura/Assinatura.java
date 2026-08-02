@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -42,7 +43,7 @@ public class Assinatura {
 
   private LocalDate fimCiclo;
 
-  private LocalDate proximaRenovacaoEm;
+  private Instant proximaRenovacaoEm;
 
   private boolean renovacaoAutomatica = true;
 
@@ -147,11 +148,11 @@ public class Assinatura {
   }
 
   /**
-   * Retorna a data da proxima renovacao.
+   * Retorna o instante da proxima renovacao.
    *
-   * @return data da proxima renovacao, ou {@code null} antes da primeira ativacao
+   * @return instante da proxima renovacao, ou {@code null} antes da primeira ativacao
    */
-  public LocalDate getProximaRenovacaoEm() {
+  public Instant getProximaRenovacaoEm() {
     return proximaRenovacaoEm;
   }
 
@@ -207,8 +208,9 @@ public class Assinatura {
    *
    * @param dataInicio data de inicio da vigencia
    * @param dataExpiracao data de expiracao da vigencia
+   * @param proximaRenovacaoEm instante em que a proxima renovacao vence
    */
-  public void ativar(LocalDate dataInicio, LocalDate dataExpiracao) {
+  public void ativar(LocalDate dataInicio, LocalDate dataExpiracao, Instant proximaRenovacaoEm) {
     if (this.status != StatusAssinatura.AGUARDANDO_PAGAMENTO) {
       return;
     }
@@ -217,7 +219,7 @@ public class Assinatura {
     this.dataExpiracao = dataExpiracao;
     this.inicioCiclo = dataInicio;
     this.fimCiclo = dataExpiracao;
-    this.proximaRenovacaoEm = dataExpiracao;
+    this.proximaRenovacaoEm = proximaRenovacaoEm;
     this.renovacaoAutomatica = true;
   }
 
@@ -233,11 +235,12 @@ public class Assinatura {
    * Avanca o ciclo de renovacao para o proximo periodo.
    *
    * @param novoFimCiclo data de fim do novo ciclo
+   * @param proximaRenovacaoEm instante em que a proxima renovacao vence
    */
-  public void renovar(LocalDate novoFimCiclo) {
+  public void renovar(LocalDate novoFimCiclo, Instant proximaRenovacaoEm) {
     this.inicioCiclo = this.fimCiclo;
     this.fimCiclo = novoFimCiclo;
-    this.proximaRenovacaoEm = novoFimCiclo;
+    this.proximaRenovacaoEm = proximaRenovacaoEm;
     this.status = StatusAssinatura.ATIVA;
   }
 
