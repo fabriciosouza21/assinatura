@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -12,7 +13,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
 import reactor.util.retry.Retry;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -287,5 +290,42 @@ class GatewayPagamentoClientTest {
         .as("Status oficial apos retry com sucesso")
         .isEqualTo(StatusGateway.APPROVED);
     assertThat(server.getRequestCount()).as("quantidade de tentativas no gateway").isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("Deve retentar quando o gateway demora alem do timeout de resposta")
+  void deveRetentarQuandoGatewayDemoraAlemDoTimeoutDeResposta() throws Exception {
+    server.enqueue(
+        new MockResponse().setHeadersDelay(1000, TimeUnit.MILLISECONDS).setResponseCode(200));
+    server.enqueue(
+        new MockResponse()
+            .setHeader("Content-Type", "application/json")
+            .setBody(
+                jsonMapper.writeValueAsString(
+                    new CreatePaymentResponse(
+                        "pay_renov", "renov-123", new BigDecimal("19.90"), "BRL", "PIX")))
+            .setResponseCode(201));
+    WebClient webClientComTimeout =
+        WebClient.builder()
+            .baseUrl(server.url("/").toString())
+            .clientConnector(
+                new ReactorClientHttpConnector(
+                    HttpClient.create().responseTimeout(Duration.ofMillis(100))))
+            .build();
+    GatewayPagamentoClient clientComTimeout =
+        new GatewayPagamentoClient(
+            webClientComTimeout,
+            "http://pagamento:8080/webhooks/payments",
+            GatewayRetryPolicy.criar(3, Duration.ofMillis(5)));
+
+    CobrancaCriada cobranca =
+        clientComTimeout.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90"));
+
+    assertThat(cobranca.paymentId())
+        .as("payment id retornado apos retry por timeout")
+        .isEqualTo("pay_renov");
+    assertThat(server.getRequestCount())
+        .as("quantidade de tentativas no gateway apos timeout")
+        .isEqualTo(2);
   }
 }
