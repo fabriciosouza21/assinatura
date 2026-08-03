@@ -12,6 +12,14 @@ spring:
     exclude:
       - org.springframework.boot.micrometer.metrics.autoconfigure.export.otlp.OtlpMetricsExportAutoConfiguration
 
+  task:
+    scheduling:
+      pool:
+        # Schedulers de lote (publisher, recuperacao da DLQ e renovacao) rodam em
+        # threads dedicadas: o envio Kafka bloqueante do publisher nao pode atrasar
+        # os demais jobs agendados.
+        size: ${SPRING_TASK_SCHEDULING_POOL_SIZE:3}
+
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/assinatura}
     username: ${SPRING_DATASOURCE_USERNAME:assinatura}
@@ -76,6 +84,10 @@ app:
     max-tentativas: ${APP_OUTBOX_MAX_TENTATIVAS:3}
     backoff-inicial-segundos: ${APP_OUTBOX_BACKOFF_INICIAL_SEGUNDOS:1}
     jitter-millis: ${APP_OUTBOX_JITTER_MILLIS:500}
+    dlq:
+      intervalo-ms: ${APP_OUTBOX_DLQ_INTERVALO_MS:60000}
+      timeout-segundos: ${APP_OUTBOX_DLQ_TIMEOUT_SEGUNDOS:3600}
+      max-ciclos: ${APP_OUTBOX_DLQ_MAX_CICLOS:3}
   renovacao:
     intervalo-ms: ${APP_RENOVACAO_INTERVALO_MS:60000}
     tamanho-lote: ${APP_RENOVACAO_TAMANHO_LOTE:100}

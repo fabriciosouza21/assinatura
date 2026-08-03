@@ -15,7 +15,10 @@ import org.hibernate.type.SqlTypes;
  *
  * <p>Nasce em {@link OutboxStatus#PENDENTE} e transita para {@link OutboxStatus#PUBLICADO} quando o
  * Kafka confirma o envio, ou para {@link OutboxStatus#FALHA} apos esgotar as tentativas (DLQ
- * persistida). O {@code payload} carrega o evento serializado em JSON.
+ * persistida). Apos o timeout da DLQ, o {@link OutboxRecuperacaoScheduler} promove o evento de
+ * {@code FALHA} para {@link OutboxStatus#RETENTATIVA_DLQ}, que retorna ao ciclo normal de
+ * publicacao; esgotar as tentativas de novo devolve o evento a {@code FALHA}, e o ciclo se repete
+ * ate o limite de ciclos de recuperacao. O {@code payload} carrega o evento serializado em JSON.
  */
 @Entity
 @Table(name = "outbox")
@@ -40,6 +43,7 @@ public class OutboxEvent {
   private Instant publicadoEm;
   private Instant falhouEm;
   private String ultimoErro;
+  private short ciclosRecuperacao;
 
   /** Construtor sem argumentos exigido pelo provedor JPA. */
   protected OutboxEvent() {}
@@ -113,6 +117,26 @@ public class OutboxEvent {
     this.status = OutboxStatus.FALHA;
     this.ultimoErro = erro;
     this.falhouEm = falhouEm;
+  }
+
+  /**
+   * Recupera automaticamente um evento em {@link OutboxStatus#FALHA} apos o timeout da DLQ,
+   * iniciando um novo ciclo de tentativas de publicacao.
+   *
+   * <p>Zera o contador de tentativas para a politica de retry rodar completa novamente, incrementa
+   * o contador de ciclos de recuperacao e agenda a proxima tentativa para o instante recebido,
+   * tornando o evento elegivel sem reaplicar o timeout da DLQ. O limite de ciclos nao e verificado
+   * aqui: a elegibilidade de recuperacao e decidida na selecao do repositorio ({@code
+   * ciclos_recuperacao < maxCiclos}).
+   *
+   * @param proximaTentativa instante em que o evento volta a ficar elegivel para publicacao, ja com
+   *     o jitter de recuperacao aplicado pelo scheduler
+   */
+  public void recuperarParaRetentativa(Instant proximaTentativa) {
+    this.status = OutboxStatus.RETENTATIVA_DLQ;
+    this.ciclosRecuperacao++;
+    this.tentativas = 0;
+    this.proximaTentativaEm = proximaTentativa;
   }
 
   /**
@@ -212,5 +236,14 @@ public class OutboxEvent {
    */
   public Instant getFalhouEm() {
     return falhouEm;
+  }
+
+  /**
+   * Retorna o numero de ciclos de recuperacao automatica ja realizados.
+   *
+   * @return contador de ciclos de recuperacao
+   */
+  public int getCiclosRecuperacao() {
+    return ciclosRecuperacao;
   }
 }

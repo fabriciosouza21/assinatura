@@ -4,12 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,11 +54,14 @@ import org.springframework.test.context.TestPropertySource;
       "app.kafka.rotas-evento-topico.RenovacaoSolicitada=renovacao-solicitada",
       "app.outbox.intervalo-ms=60000",
       "app.outbox.tamanho-lote=10",
+      "app.outbox.backoff-inicial-segundos=0",
+      "app.outbox.jitter-millis=0",
     })
 class OutboxPublisherIntegracaoTest {
 
   @Autowired private OutboxRepository outboxRepository;
   @Autowired private OutboxPublisher publisher;
+  @Autowired private OutboxRecuperacaoScheduler recuperacaoScheduler;
   @Autowired private KafkaListenerEndpointRegistry listenerRegistry;
   @Autowired private CapturadorEventoAssinaturaSolicitada capturadorAssinatura;
   @Autowired private CapturadorEventoRenovacaoSolicitada capturadorRenovacao;
@@ -108,6 +113,55 @@ class OutboxPublisherIntegracaoTest {
 
   private CapturadorEvento capturadorDo(String topico) {
     return "renovacao-solicitada".equals(topico) ? capturadorRenovacao : capturadorAssinatura;
+  }
+
+  @Test
+  @DisplayName("Deve recuperar evento da DLQ e publica-lo no topico correspondente")
+  void deveRecuperarEventoDaDlqPublicarNoTopico() {
+    OutboxEvent evento = eventoEmFalhaRecuperavel();
+    outboxRepository.saveAndFlush(evento);
+
+    recuperacaoScheduler.recuperarFalhas();
+
+    OutboxEvent recuperado = outboxRepository.findById(evento.getEventId()).orElseThrow();
+    assertThat(recuperado.getStatus())
+        .as("Evento em falha e promovido para RETENTATIVA_DLQ")
+        .isEqualTo(OutboxStatus.RETENTATIVA_DLQ);
+
+    publisher.publicarPendentes();
+
+    await()
+        .atMost(Duration.ofSeconds(10))
+        .untilAsserted(
+            () -> {
+              ConsumerRecord<String, String> registro = capturadorAssinatura.ultimoRegistro();
+              assertThat(registro)
+                  .as("Evento recuperado publicado no topico de assinatura")
+                  .isNotNull();
+              assertThat(registro.key())
+                  .as("Key de roteamento igual ao aggregateId")
+                  .isEqualTo("33333333-3333-3333-3333-333333333333");
+              assertThat(registro.value())
+                  .as("Payload do evento recuperado")
+                  .contains("33333333-3333-3333-3333-333333333333");
+            });
+
+    OutboxEvent publicado = outboxRepository.findById(evento.getEventId()).orElseThrow();
+    assertThat(publicado.getStatus())
+        .as("Evento recuperado transita para PUBLICADO")
+        .isEqualTo(OutboxStatus.PUBLICADO);
+  }
+
+  private static OutboxEvent eventoEmFalhaRecuperavel() {
+    OutboxEvent evento =
+        OutboxEvent.criar(
+            UUID.randomUUID(),
+            "Assinatura",
+            UUID.fromString("33333333-3333-3333-3333-333333333333"),
+            "AssinaturaSolicitada",
+            "{\"eventId\":\"x\",\"assinaturaId\":\"33333333-3333-3333-3333-333333333333\"}");
+    evento.marcarFalha("timeout", Instant.now().minusSeconds(3700));
+    return evento;
   }
 
   private CapturadorEvento capturadorDoOutro(String topico) {
