@@ -16,6 +16,10 @@ import org.springframework.kafka.config.TopicBuilder;
 @Configuration
 public class KafkaTopicsConfig {
 
+  private static final int PARTICOES_DLQ = 3;
+  private static final int REPLICACAO_DLQ = 1;
+  private static final String RETENCAO_DLQ_MS = "604800000";
+
   /**
    * Declara o topico consumido da adesao.
    *
@@ -29,11 +33,16 @@ public class KafkaTopicsConfig {
   /**
    * Declara a DLQ do topico consumido da adesao.
    *
-   * @return topico {@code assinatura-solicitada-dlq}
+   * @return topico {@code assinatura-solicitada-dlq} com 3 particoes, fator de replicacao 1 e
+   *     retencao de 7 dias
    */
   @Bean
   public NewTopic assinaturaSolicitadaDlq() {
-    return TopicBuilder.name("assinatura-solicitada-dlq").build();
+    return TopicBuilder.name("assinatura-solicitada-dlq")
+        .partitions(PARTICOES_DLQ)
+        .replicas(REPLICACAO_DLQ)
+        .config("retention.ms", RETENCAO_DLQ_MS)
+        .build();
   }
 
   /**
@@ -59,11 +68,16 @@ public class KafkaTopicsConfig {
   /**
    * Declara a DLQ do topico consumido da renovacao.
    *
-   * @return topico {@code renovacao-solicitada-dlq}
+   * @return topico {@code renovacao-solicitada-dlq} com 3 particoes, fator de replicacao 1 e
+   *     retencao de 7 dias
    */
   @Bean
   public NewTopic renovacaoSolicitadaDlq() {
-    return TopicBuilder.name("renovacao-solicitada-dlq").build();
+    return TopicBuilder.name("renovacao-solicitada-dlq")
+        .partitions(PARTICOES_DLQ)
+        .replicas(REPLICACAO_DLQ)
+        .config("retention.ms", RETENCAO_DLQ_MS)
+        .build();
   }
 
   /**
@@ -79,11 +93,16 @@ public class KafkaTopicsConfig {
   /**
    * Declara a DLQ do topico produzido com o resultado da renovacao.
    *
-   * @return topico {@code renovacao-resultado-dlq}
+   * @return topico {@code renovacao-resultado-dlq} com 3 particoes, fator de replicacao 1 e
+   *     retencao de 7 dias
    */
   @Bean
   public NewTopic renovacaoResultadoDlq() {
-    return TopicBuilder.name("renovacao-resultado-dlq").build();
+    return TopicBuilder.name("renovacao-resultado-dlq")
+        .partitions(PARTICOES_DLQ)
+        .replicas(REPLICACAO_DLQ)
+        .config("retention.ms", RETENCAO_DLQ_MS)
+        .build();
   }
 
   /**
@@ -99,11 +118,16 @@ public class KafkaTopicsConfig {
   /**
    * Declara a DLQ do topico consumido de cancelamento agendado.
    *
-   * @return topico {@code cancelamento-agendado-dlq}
+   * @return topico {@code cancelamento-agendado-dlq} com 3 particoes, fator de replicacao 1 e
+   *     retencao de 7 dias
    */
   @Bean
   public NewTopic cancelamentoAgendadoDlq() {
-    return TopicBuilder.name("cancelamento-agendado-dlq").build();
+    return TopicBuilder.name("cancelamento-agendado-dlq")
+        .partitions(PARTICOES_DLQ)
+        .replicas(REPLICACAO_DLQ)
+        .config("retention.ms", RETENCAO_DLQ_MS)
+        .build();
   }
 
   /**
@@ -119,10 +143,15 @@ public class KafkaTopicsConfig {
   /**
    * Declara a DLQ do topico consumido de assinatura cancelada.
    *
-   * @return topico {@code assinatura-cancelada-dlq}
+   * @return topico {@code assinatura-cancelada-dlq} com 3 particoes, fator de replicacao 1 e
+   *     retencao de 7 dias
    */
   @Bean
   public NewTopic assinaturaCanceladaDlq() {
-    return TopicBuilder.name("assinatura-cancelada-dlq").build();
+    return TopicBuilder.name("assinatura-cancelada-dlq")
+        .partitions(PARTICOES_DLQ)
+        .replicas(REPLICACAO_DLQ)
+        .config("retention.ms", RETENCAO_DLQ_MS)
+        .build();
   }
 }
