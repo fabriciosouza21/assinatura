@@ -1,5 +1,6 @@
 package com.globo.assinatura.shared.kafka;
 
+import java.util.Map;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,6 +28,10 @@ import tools.jackson.core.JacksonException;
 @EnableScheduling
 @EnableConfigurationProperties(RotasEventoTopicoProperties.class)
 public class MessagingConfig {
+
+  private static final int PARTICOES_DLQ = 3;
+  private static final short REPLICACAO_DLQ = 1;
+  private static final String RETENCAO_DLQ_MS = "604800000";
 
   /**
    * Declara o topico de eventos {@code AssinaturaSolicitada}.
@@ -109,13 +114,17 @@ public class MessagingConfig {
   /**
    * Cria o topico DLQ de status de pagamento atualizado.
    *
+   * <p>A configuracao de particoes, fator de replicacao e retencao e fixa no bean, sem depender de
+   * defaults do broker.
+   *
    * @param nome nome do topico definido em {@code app.kafka.topico-pagamento-status-atualizado-dlq}
-   * @return topico com 1 particao e fator de replicacao 1
+   * @return topico com 3 particoes, fator de replicacao 1 e retencao de 7 dias
    */
   @Bean
   public NewTopic topicoPagamentoStatusAtualizadoDlq(
       @Value("${app.kafka.topico-pagamento-status-atualizado-dlq}") String nome) {
-    return new NewTopic(nome, 1, (short) 1);
+    return new NewTopic(nome, PARTICOES_DLQ, REPLICACAO_DLQ)
+        .configs(Map.of("retention.ms", RETENCAO_DLQ_MS));
   }
 
   /**
@@ -133,13 +142,17 @@ public class MessagingConfig {
   /**
    * Cria o topico DLQ de resultado de renovacao.
    *
+   * <p>A configuracao de particoes, fator de replicacao e retencao e fixa no bean, sem depender de
+   * defaults do broker.
+   *
    * @param nome nome do topico definido em {@code app.kafka.topico-renovacao-resultado-dlq}
-   * @return topico com 1 particao e fator de replicacao 1
+   * @return topico com 3 particoes, fator de replicacao 1 e retencao de 7 dias
    */
   @Bean
   public NewTopic topicoRenovacaoResultadoDlq(
       @Value("${app.kafka.topico-renovacao-resultado-dlq}") String nome) {
-    return new NewTopic(nome, 1, (short) 1);
+    return new NewTopic(nome, PARTICOES_DLQ, REPLICACAO_DLQ)
+        .configs(Map.of("retention.ms", RETENCAO_DLQ_MS));
   }
 
   /**
