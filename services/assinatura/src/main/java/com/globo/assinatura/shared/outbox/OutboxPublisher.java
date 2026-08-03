@@ -106,7 +106,7 @@ public class OutboxPublisher {
           .addKeyValue("event", "outbox_publicacao_falhou")
           .addKeyValue("eventId", evento.getEventId())
           .addKeyValue("attempt", tentativas)
-          .addKeyValue("reasonCode", mensagem(erro))
+          .addKeyValue("reasonCode", "envio_falhou")
           .log("Tentativa de publicacao da outbox falhou");
       evento.registrarFalha(
           mensagem(erro), Instant.now().plus(retryPolicy.calcularProximoAtraso(tentativas)));

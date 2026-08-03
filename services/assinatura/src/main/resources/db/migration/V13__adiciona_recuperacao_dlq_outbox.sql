@@ -6,5 +6,5 @@ CREATE INDEX idx_outbox_polling
     WHERE status IN ('PENDENTE', 'RETENTATIVA_DLQ');
 
 CREATE INDEX idx_outbox_recuperacao_dlq
-    ON outbox (falhou_em)
+    ON outbox (falhou_em, ciclos_recuperacao)
     WHERE status = 'FALHA';
