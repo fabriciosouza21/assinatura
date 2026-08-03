@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.globo.pagamento.cobranca.Plano;
 import com.globo.pagamento.gateway.CobrancaCriada;
+import com.globo.pagamento.gateway.CobrancaGatewayIndisponivelException;
 import com.globo.pagamento.gateway.GatewayPagamentoClient;
 import com.globo.pagamento.renovacao.StatusTentativa;
 import com.globo.pagamento.renovacao.TentativaCobranca;
@@ -69,14 +70,14 @@ class CobrancaRenovacaoSchedulerIntegracaoTest {
     jdbcTemplate.update(
         "INSERT INTO pagamento_renovacao (renovacao_id, assinatura_id, plano, valor,"
             + " ciclo_referencia) VALUES (?, ?, ?, ?, ?)",
-        "renov-1",
-        "assinatura-1",
+        "00000000-0000-0000-0000-000000000031",
+        "00000000-0000-0000-0000-000000000011",
         Plano.BASICO.name(),
         new BigDecimal("19.90"),
         2);
     jdbcTemplate.update(
         "INSERT INTO tentativa_cobranca (renovacao_id, numero, status) VALUES (?, ?, ?)",
-        "renov-1",
+        "00000000-0000-0000-0000-000000000031",
         1,
         StatusTentativa.PENDENTE.name());
   }
@@ -111,9 +112,35 @@ class CobrancaRenovacaoSchedulerIntegracaoTest {
         .isTrue();
   }
 
+  @Test
+  @DisplayName("Deve esgotar a renovacao ao atingir o teto de falhas tecnicas")
+  void deveEsgotarAoAtingirTetoDeFalhasTecnicas() {
+    when(gateway.criarCobrancaRenovacao(any(), anyInt(), any()))
+        .thenThrow(new CobrancaGatewayIndisponivelException());
+
+    for (int ciclo = 1; ciclo <= 3; ciclo++) {
+      scheduler.cobrar();
+    }
+
+    TentativaCobranca tentativa = tentativaCobrancaRepository.findAll().getFirst();
+    assertThat(tentativa.getStatus())
+        .as("Teto de falhas tecnicas esgota a tentativa")
+        .isEqualTo(StatusTentativa.TENTATIVAS_ESGOTADA);
+    assertThat(tentativa.getFalhasTecnicas())
+        .as("Contador de falhas tecnicas persistido")
+        .isEqualTo(3);
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM outbox WHERE event_type = 'RenovacaoTentativasEsgotadas'",
+                Integer.class))
+        .as("Evento terminal gravado na outbox")
+        .isEqualTo(1);
+  }
+
   @AfterEach
   void limparTabelas() {
     jdbcTemplate.update("DELETE FROM tentativa_cobranca");
     jdbcTemplate.update("DELETE FROM pagamento_renovacao");
+    jdbcTemplate.update("DELETE FROM outbox");
   }
 }
