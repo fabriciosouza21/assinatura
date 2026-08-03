@@ -78,6 +78,13 @@ app:
       PagamentoStatusAtualizado: ${APP_KAFKA_ROTAS_PAGAMENTO_STATUS_ATUALIZADO:pagamento-status-atualizado}
       PagamentoRenovacaoAprovado: ${APP_KAFKA_ROTAS_PAGAMENTO_RENOVACAO_APROVADO:renovacao-resultado}
       RenovacaoTentativasEsgotadas: ${APP_KAFKA_ROTAS_RENOVACAO_TENTATIVAS_ESGOTADAS:renovacao-resultado}
+    replay:
+      # Listener de replay da DLQ de consumer, desligado por padrao. O operador
+      # liga (true) e reinicia o servico quando quer drenar os topicos *-dlq.
+      auto-startup: ${APP_KAFKA_REPLAY_AUTO_STARTUP:false}
+      # Intervalo entre republicacoes de uma mesma mensagem que continua falhando
+      # no consumer original (bounce), em milissegundos. Default: 1 hora (3600000).
+      backoff-interval-ms: ${APP_KAFKA_REPLAY_BACKOFF_INTERVAL_MS:3600000}
   outbox:
     intervalo-ms: ${APP_OUTBOX_INTERVALO_MS:5000}
     tamanho-lote: ${APP_OUTBOX_TAMANHO_LOTE:100}
