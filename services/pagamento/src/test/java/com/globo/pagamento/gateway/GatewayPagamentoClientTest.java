@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.util.retry.Retry;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -122,6 +124,41 @@ class GatewayPagamentoClientTest {
     assertThatThrownBy(() -> client.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90")))
         .as("falha tecnica do gateway deve virar excecao de dominio")
         .isInstanceOf(CobrancaGatewayIndisponivelException.class);
+  }
+
+  @Test
+  @DisplayName("Deve retentar com backoff quando o gateway responde 500 e depois 201")
+  void deveRetentarComBackoffAposErroTransitorioDoGateway() throws Exception {
+    server.enqueue(new MockResponse().setResponseCode(500));
+    server.enqueue(
+        new MockResponse()
+            .setHeader("Content-Type", "application/json")
+            .setBody(
+                jsonMapper.writeValueAsString(
+                    new CreatePaymentResponse(
+                        "pay_renov", "renov-123", new BigDecimal("19.90"), "BRL", "PIX")))
+            .setResponseCode(201));
+    GatewayPagamentoClient clientComRetry =
+        new GatewayPagamentoClient(
+            WebClient.builder().baseUrl(server.url("/").toString()).build(),
+            "http://pagamento:8080/webhooks/payments",
+            Retry.backoff(3, Duration.ofMillis(5)));
+
+    CobrancaCriada cobranca =
+        clientComRetry.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90"));
+
+    assertThat(cobranca.paymentId())
+        .as("payment id retornado apos retry com sucesso")
+        .isEqualTo("pay_renov");
+    assertThat(server.getRequestCount()).as("quantidade de tentativas no gateway").isEqualTo(2);
+    RecordedRequest primeiraTentativa = server.takeRequest();
+    RecordedRequest segundaTentativa = server.takeRequest();
+    assertThat(primeiraTentativa.getHeader("Idempotency-Key"))
+        .as("Idempotency-Key da primeira tentativa")
+        .isEqualTo("renov-123:1");
+    assertThat(segundaTentativa.getHeader("Idempotency-Key"))
+        .as("Idempotency-Key da segunda tentativa")
+        .isEqualTo("renov-123:1");
   }
 
   @Test

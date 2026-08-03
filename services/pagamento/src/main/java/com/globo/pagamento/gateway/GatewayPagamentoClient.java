@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientException;
+import reactor.util.retry.Retry;
 
 /**
  * Client do gateway de pagamento. Encapsula a chamada {@code POST /v1/payments} com a chave de
@@ -17,16 +18,29 @@ public class GatewayPagamentoClient {
 
   private final WebClient webClient;
   private final String notificationUrl;
+  private final Retry retry;
 
   /**
-   * Cria o client.
+   * Cria o client sem politica de retry, executando uma unica tentativa por chamada.
    *
    * @param webClient web client configurado com a base url do gateway
    * @param notificationUrl url para notificacoes de webhook futuras
    */
   public GatewayPagamentoClient(WebClient webClient, String notificationUrl) {
+    this(webClient, notificationUrl, Retry.max(0).filter(ignored -> false));
+  }
+
+  /**
+   * Cria o client com politica de retry para a criacao de cobrancas de renovacao.
+   *
+   * @param webClient web client configurado com a base url do gateway
+   * @param notificationUrl url para notificacoes de webhook futuras
+   * @param retry politica de retry do Reactor aplicada a criacao de cobrancas de renovacao
+   */
+  public GatewayPagamentoClient(WebClient webClient, String notificationUrl, Retry retry) {
     this.webClient = webClient;
     this.notificationUrl = notificationUrl;
+    this.retry = retry;
   }
 
   /**
@@ -81,6 +95,7 @@ public class GatewayPagamentoClient {
               .bodyValue(request)
               .retrieve()
               .bodyToMono(CreatePaymentResponse.class)
+              .retryWhen(retry)
               .block();
       return new CobrancaCriada(response.id());
     } catch (WebClientException e) {
