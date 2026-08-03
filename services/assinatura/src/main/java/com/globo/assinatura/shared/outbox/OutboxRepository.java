@@ -1,9 +1,12 @@
 package com.globo.assinatura.shared.outbox;
 
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -60,4 +63,18 @@ public interface OutboxRepository extends JpaRepository<OutboxEvent, UUID> {
       @Param("limiteFalhouEm") Instant limiteFalhouEm,
       @Param("maxCiclos") int maxCiclos,
       @Param("tamanhoLote") int tamanhoLote);
+
+  /**
+   * Busca um evento pelo identificador, bloqueando a linha para escrita ate o fim da transacao.
+   *
+   * <p>Garante que chamadas concorrentes de retomada manual sobre o mesmo evento se serializem: a
+   * segunda transacao aguarda o lock e observa o status ja transicionado, abortando a propria
+   * retomada.
+   *
+   * @param eventId identificador do evento
+   * @return evento encontrado, ou vazio se nao existir
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("SELECT e FROM OutboxEvent e WHERE e.eventId = :eventId")
+  Optional<OutboxEvent> buscarPorIdComLock(@Param("eventId") UUID eventId);
 }
