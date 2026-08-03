@@ -12,9 +12,9 @@ O desafio exige um sistema de assinaturas com adesão, renovação automática n
 dia do vencimento, suspensão após três cobranças recusadas e cancelamento que
 mantém o acesso até o fim do ciclo. Este roadmap consolida a entrega do início
 ao fim: o que já está em `develop` (marcado como concluído) e o que falta
-(recuperação manual, observabilidade, replay de DLQ e fechamento de release,
-marcados como pendentes). Todas as lacunas de robustez e aderência ao enunciado
-foram fechadas nos PRs #32 a #36.
+(recuperação manual, observabilidade, replay de DLQ de consumer, configuração
+de DLTs e fechamento de release, marcados como pendentes). Todas as lacunas de
+robustez e aderência ao enunciado foram fechadas nos PRs #32 a #36.
 
 Todas as regras obrigatórias do enunciado já estão implementadas:
 
@@ -104,10 +104,15 @@ _Nenhuma frente aberta no Pagamento Service._
 
 ### BE-27 — Replay da DLQ de consumer
 `feat/replay-dlq-consumer`
-- Mensagens dos tópicos `-dlq` dos consumers ficam paradas sem caminho de
-  reprocessamento.
-- Replay sob controle operacional reprocessa pelo fluxo original preservando a
-  idempotência por `event_id`.
+- Mensagens dos tópicos `-dlq` dos consumers ficam retidas no Kafka após esgotar
+  as retentativas do `DefaultErrorHandler`.
+- Um `@KafkaListener` próprio consome os `*-dlq`, desligado por padrão
+  (`autoStartup` via `APP_KAFKA_REPLAY_AUTO_STARTUP`), e republica a mensagem no
+  tópico original lido do header `kafka_dlt-original-topic`. O BackOff do listener
+  de replay é longo (default 1h), distinto do retry curto dos consumers normais.
+- Os guards de idempotência existentes (`eventId` e chave natural) absorvem o
+  reprocessamento. Não há caminho automático pela outbox: a DLQ de consumer é
+  falha de consumo, disjunta da falha de publicação tratada pelo BE-24.
 
 ### BE-28 — Configuração operacional dos DLTs e logging
 `feat/config-operacional-dlt`
@@ -149,14 +154,14 @@ Convenção: `[x]` no `develop` · `[~]` em andamento (worktree ativa) · `[ ]` 
 | 8 | Recuperação manual assistida da outbox (BE-26) | 5 | [ ] |
 | 9 | Configuração operacional dos DLTs e logging (BE-28) | 5, 6 | [ ] |
 | 10 | Testes de integração com Testcontainers (INT-2) | 3-9 | [ ] |
-| 11 | Changelog + bump versão 0.5.0 (DOCS-5) | 3-10 | [ ] |
+| 11 | Changelog + bump versão 0.5.0 (DOCS-5) | 3-9 | [ ] |
 
 **Próxima frente:** BE-27 (item 6) é o único independente que pode abrir agora,
-pois toca `shared/kafka` (replay de DLQ de consumer), área distinta da outbox.
-BE-25 e BE-26 (itens 7, 8) dependem do BE-24, já entregue, e também podem abrir
-em paralelo entre si desde que em worktrees separadas por serviço, pois ambas
-tocam `shared/outbox`. Em sequência fica BE-28, que precisa de BE-24 e BE-27
-landados para alinhar logging e configuração de DLT.
+pois toca `shared/kafka`, área distinta da outbox. BE-25 e BE-26 (itens 7, 8)
+dependem do BE-24 (já entregue) e também podem abrir em paralelo entre si em
+worktrees separadas por serviço, pois ambas tocam `shared/outbox`. Em sequência
+fica BE-28, que precisa do BE-24 e do BE-27 landados para alinhar logging e
+configurar os tópicos DLT.
 
 **Numeração de migrations (após BE-20 e BE-24):** Assinatura em V13, Pagamento
 em V11. Próximo número livre: V14 (Assinatura) e V12 (Pagamento). Coordenar ao

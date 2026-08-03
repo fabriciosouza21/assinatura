@@ -66,9 +66,11 @@ e **por quê**. Detalhe completo nas ADRs (`docs/adr/`) e PRDs (`docs/prd/`).
   conhecido antes do commit. Semântica *at-least-once*, com dedup no consumo.
 - **Retry com backoff exponencial + jitter (3 tentativas) na outbox.** Absorve
   tremores curtos do broker sem martelá-lo.
-- **`FALHA` é terminal, sem recuperação automática.** Dívida explícita (BE-24).
-  Eventos esgotados ficam persistidos como DLQ para reprocessamento manual até
-  existir métrica (BE-25) e replay assistido (BE-26, BE-27).
+- **`FALHA` recuperável.** O BE-24 promove eventos em `FALHA` de volta ao ciclo
+  de publicação após quarentena, com limite de ciclos e `FOR UPDATE SKIP LOCKED`.
+- **DLQ de consumer com replay por configuração.** Um `@KafkaListener` dedicado,
+  desligado por padrão, republica mensagens dos tópicos `*-dlq` no tópico original
+  (BE-27).
 - **Idempotência por `event_id` nos consumers.** `ON CONFLICT DO NOTHING` ou
   `existsByEventId`. Uma reentrega do Kafka nunca duplica efeito de negócio.
 

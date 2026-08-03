@@ -63,6 +63,14 @@ A DLT (`renovacao-solicitada-dlq`, `renovacao-resultado-dlq`) é a fila morta do
 **consumidor**. Significa: o evento chegou ao Kafka, mas quem consome não conseguiu
 processar. Diferente da `FALHA` do outbox (que mora no banco), a DLT mora no Kafka.
 
+O replay da DLT de consumer é feito por um `@KafkaListener` dedicado, desligado por
+padrão (`APP_KAFKA_REPLAY_AUTO_STARTUP=false`) e com BackOff longo (default 1h),
+que republica a mensagem no tópico original lido do header
+`kafka_dlt-original-topic`. Os guards de idempotência dos consumers absorvem o
+reprocessamento. Não há caminho pela outbox: a DLT de consumer é falha de consumo,
+disjunta da falha de publicação tratada pelo BE-24. Detalhes no PRD
+`docs/prd/2026-08-03-replay-dlq-consumer.md`.
+
 ## 3. Retentativa de cobrança (negócio)
 
 **Alvo:** cobrar a renovação no gateway *após uma decisão de recusa*.
