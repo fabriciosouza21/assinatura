@@ -5,9 +5,11 @@ import static org.assertj.core.api.Assertions.byLessThan;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -29,7 +31,13 @@ class OutboxRecuperacaoSchedulerTest {
 
   @BeforeEach
   void setUp() {
-    scheduler = new OutboxRecuperacaoScheduler(outboxRepository, 3600L, 3, 100);
+    scheduler =
+        new OutboxRecuperacaoScheduler(
+            outboxRepository,
+            new RetryPolicy(3, Duration.ofSeconds(1), Duration.ofMillis(500)),
+            3600L,
+            3,
+            100);
   }
 
   @Test
@@ -61,6 +69,23 @@ class OutboxRecuperacaoSchedulerTest {
     assertThat(limiteCapturado.getValue())
         .as("Limite e aproximadamente agora menos o timeout de 3600s")
         .isCloseTo(Instant.now().minusSeconds(3600), byLessThan(2, ChronoUnit.SECONDS));
+  }
+
+  @Test
+  @DisplayName("Nao deve abortar o lote quando um evento falha ao recuperar")
+  void naoDeveAbortarLoteQuandoEventoFalhaAoRecuperar() {
+    OutboxEvent primeiro = eventoEmFalha();
+    OutboxEvent segundo = eventoEmFalha();
+    when(outboxRepository.buscarRecuperaveis(any(Instant.class), anyInt(), anyInt()))
+        .thenReturn(List.of(primeiro, segundo));
+    doThrow(new RuntimeException("falha ao salvar")).when(outboxRepository).save(primeiro);
+
+    scheduler.recuperarFalhas();
+
+    verify(outboxRepository).save(segundo);
+    assertThat(segundo.getStatus())
+        .as("Evento posterior ao que falhou continua recuperado")
+        .isEqualTo(OutboxStatus.RETENTATIVA_DLQ);
   }
 
   private static OutboxEvent eventoEmFalha() {

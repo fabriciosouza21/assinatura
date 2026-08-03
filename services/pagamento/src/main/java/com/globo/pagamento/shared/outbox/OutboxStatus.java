@@ -14,7 +14,8 @@ public enum OutboxStatus {
   FALHA,
   /**
    * Promovido automaticamente de {@link #FALHA} apos o timeout da DLQ, para um novo ciclo de
-   * tentativas de publicacao.
+   * tentativas de publicacao. Ao esgotar as tentativas de novo, o evento retorna a {@link #FALHA},
+   * permanecendo elegivel a recuperacao ate o limite de ciclos.
    */
   RETENTATIVA_DLQ
 }
