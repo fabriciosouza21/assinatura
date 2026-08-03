@@ -17,6 +17,11 @@ import java.time.Instant;
  * nasce {@link StatusTentativa#PENDENTE}, sem {@code paymentId} e sem {@code proximaTentativaEm}: o
  * scheduler que cobra a tentativa no gateway preenche esses campos.
  *
+ * <p>Falhas tecnicas do gateway (indisponibilidade, timeout) nao decidem a tentativa, mas ficam
+ * contabilizadas em {@code falhasTecnicas}: o scheduler zera o contador quando o gateway se
+ * recupera e a cobranca e criada, e esgota a tentativa pelo {@link #esgotar()} quando o teto
+ * configurado e atingido.
+ *
  * <p>A construcao e responsabilidade de {@link PagamentoRenovacao}, que gera a sequencia de {@code
  * numero}. As transicoes de decisao do gateway sao feitas pelo webhook a partir do status oficial
  * do gateway. Um cancelamento administrativo ou de ciclo pode marcar a tentativa como {@link
@@ -38,6 +43,8 @@ public class TentativaCobranca {
   private StatusTentativa status;
 
   private String paymentId;
+
+  private int falhasTecnicas;
 
   private Instant proximaTentativaEm;
 
@@ -120,10 +127,55 @@ public class TentativaCobranca {
   /**
    * Registra o identificador da cobranca criada no gateway de pagamento.
    *
+   * <p>Uma cobranca criada significa que o gateway se recuperou das falhas tecnicas: o contador
+   * {@code falhasTecnicas} e zerado, e o ciclo prossegue como se nenhuma falha tivesse ocorrido.
+   *
    * @param paymentId identificador da cobranca no gateway
+   * @throws IllegalStateException se a tentativa ja tiver sido decidida
    */
   public void registrarCobranca(String paymentId) {
+    exigirPendente();
     this.paymentId = paymentId;
+    this.falhasTecnicas = 0;
+  }
+
+  /**
+   * Retorna o numero de falhas tecnicas consecutivas do gateway nesta tentativa.
+   *
+   * <p>Falhas tecnicas (indisponibilidade, timeout) nao decidem a tentativa; o scheduler as
+   * contabiliza e zera o contador quando a cobranca e criada com sucesso.
+   *
+   * @return contador de falhas tecnicas consecutivas
+   */
+  public int getFalhasTecnicas() {
+    return falhasTecnicas;
+  }
+
+  /**
+   * Contabiliza uma falha tecnica do gateway nesta tentativa.
+   *
+   * @throws IllegalStateException se a tentativa ja tiver sido decidida
+   */
+  public void registrarFalhaTecnica() {
+    exigirPendente();
+    this.falhasTecnicas++;
+  }
+
+  /**
+   * Informa se o teto de falhas tecnicas configurado foi atingido.
+   *
+   * <p>Com o teto atingido, o scheduler esgota a tentativa pelo {@link #esgotar()}, tirando a
+   * renovacao da cobranca eterna e suspendendo a assinatura pelo fluxo existente.
+   *
+   * @param teto numero de falhas tecnicas consecutivas que esgota a tentativa; deve ser maior que 0
+   * @return {@code true} quando o contador alcanca ou ultrapassa o teto
+   * @throws IllegalArgumentException se {@code teto} for menor ou igual a 0
+   */
+  public boolean esgotouFalhasTecnicas(int teto) {
+    if (teto < 1) {
+      throw new IllegalArgumentException("teto deve ser maior que 0");
+    }
+    return falhasTecnicas >= teto;
   }
 
   /**
@@ -178,7 +230,10 @@ public class TentativaCobranca {
   }
 
   /**
-   * Marca a tentativa como a recusa que esgota o ciclo, sem nova tentativa.
+   * Marca a tentativa como esgotada do ciclo, sem nova tentativa.
+   *
+   * <p>O ciclo esgota pela recusa da ultima tentativa (decisao do webhook) ou pelo teto de falhas
+   * tecnicas do gateway atingido (decisao do scheduler).
    *
    * @throws IllegalStateException se a tentativa ja tiver sido decidida
    */

@@ -59,6 +59,99 @@ class TentativaCobrancaTest {
   }
 
   @Test
+  @DisplayName("Deve registrar falha tecnica incrementando o contador")
+  void deveRegistrarFalhaTecnica() {
+    TentativaCobranca tentativa = new TentativaCobranca("renov-uuid", 1);
+
+    tentativa.registrarFalhaTecnica();
+    tentativa.registrarFalhaTecnica();
+
+    assertThat(tentativa.getFalhasTecnicas())
+        .as("Contador de falhas tecnicas consecutivas")
+        .isEqualTo(2);
+    assertThat(tentativa.getStatus())
+        .as("Falha tecnica nao decide a tentativa")
+        .isEqualTo(StatusTentativa.PENDENTE);
+  }
+
+  @Test
+  @DisplayName("Deve esgotar as falhas tecnicas quando o contador alcanca o teto")
+  void deveEsgotarFalhasTecnicasQuandoContadorAlcancaTeto() {
+    TentativaCobranca tentativa = new TentativaCobranca("renov-uuid", 1);
+
+    tentativa.registrarFalhaTecnica();
+    tentativa.registrarFalhaTecnica();
+    tentativa.registrarFalhaTecnica();
+
+    assertThat(tentativa.esgotouFalhasTecnicas(3))
+        .as("Teto alcancado com tres falhas tecnicas consecutivas")
+        .isTrue();
+    assertThat(tentativa.esgotouFalhasTecnicas(4))
+        .as("Teto maior que o contador nao esgota")
+        .isFalse();
+  }
+
+  @Test
+  @DisplayName("Deve esgotar as falhas tecnicas quando o teto e igual a um")
+  void deveEsgotarComTetoUm() {
+    TentativaCobranca tentativa = new TentativaCobranca("renov-uuid", 1);
+    tentativa.registrarFalhaTecnica();
+
+    assertThat(tentativa.esgotouFalhasTecnicas(1))
+        .as("Primeira falha tecnica esgota com teto minimo")
+        .isTrue();
+  }
+
+  @Test
+  @DisplayName("Deve esgotar as falhas tecnicas quando o contador ultrapassa o teto")
+  void deveEsgotarQuandoContadorUltrapassaTeto() {
+    TentativaCobranca tentativa = new TentativaCobranca("renov-uuid", 1);
+    for (int i = 0; i < 4; i++) {
+      tentativa.registrarFalhaTecnica();
+    }
+
+    assertThat(tentativa.esgotouFalhasTecnicas(3))
+        .as("Contador acima do teto ainda esgota as falhas tecnicas")
+        .isTrue();
+  }
+
+  @Test
+  @DisplayName("Deve zerar o contador de falhas tecnicas quando a cobranca e registrada")
+  void deveZerarContadorDeFalhasTecnicasAoRegistrarCobranca() {
+    TentativaCobranca tentativa = new TentativaCobranca("renov-uuid", 1);
+    tentativa.registrarFalhaTecnica();
+    tentativa.registrarFalhaTecnica();
+
+    tentativa.registrarCobranca("pay-123");
+
+    assertThat(tentativa.getFalhasTecnicas())
+        .as("Gateway recuperado zera o contador antes do teto")
+        .isZero();
+  }
+
+  @Test
+  @DisplayName("Deve recusar registrar falha tecnica em tentativa ja decidida")
+  void deveRecusarRegistrarFalhaTecnicaEmTentativaJaDecidida() {
+    TentativaCobranca tentativa = new TentativaCobranca("renov-uuid", 1);
+    tentativa.recusar();
+
+    assertThatThrownBy(tentativa::registrarFalhaTecnica)
+        .as("Tentativa ja decidida nao pode acumular falha tecnica")
+        .isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
+  @DisplayName("Deve recusar registrar cobranca em tentativa ja decidida")
+  void deveRecusarRegistrarCobrancaEmTentativaJaDecidida() {
+    TentativaCobranca tentativa = new TentativaCobranca("renov-uuid", 1);
+    tentativa.esgotar();
+
+    assertThatThrownBy(() -> tentativa.registrarCobranca("pay-1"))
+        .as("Tentativa ja decidida nao pode receber nova cobranca")
+        .isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
   @DisplayName("Deve cancelar tentativa pendente")
   void deveCancelarTentativaPendente() {
     TentativaCobranca tentativa = new TentativaCobranca("renov-uuid", 1);
