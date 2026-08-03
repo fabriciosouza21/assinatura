@@ -92,7 +92,7 @@ class ArquiteturaTest {
           .that()
           .haveSimpleNameEndingWith("Consumer")
           .and()
-          .resideOutsideOfPackage("..shared..")
+          .resideOutsideOfPackage("..shared.kafka.replay..")
           .should()
           .resideInAnyPackage("..evento..");
 

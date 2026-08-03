@@ -44,7 +44,7 @@ class ReplayDlqKafkaConfigTest {
 
     ConcurrentKafkaListenerContainerFactory<String, String> factory =
         config.replayKafkaListenerContainerFactory(
-            consumerFactory, new ReplayDlqProperties(INTERVALO_MS));
+            consumerFactory, new ReplayDlqProperties(INTERVALO_MS, 3));
 
     assertThat(factory.getConsumerFactory())
         .as("Fabrica de consumidores aplicada")

@@ -41,6 +41,7 @@ class ReplayDlqConsumerTest {
   private static final String CHAVE = "550e8400-e29b-41d4-a716-446655440000";
   private static final String PAYLOAD = "{\"tipo\":\"APROVADO\"}";
   private static final long INTERVALO_MS = 3600000L;
+  private static final int MAX_BOUNCES = 3;
 
   @Mock private KafkaTemplate<String, String> kafkaTemplate;
   @Mock private Acknowledgment acknowledgment;
@@ -49,7 +50,8 @@ class ReplayDlqConsumerTest {
 
   @BeforeEach
   void setUp() {
-    consumer = new ReplayDlqConsumer(kafkaTemplate, new ReplayDlqProperties(INTERVALO_MS));
+    consumer =
+        new ReplayDlqConsumer(kafkaTemplate, new ReplayDlqProperties(INTERVALO_MS, MAX_BOUNCES));
   }
 
   @Test
@@ -78,6 +80,9 @@ class ReplayDlqConsumerTest {
     assertThat(publicado.value()).as("Payload bruta preservada no replay").isEqualTo(PAYLOAD);
     assertThat(publicado.headers().lastHeader(ReplayDlqConsumer.HEADER_REPUBLICACAO))
         .as("Marcador de republicacao presente no envio")
+        .isNotNull();
+    assertThat(publicado.headers().lastHeader(ReplayDlqConsumer.HEADER_TENTATIVAS))
+        .as("Contador de republicacoes presente no envio")
         .isNotNull();
   }
 
@@ -127,7 +132,99 @@ class ReplayDlqConsumerTest {
     consumer.republicar(registro, acknowledgment);
 
     verifyNoInteractions(kafkaTemplate);
-    verify(acknowledgment).nack(any(Duration.class));
+    ArgumentCaptor<Duration> duracaoCaptor = ArgumentCaptor.forClass(Duration.class);
+    verify(acknowledgment).nack(duracaoCaptor.capture());
+    assertThat(duracaoCaptor.getValue())
+        .as("Adiamento do bounce limitado ao intervalo do replay")
+        .isBetween(Duration.ofMillis(1), Duration.ofMillis(INTERVALO_MS));
+  }
+
+  @Test
+  @DisplayName("Deve descartar e confirmar quando o topico original nao corresponde a DLQ")
+  void deveDescartarTopicoOriginalForaDaDlq() {
+    var registro = new ConsumerRecord<>(TOPICO_DLQ, 0, 0L, CHAVE, PAYLOAD);
+    registro
+        .headers()
+        .add(
+            new RecordHeader(
+                KafkaHeaders.DLT_ORIGINAL_TOPIC,
+                "assinatura-solicitada".getBytes(StandardCharsets.UTF_8)));
+
+    consumer.republicar(registro, acknowledgment);
+
+    verifyNoInteractions(kafkaTemplate);
+    verify(acknowledgment).acknowledge();
+  }
+
+  @Test
+  @DisplayName("Deve descartar e confirmar quando o teto de republicacoes do bounce e atingido")
+  void deveDescartarBouncesAcimaDoTeto() {
+    var registro = new ConsumerRecord<>(TOPICO_DLQ, 0, 0L, CHAVE, PAYLOAD);
+    registro
+        .headers()
+        .add(
+            new RecordHeader(
+                KafkaHeaders.DLT_ORIGINAL_TOPIC, TOPICO_ORIGINAL.getBytes(StandardCharsets.UTF_8)));
+    registro
+        .headers()
+        .add(
+            new RecordHeader(
+                ReplayDlqConsumer.HEADER_TENTATIVAS, "3".getBytes(StandardCharsets.UTF_8)));
+
+    consumer.republicar(registro, acknowledgment);
+
+    verifyNoInteractions(kafkaTemplate);
+    verify(acknowledgment).acknowledge();
+  }
+
+  @Test
+  @DisplayName("Deve republicar quando o marcador de republicacao esta ilegivel")
+  void deveRepublicarQuandoMarcadorIlegivel() throws Exception {
+    var registro = new ConsumerRecord<>(TOPICO_DLQ, 0, 0L, CHAVE, PAYLOAD);
+    registro
+        .headers()
+        .add(
+            new RecordHeader(
+                KafkaHeaders.DLT_ORIGINAL_TOPIC, TOPICO_ORIGINAL.getBytes(StandardCharsets.UTF_8)));
+    registro
+        .headers()
+        .add(
+            new RecordHeader(
+                ReplayDlqConsumer.HEADER_REPUBLICACAO,
+                "nao-numerico".getBytes(StandardCharsets.UTF_8)));
+    CompletableFuture<SendResult<String, String>> futuro = CompletableFuture.completedFuture(null);
+
+    when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(futuro);
+
+    consumer.republicar(registro, acknowledgment);
+
+    verify(kafkaTemplate).send(any(ProducerRecord.class));
+    verify(acknowledgment).acknowledge();
+  }
+
+  @Test
+  @DisplayName("Deve republicar quando o marcador esta fora da janela valida do intervalo")
+  void deveRepublicarQuandoMarcadorForaDaJanela() throws Exception {
+    var registro = new ConsumerRecord<>(TOPICO_DLQ, 0, 0L, CHAVE, PAYLOAD);
+    registro
+        .headers()
+        .add(
+            new RecordHeader(
+                KafkaHeaders.DLT_ORIGINAL_TOPIC, TOPICO_ORIGINAL.getBytes(StandardCharsets.UTF_8)));
+    registro
+        .headers()
+        .add(
+            new RecordHeader(
+                ReplayDlqConsumer.HEADER_REPUBLICACAO,
+                Long.toString(Long.MAX_VALUE).getBytes(StandardCharsets.UTF_8)));
+    CompletableFuture<SendResult<String, String>> futuro = CompletableFuture.completedFuture(null);
+
+    when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(futuro);
+
+    consumer.republicar(registro, acknowledgment);
+
+    verify(kafkaTemplate).send(any(ProducerRecord.class));
+    verify(acknowledgment).acknowledge();
   }
 
   @Test

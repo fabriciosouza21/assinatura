@@ -23,10 +23,12 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.KafkaHeaders;
@@ -72,24 +74,35 @@ class ReplayDlqConsumerIntegracaoTest {
 
   private static final String TOPICO_ORIGINAL = "assinatura-solicitada";
   private static final String TOPICO_DLQ = "assinatura-solicitada-dlq";
-  private static final String ASSINATURA_ID = "66666666-6666-6666-6666-666666666666";
-  private static final String EVENT_ID = "55555555-5555-5555-5555-555555555555";
 
   @Autowired private CobrancaRepository cobrancaRepository;
   @Autowired private KafkaTemplate<String, String> kafkaTemplate;
   @Autowired private ObjectMapper objectMapper;
   @Autowired private EmbeddedKafkaBroker embeddedKafka;
 
+  @Value("${app.kafka.replay.backoff-interval-ms}")
+  private long intervaloReplayMs;
+
+  private UUID assinaturaId;
+  private UUID eventId;
+
+  @BeforeEach
+  void setUp() {
+    assinaturaId = UUID.randomUUID();
+    eventId = UUID.randomUUID();
+  }
+
   @Test
   @DisplayName("Deve republicar a mensagem da DLQ no topico original com a mesma chave e payload")
   void deveRepublicarDlqNoTopicoOriginal() throws Exception {
-    cobrancaRepository.save(new Cobranca(ASSINATURA_ID, "payment-123", StatusCobranca.PENDING));
+    cobrancaRepository.save(
+        new Cobranca(assinaturaId.toString(), "payment-123", StatusCobranca.PENDING));
     AssinaturaSolicitada evento =
         new AssinaturaSolicitada(
-            UUID.fromString(EVENT_ID),
+            eventId,
             Instant.parse("2026-07-30T12:00:00Z"),
-            UUID.fromString(ASSINATURA_ID),
-            UUID.fromString("44444444-4444-4444-4444-444444444444"),
+            assinaturaId,
+            UUID.randomUUID(),
             Plano.BASICO,
             new BigDecimal("19.90"));
     String payload = objectMapper.writeValueAsString(evento);
@@ -108,14 +121,16 @@ class ReplayDlqConsumerIntegracaoTest {
                 coletar(observador, republicadas);
                 assertThat(republicadas)
                     .as("Topico original recebeu a mensagem da DLQ")
-                    .anyMatch(registro -> registro.value().contains(EVENT_ID));
+                    .anyMatch(registro -> registro.value().contains(eventId.toString()));
               });
       ConsumerRecord<String, String> republicada =
           republicadas.stream()
-              .filter(registro -> registro.value().contains(EVENT_ID))
+              .filter(registro -> registro.value().contains(eventId.toString()))
               .findFirst()
               .orElseThrow();
-      assertThat(republicada.key()).as("Chave preservada no replay").isEqualTo(ASSINATURA_ID);
+      assertThat(republicada.key())
+          .as("Chave preservada no replay")
+          .isEqualTo(assinaturaId.toString());
       assertThat(republicada.headers().lastHeader(ReplayDlqConsumer.HEADER_REPUBLICACAO))
           .as("Marcador de republicacao anexado")
           .isNotNull();
@@ -141,7 +156,8 @@ class ReplayDlqConsumerIntegracaoTest {
                 return contar(republicadas, "isto-nao-e-json-2") >= 1;
               });
 
-      long fimDaJanela = System.currentTimeMillis() + 3500;
+      long janelaSemSegundaRepublicacao = intervaloReplayMs - 1500;
+      long fimDaJanela = System.currentTimeMillis() + janelaSemSegundaRepublicacao;
       while (System.currentTimeMillis() < fimDaJanela) {
         coletar(observador, republicadas);
       }
@@ -165,7 +181,7 @@ class ReplayDlqConsumerIntegracaoTest {
             new ProducerRecord<>(
                 TOPICO_DLQ,
                 null,
-                ASSINATURA_ID,
+                assinaturaId.toString(),
                 payload,
                 List.of(
                     new RecordHeader(
@@ -180,7 +196,7 @@ class ReplayDlqConsumerIntegracaoTest {
             new ProducerRecord<>(
                 TOPICO_DLQ,
                 null,
-                ASSINATURA_ID,
+                assinaturaId.toString(),
                 payload,
                 List.of(
                     new RecordHeader(

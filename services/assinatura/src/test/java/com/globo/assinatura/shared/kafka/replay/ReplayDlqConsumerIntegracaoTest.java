@@ -29,6 +29,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.KafkaHeaders;
@@ -77,20 +78,25 @@ class ReplayDlqConsumerIntegracaoTest {
   @Autowired private ObjectMapper objectMapper;
   @Autowired private EmbeddedKafkaBroker embeddedKafka;
 
+  @Value("${app.kafka.replay.backoff-interval-ms}")
+  private long intervaloReplayMs;
+
   @Test
   @DisplayName("Deve republicar a mensagem da DLQ no topico original com a mesma chave e payload")
   void deveRepublicarDlqNoTopicoOriginal() throws Exception {
-    Usuario usuario = usuarioRepository.save(new Usuario("Fulano", "fulano.replay@example.com"));
+    String email = "replay-%s@example.com".formatted(UUID.randomUUID());
+    Usuario usuario = usuarioRepository.save(new Usuario("Fulano", email));
     Assinatura assinatura =
         assinaturaRepository.saveAndFlush(new Assinatura(usuario.getId(), Plano.BASICO));
     UUID assinaturaId = UUID.fromString(assinatura.getUuid());
+    UUID eventId = UUID.randomUUID();
     PagamentoStatusAtualizado evento =
         new PagamentoStatusAtualizado(
-            UUID.fromString("77777777-7777-7777-7777-777777777777"),
+            eventId,
             Instant.parse("2026-07-30T12:00:00Z"),
             assinaturaId,
             StatusPagamento.APPROVED,
-            UUID.fromString("88888888-8888-8888-8888-888888888888"));
+            UUID.randomUUID());
     String payload = objectMapper.writeValueAsString(evento);
 
     try (KafkaConsumer<String, String> observador = consumidor(TOPICO_ORIGINAL)) {
@@ -107,13 +113,11 @@ class ReplayDlqConsumerIntegracaoTest {
                 coletar(observador, republicadas);
                 assertThat(republicadas)
                     .as("Topico original recebeu a mensagem da DLQ")
-                    .anyMatch(
-                        registro ->
-                            registro.value().contains("77777777-7777-7777-7777-777777777777"));
+                    .anyMatch(registro -> registro.value().contains(eventId.toString()));
               });
       ConsumerRecord<String, String> republicada =
           republicadas.stream()
-              .filter(registro -> registro.value().contains("77777777-7777-7777-7777-777777777777"))
+              .filter(registro -> registro.value().contains(eventId.toString()))
               .findFirst()
               .orElseThrow();
       assertThat(republicada.key()).as("Chave preservada no replay").isEqualTo(CHAVE);
@@ -153,7 +157,8 @@ class ReplayDlqConsumerIntegracaoTest {
                 return contar(republicadas, "isto-nao-e-json-2") >= 1;
               });
 
-      long fimDaJanela = System.currentTimeMillis() + 3500;
+      long janelaSemSegundaRepublicacao = intervaloReplayMs - 1500;
+      long fimDaJanela = System.currentTimeMillis() + janelaSemSegundaRepublicacao;
       while (System.currentTimeMillis() < fimDaJanela) {
         coletar(observador, republicadas);
       }
