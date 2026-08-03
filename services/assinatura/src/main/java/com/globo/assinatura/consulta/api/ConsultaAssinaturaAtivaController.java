@@ -35,7 +35,7 @@ public class ConsultaAssinaturaAtivaController {
    */
   @GetMapping("/ativa")
   public AssinaturaResponse consultarAtiva(@AuthenticationPrincipal UsuarioAutenticado principal) {
-    if (principal.usuarioId() == null) {
+    if (principal.usuarioId() == null || principal.usuarioId().isBlank()) {
       throw new AcessoNegadoException();
     }
     return consultarAssinaturaAtiva

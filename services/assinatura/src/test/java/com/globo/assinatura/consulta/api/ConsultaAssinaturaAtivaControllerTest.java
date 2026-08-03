@@ -1,5 +1,6 @@
 package com.globo.assinatura.consulta.api;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -102,6 +103,22 @@ class ConsultaAssinaturaAtivaControllerTest {
         .andExpect(status().isForbidden())
         .andExpect(content().string(""));
 
-    verify(consultarAssinaturaAtiva, never()).executar(org.mockito.ArgumentMatchers.any());
+    verify(consultarAssinaturaAtiva, never()).executar(any());
+  }
+
+  @Test
+  @DisplayName("Deve retornar 403 quando o usuarioId do token e vazio")
+  void deveRetornarForbiddenQuandoUsuarioIdVazio() throws Exception {
+    UsuarioAutenticado principal = new UsuarioAutenticado("cliente@example.com", "", "ROLE_CLIENT");
+    Authentication token =
+        new UsernamePasswordAuthenticationToken(
+            principal, null, List.of(new SimpleGrantedAuthority(principal.role())));
+
+    mockMvc
+        .perform(get("/assinaturas/ativa").with(authentication(token)))
+        .andExpect(status().isForbidden())
+        .andExpect(content().string(""));
+
+    verify(consultarAssinaturaAtiva, never()).executar(any());
   }
 }

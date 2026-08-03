@@ -117,4 +117,24 @@ class ListaAssinaturasControllerTest {
             org.mockito.ArgumentMatchers.anyInt(),
             org.mockito.ArgumentMatchers.anyInt());
   }
+
+  @Test
+  @DisplayName("Deve retornar 403 quando o usuarioId do token e vazio")
+  void deveRetornarForbiddenQuandoUsuarioIdVazio() throws Exception {
+    UsuarioAutenticado principal = new UsuarioAutenticado("cliente@example.com", "", "ROLE_CLIENT");
+    Authentication token =
+        new UsernamePasswordAuthenticationToken(
+            principal, null, List.of(new SimpleGrantedAuthority(principal.role())));
+
+    mockMvc
+        .perform(get("/assinaturas").with(authentication(token)))
+        .andExpect(status().isForbidden())
+        .andExpect(content().string(""));
+
+    verify(listarAssinaturas, never())
+        .executar(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.anyInt(),
+            org.mockito.ArgumentMatchers.anyInt());
+  }
 }
