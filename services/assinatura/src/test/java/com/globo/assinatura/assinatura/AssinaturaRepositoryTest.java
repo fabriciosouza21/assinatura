@@ -64,4 +64,18 @@ class AssinaturaRepositoryTest {
         .as("Indice unico parcial impede segunda assinatura aberta")
         .isInstanceOf(DataIntegrityViolationException.class);
   }
+
+  @Test
+  @DisplayName("Deve impedir nova assinatura quando usuario tem assinatura em renovacao")
+  void deveImpedirNovaAssinaturaQuandoUsuarioTemAssinaturaEmRenovacao() {
+    Usuario usuario = usuarioRepository.save(new Usuario("Beltrano", "beltrano@example.com"));
+    Assinatura primeira = assinaturaRepository.save(new Assinatura(usuario.getId(), Plano.BASICO));
+    primeira.iniciarRenovacao();
+    assinaturaRepository.saveAndFlush(primeira);
+
+    assertThatThrownBy(
+            () -> assinaturaRepository.saveAndFlush(new Assinatura(usuario.getId(), Plano.PREMIUM)))
+        .as("Indice unico parcial impede nova assinatura durante renovacao")
+        .isInstanceOf(DataIntegrityViolationException.class);
+  }
 }
