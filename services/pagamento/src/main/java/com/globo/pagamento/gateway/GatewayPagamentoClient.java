@@ -113,17 +113,31 @@ public class GatewayPagamentoClient {
   /**
    * Consulta o status oficial da cobranca no gateway.
    *
+   * <p>Falhas tecnicas de WebClient e a exaustao do retry sao envolvidas em {@link
+   * CobrancaGatewayIndisponivelException}; demais excecoes propagam, distinguindo falha tecnica de
+   * bug.
+   *
    * @param paymentId identificador da cobranca no gateway
    * @return status oficial reportado pelo gateway
    */
   public StatusGateway consultarStatus(String paymentId) {
-    PaymentResponse response =
-        webClient
-            .get()
-            .uri("/v1/payments/{id}", paymentId)
-            .retrieve()
-            .bodyToMono(PaymentResponse.class)
-            .block();
-    return StatusGateway.valueOf(response.status());
+    try {
+      PaymentResponse response =
+          webClient
+              .get()
+              .uri("/v1/payments/{id}", paymentId)
+              .retrieve()
+              .bodyToMono(PaymentResponse.class)
+              .retryWhen(retry)
+              .block();
+      return StatusGateway.valueOf(response.status());
+    } catch (WebClientException e) {
+      throw new CobrancaGatewayIndisponivelException(e);
+    } catch (IllegalStateException e) {
+      if (Exceptions.isRetryExhausted(e)) {
+        throw new CobrancaGatewayIndisponivelException(e);
+      }
+      throw e;
+    }
   }
 }

@@ -230,4 +230,35 @@ class GatewayPagamentoClientTest {
         .as("Path da consulta de status")
         .isEqualTo("/v1/payments/pay_123");
   }
+
+  @Test
+  @DisplayName("Deve retentar a consulta de status apos falha transitoria do gateway")
+  void deveRetentarConsultaDeStatusAposFalhaTransitoriaDoGateway() throws Exception {
+    server.enqueue(new MockResponse().setResponseCode(500));
+    server.enqueue(
+        new MockResponse()
+            .setHeader("Content-Type", "application/json")
+            .setBody(
+                jsonMapper.writeValueAsString(
+                    new PaymentResponse(
+                        "pay_123",
+                        "assinatura-uuid",
+                        new BigDecimal("19.90"),
+                        "BRL",
+                        "PIX",
+                        "APPROVED")))
+            .setResponseCode(200));
+    GatewayPagamentoClient clientComRetry =
+        new GatewayPagamentoClient(
+            WebClient.builder().baseUrl(server.url("/").toString()).build(),
+            "http://pagamento:8080/webhooks/payments",
+            GatewayRetryPolicy.criar(3, Duration.ofMillis(5)));
+
+    StatusGateway status = clientComRetry.consultarStatus("pay_123");
+
+    assertThat(status)
+        .as("Status oficial apos retry com sucesso")
+        .isEqualTo(StatusGateway.APPROVED);
+    assertThat(server.getRequestCount()).as("quantidade de tentativas no gateway").isEqualTo(2);
+  }
 }
