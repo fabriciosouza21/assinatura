@@ -7,5 +7,10 @@ public enum OutboxStatus {
   /** Publicado e confirmado pelo Kafka. */
   PUBLICADO,
   /** Tentativas esgotadas; DLQ persistida para reprocessamento manual. */
-  FALHA
+  FALHA,
+  /**
+   * Promovido automaticamente de {@link #FALHA} apos o timeout da DLQ, para um novo ciclo de
+   * tentativas de publicacao.
+   */
+  RETENTATIVA_DLQ
 }

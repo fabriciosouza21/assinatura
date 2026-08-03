@@ -62,4 +62,18 @@ class OutboxEventTest {
         .as("Status transita para FALHA apos esgotar tentativas")
         .isEqualTo(OutboxStatus.FALHA);
   }
+
+  @Test
+  @DisplayName("Deve marcar como retentativa de DLQ ao recuperar evento em falha")
+  void deveMarcarComoRetentativaDlqAoRecuperar() {
+    OutboxEvent evento =
+        OutboxEvent.criar(EVENT_ID, "Assinatura", AGGREGATE_ID, "AssinaturaSolicitada", "{}");
+    evento.marcarFalha("timeout", Instant.parse("2026-07-30T10:01:00Z"));
+
+    evento.recuperarParaRetentativa(Instant.parse("2026-07-30T11:01:00Z"));
+
+    assertThat(evento.getStatus())
+        .as("Status transita para RETENTATIVA_DLQ apos recuperacao automatica")
+        .isEqualTo(OutboxStatus.RETENTATIVA_DLQ);
+  }
 }

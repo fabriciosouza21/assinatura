@@ -39,6 +39,7 @@ public class OutboxEvent {
   private Instant publicadoEm;
   private Instant falhouEm;
   private String ultimoErro;
+  private short ciclosRecuperacao;
 
   /** Construtor sem argumentos exigido pelo provedor JPA. */
   protected OutboxEvent() {}
@@ -121,6 +122,22 @@ public class OutboxEvent {
     this.status = OutboxStatus.FALHA;
     this.ultimoErro = erro;
     this.falhouEm = falhouEm;
+  }
+
+  /**
+   * Recupera automaticamente um evento em {@link OutboxStatus#FALHA} apos o timeout da DLQ,
+   * iniciando um novo ciclo de tentativas de publicacao.
+   *
+   * <p>Zera o contador de tentativas para a politica de retry rodar completa novamente e incrementa
+   * o contador de ciclos de recuperacao.
+   *
+   * @param agora instante da recuperacao, usado como proxima tentativa
+   */
+  public void recuperarParaRetentativa(Instant agora) {
+    this.status = OutboxStatus.RETENTATIVA_DLQ;
+    this.ciclosRecuperacao++;
+    this.tentativas = 0;
+    this.proximaTentativaEm = agora;
   }
 
   /**
@@ -220,5 +237,14 @@ public class OutboxEvent {
    */
   public String getUltimoErro() {
     return ultimoErro;
+  }
+
+  /**
+   * Retorna o numero de ciclos de recuperacao automatica ja realizados.
+   *
+   * @return contador de ciclos de recuperacao
+   */
+  public int getCiclosRecuperacao() {
+    return ciclosRecuperacao;
   }
 }
