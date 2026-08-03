@@ -87,6 +87,9 @@ app:
     # Tempo de vida das paginas da listagem em segundos; rede de seguranca caso
     # alguma invalidacao falhe.
     assinatura-lista-ttl: ${APP_CACHE_ASSINATURA_LISTA_TTL:300}
+    # Tempo de vida da assinatura ativa em segundos; rede de seguranca caso
+    # alguma invalidacao falhe.
+    assinatura-ativa-ttl: ${APP_CACHE_ASSINATURA_ATIVA_TTL:300}
 
 management:
   endpoints:

@@ -41,7 +41,7 @@ public class ListaAssinaturasController {
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @AuthenticationPrincipal UsuarioAutenticado principal) {
-    if (principal.usuarioId() == null) {
+    if (principal.usuarioId() == null || principal.usuarioId().isBlank()) {
       throw new AcessoNegadoException();
     }
     return listarAssinaturas.executar(

@@ -9,7 +9,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /** Trata as excecoes das queries de leitura de assinatura. */
 @RestControllerAdvice(
-    assignableTypes = {ConsultaAssinaturaController.class, ListaAssinaturasController.class})
+    assignableTypes = {
+      ConsultaAssinaturaController.class,
+      ListaAssinaturasController.class,
+      ConsultaAssinaturaAtivaController.class
+    })
 public class ConsultaExceptionHandler {
 
   /**

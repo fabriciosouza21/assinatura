@@ -1,11 +1,11 @@
 info:
-  name: Consultar assinatura
+  name: Consultar assinatura ativa
   type: http
   seq: 5
 
 http:
   method: GET
-  url: "{{assinaturaUrl}}/assinaturas/{{assinaturaId}}"
+  url: "{{assinaturaUrl}}/assinaturas/ativa"
   headers:
     - name: Authorization
       value: "Bearer {{token}}"
@@ -15,7 +15,7 @@ runtime:
     - type: after-response
       code: |-
         expect(res.getStatus()).to.equal(200);
-        expect(res.body.id).to.equal(bru.getVar("assinaturaId"));
+        expect(res.body.id, "mesma assinatura ativa do dono do token").to.equal(bru.getVar("assinaturaId"));
         expect(res.body.status, "assinatura deve estar ATIVA").to.equal("ATIVA");
         expect(res.body.inicioCiclo, "inicio do ciclo de renovação").to.be.a('string');
         expect(res.body.fimCiclo, "fim do ciclo de renovação").to.be.a('string');

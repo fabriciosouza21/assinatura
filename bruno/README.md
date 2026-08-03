@@ -48,8 +48,10 @@ requests via variáveis capturadas no `after-response`.
 3. **Solicitar assinatura** → envia `Bearer {{token}}` e apenas o `plano`;
    devolve a assinatura com status `AGUARDANDO_PAGAMENTO` e captura
    `assinaturaId`.
-4. **Consultar assinatura** → usa o `assinaturaId` capturado, também com
-   `Bearer {{token}}`, para acompanhar o estado da assinatura.
+4. **Consultar assinatura ativa** → `GET /assinaturas/ativa`, também com
+   `Bearer {{token}}`: devolve a assinatura ATIVA do dono do token, sem precisar
+   do `assinaturaId`. Sem assinatura ativa responde `404`; o `admin` do seed
+   recebe `403`.
 
 > As rotas de assinatura exigem JWT (ADR 0003): sem o passo de **Login** elas
 > respondem `401`. O dono vem do token, então `usuarioId` não é mais enviado no
@@ -89,8 +91,8 @@ id do passo seguinte via `after-response`.
 5. **Simular aprovação** (`api/mock-gateway/simular-aprovacao`) → usa o
    `paymentId` capturado, força `APPROVED` e dispara o webhook que leva a
    assinatura a `ATIVA`.
-6. **Consultar assinatura** → usa o `assinaturaId` capturado, com o mesmo token,
-   para confirmar o status `ATIVA`.
+6. **Consultar assinatura ativa** → usa o mesmo token para confirmar o status
+   `ATIVA` no `GET /assinaturas/ativa`, sem depender do `assinaturaId`.
 
 > O passo **Consultar cobrança** é a ponte entre os dois serviços: sem ele, o
 > `paymentId` fica preso no Pagamento Service e não há como aprovar a cobrança
@@ -152,10 +154,11 @@ este caminho:
 > sinal de que você chegou cedo demais. Após aprovar, um novo `renovacaoId`
 > aparece no passo 2: cada ciclo é uma renovação distinta.
 >
-> O `api/assinatura/consultar-assinatura` do fluxo de adesão exige `ATIVA` e
-> serve para validar a ativação; o `fluxo/renovacao/consultar-assinatura` aceita
-> também `EM_RENOVACAO` e `SUSPENSA`, porque o ciclo fica `EM_RENOVACAO` entre
-> o disparo e a decisão da cobrança.
+> O `api/assinatura/consultar-assinatura-ativa` do fluxo de adesão exige
+> `ATIVA` e serve para validar a ativação; o
+> `fluxo/renovacao/consultar-assinatura` aceita também `EM_RENOVACAO` e
+> `SUSPENSA`, porque o ciclo fica `EM_RENOVACAO` entre o disparo e a decisão da
+> cobrança.
 
 ### Fluxo de esgotamento (suspensão)
 

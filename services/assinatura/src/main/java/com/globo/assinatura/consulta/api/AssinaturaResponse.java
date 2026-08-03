@@ -1,5 +1,6 @@
 package com.globo.assinatura.consulta.api;
 
+import com.globo.assinatura.assinatura.Assinatura;
 import com.globo.assinatura.assinatura.Plano;
 import com.globo.assinatura.assinatura.StatusAssinatura;
 import java.time.Instant;
@@ -31,4 +32,26 @@ public record AssinaturaResponse(
     LocalDate inicioCiclo,
     LocalDate fimCiclo,
     Instant proximaRenovacaoEm,
-    boolean renovacaoAutomatica) {}
+    boolean renovacaoAutomatica) {
+
+  /**
+   * Converte a assinatura persistida na representacao publica de consulta.
+   *
+   * @param assinatura assinatura persistida
+   * @param usuarioUuid uuid publico do usuario dono
+   * @return a representacao publica da assinatura
+   */
+  public static AssinaturaResponse of(Assinatura assinatura, String usuarioUuid) {
+    return new AssinaturaResponse(
+        assinatura.getUuid(),
+        usuarioUuid,
+        assinatura.getPlano(),
+        assinatura.getDataInicio(),
+        assinatura.getDataExpiracao(),
+        assinatura.getStatus(),
+        assinatura.getInicioCiclo(),
+        assinatura.getFimCiclo(),
+        assinatura.getProximaRenovacaoEm(),
+        assinatura.isRenovacaoAutomatica());
+  }
+}
