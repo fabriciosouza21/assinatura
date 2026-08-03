@@ -1,6 +1,7 @@
 package com.globo.assinatura.shared.seguranca;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -77,5 +78,14 @@ class JwtServiceTest {
     assertThat(jwtService.extrairPrincipal("nao-e-um-jwt"))
         .as("Token malformado deve ser rejeitado")
         .isEmpty();
+  }
+
+  @Test
+  @DisplayName("Deve falhar ao construir com segredo em branco")
+  void deveFalharComSegredoEmBranco() {
+    assertThatThrownBy(() -> new JwtService("", 3600000L))
+        .as("Segredo em branco deve impedir o startup com mensagem clara")
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("APP_JWT_SECRET");
   }
 }

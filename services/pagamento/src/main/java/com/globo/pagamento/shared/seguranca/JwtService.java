@@ -38,6 +38,9 @@ public class JwtService {
   public JwtService(
       @Value("${app.jwt.secret}") String secret,
       @Value("${app.jwt.expiration-ms}") long expirationMillis) {
+    if (secret == null || secret.isBlank()) {
+      throw new IllegalStateException("APP_JWT_SECRET deve ser definida com um segredo HMAC");
+    }
     this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     this.expirationMillis = expirationMillis;
   }

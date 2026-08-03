@@ -1,2 +1,7 @@
 # Perfil de desenvolvimento local.
 # Sobrescreve valores via .env (ver .env.example). Use SPRING_PROFILES_ACTIVE=dev.
+
+app:
+  jwt:
+    # Default apenas para dev local; ambientes nao-dev devem definir APP_JWT_SECRET.
+    secret: ${APP_JWT_SECRET:ZmIxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTA=}
