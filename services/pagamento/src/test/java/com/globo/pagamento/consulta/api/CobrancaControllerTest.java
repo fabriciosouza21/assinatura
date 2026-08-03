@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.globo.pagamento.cobranca.CobrancaNaoEncontradaException;
 import com.globo.pagamento.cobranca.StatusCobranca;
 import com.globo.pagamento.consulta.ConsultarCobranca;
+import com.globo.pagamento.shared.seguranca.JwtService;
 import com.globo.pagamento.shared.seguranca.SecurityConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,7 @@ class CobrancaControllerTest {
 
   @Autowired private MockMvc mockMvc;
   @MockitoBean private ConsultarCobranca consultarCobranca;
+  @MockitoBean private JwtService jwtService;
 
   @Test
   @DisplayName("Deve retornar 200 com paymentId e status quando a cobranca existe")
