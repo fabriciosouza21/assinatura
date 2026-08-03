@@ -15,10 +15,10 @@ spring:
   task:
     scheduling:
       pool:
-        # Schedulers de lote (publisher, recuperacao da DLQ e renovacao) rodam em
-        # threads dedicadas: o envio Kafka bloqueante do publisher nao pode atrasar
-        # os demais jobs agendados.
-        size: ${SPRING_TASK_SCHEDULING_POOL_SIZE:3}
+        # Schedulers de lote (publisher, recuperacao da DLQ, renovacao e metricas
+        # da outbox) rodam em threads dedicadas: o envio Kafka bloqueante do
+        # publisher nao pode atrasar os demais jobs agendados.
+        size: ${SPRING_TASK_SCHEDULING_POOL_SIZE:4}
 
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/assinatura}
@@ -80,6 +80,16 @@ app:
     topico-pagamento-status-atualizado-dlq: ${APP_KAFKA_TOPICO_PAGAMENTO_STATUS_ATUALIZADO_DLQ:pagamento-status-atualizado-dlq}
     topico-renovacao-resultado: ${APP_KAFKA_TOPICO_RENOVACAO_RESULTADO:renovacao-resultado}
     topico-renovacao-resultado-dlq: ${APP_KAFKA_TOPICO_RENOVACAO_RESULTADO_DLQ:renovacao-resultado-dlq}
+    replay:
+      # Listener de replay da DLQ de consumer, desligado por padrao. O operador
+      # liga (true) e reinicia o servico quando quer drenar os topicos *-dlq.
+      auto-startup: ${APP_KAFKA_REPLAY_AUTO_STARTUP:false}
+      # Intervalo entre republicacoes de uma mesma mensagem que continua falhando
+      # no consumer original (bounce), em milissegundos. Default: 1 hora (3600000).
+      backoff-interval-ms: ${APP_KAFKA_REPLAY_BACKOFF_INTERVAL_MS:3600000}
+      # Teto de republicacoes de uma mesma mensagem em bounce. Apos o teto, a
+      # mensagem sai do dreno com erro para nao travar o replay indefinidamente.
+      max-bounces: ${APP_KAFKA_REPLAY_MAX_BOUNCES:3}
   outbox:
     intervalo-ms: ${APP_OUTBOX_INTERVALO_MS:5000}
     tamanho-lote: ${APP_OUTBOX_TAMANHO_LOTE:100}
@@ -90,6 +100,8 @@ app:
       intervalo-ms: ${APP_OUTBOX_DLQ_INTERVALO_MS:60000}
       timeout-segundos: ${APP_OUTBOX_DLQ_TIMEOUT_SEGUNDOS:3600}
       max-ciclos: ${APP_OUTBOX_DLQ_MAX_CICLOS:3}
+    metricas:
+      intervalo-ms: ${APP_OUTBOX_METRICAS_INTERVALO_MS:60000}
   renovacao:
     intervalo-ms: ${APP_RENOVACAO_INTERVALO_MS:60000}
     tamanho-lote: ${APP_RENOVACAO_TAMANHO_LOTE:100}
@@ -109,7 +121,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,prometheus
   tracing:
     sampling:
       probability: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:1.0}

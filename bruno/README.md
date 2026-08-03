@@ -69,6 +69,25 @@ requests via variáveis capturadas no `after-response`.
 3. **Simular aprovação** → força `APPROVED` e dispara o webhook para o serviço
    de pagamento.
 
+## Observabilidade (metricas)
+
+Os dois serviços expõem `GET /actuator/prometheus` no formato do Prometheus,
+sem autenticação (`api/assinatura/metricas-prometheus` e
+`api/pagamento/metricas-prometheus`).
+
+- A métrica **`outbox_eventos`** conta os eventos da outbox por status, com as
+  tags `servico` (`assinatura` | `pagamento`) e `status` (`pendente` |
+  `retentativa_dlq` | `falha`), atualizada a cada
+  `APP_OUTBOX_METRICAS_INTERVALO_MS` (default 60s). O gauge de `falha` é o
+  sinal de evento que esgotou as tentativas e ficou terminal.
+- Junto vêm as métricas de JVM e do Kafka (`jvm_memory_*`,
+  `kafka_producer_*`), além das customizadas como
+  `pagamento_gateway_retry_tentativas`.
+
+Para ver o gauge refletir eventos reais: solicite uma assinatura e, com o
+Kafka parado (`docker compose stop kafka`), o evento fica `pendente` e passa a
+`falha` após esgotar as tentativas do publisher.
+
 ## Fluxo encadeado completo (assinatura)
 
 Ponta a ponta, do cadastro do usuário até a assinatura `ATIVA`, sem editar
@@ -130,6 +149,21 @@ APP_OUTBOX_INTERVALO_MS=1000
 > avançado em mais um ciclo: aprovar → conferir `ATIVA` estável → aguardar
 > `EM_RENOVACAO` no ciclo seguinte. Ciclos de um dia ou mais aguardam dias
 > reais.
+
+## Gotchas
+
+- **`make test-integration` derruba a stack inteira, não só o Postgres.** Os
+  targets `test-integration-clean`/`up` rodam `docker compose -f
+  ../../docker-compose.yml down -v --remove-orphans` — o mesmo projeto compose
+  da raiz, então `down -v` derruba `assinatura`, `pagamento`, `kafka`,
+  `mock-pagamento` e `jaeger` e apaga o volume do Postgres. Não rode os testes
+  de integração numa terminal ao lado de uma stack em uso para testes manuais;
+  depois, suba tudo de novo com `docker compose up -d --build` na raiz.
+- **Erros de `Unable to rollback against JDBC Connection` logo após `docker
+  compose up` são esperados e inofensivos**: um tick agendado do publisher da
+  outbox cai no meio do restart, enquanto o Postgres ainda sobe. Somem em
+  ~20s e o fluxo E2E não é afetado; só se preocupar se continuarem depois do
+  healthcheck ficar verde.
 
 ### Fluxo de aprovação
 

@@ -82,10 +82,11 @@ public interface OutboxRepository extends JpaRepository<OutboxEvent, UUID> {
 
   /**
    * Seleciona paginadamente os eventos em {@code FALHA} para a recuperacao manual assistida,
-   * filtrados por tipo de evento e idade minima da falha.
+   * filtrados por tipo de evento e tempo decorrido desde a falha.
    *
    * @param tipoEvento tipo de evento para filtro exato, ou {@code null} para listar todos
-   * @param limiteFalhouEm somente eventos cuja falha ocorreu ate este instante (idade minima)
+   * @param limiteFalhouEm somente eventos cuja falha ocorreu ate este instante (falhou ha N
+   *     segundos)
    * @param pageable paginacao e ordenacao, sempre por instante da falha do mais antigo
    * @return pagina de eventos em falha do mais antigo ao mais recente
    */
@@ -106,4 +107,23 @@ public interface OutboxRepository extends JpaRepository<OutboxEvent, UUID> {
       @Param("tipoEvento") String tipoEvento,
       @Param("limiteFalhouEm") Instant limiteFalhouEm,
       Pageable pageable);
+
+  /**
+   * Conta os eventos da outbox agrupados por {@code status} monitorado, para alimentar as metricas
+   * de monitoramento do ciclo de publicacao e recuperacao.
+   *
+   * <p>Cada linha contem o nome do status na primeira posicao e a quantidade de eventos na segunda,
+   * uma linha por status existente. Filtra apenas os status monitorados ({@code PENDENTE}, {@code
+   * RETENTATIVA_DLQ} e {@code FALHA}), mantendo a consulta coberta pelos indices parciais em vez de
+   * varrer a tabela inteira.
+   *
+   * @return linhas de status e contagem
+   */
+  @Query(
+      nativeQuery = true,
+      value =
+          "SELECT status, COUNT(*) FROM outbox "
+              + "WHERE status IN ('PENDENTE', 'RETENTATIVA_DLQ', 'FALHA') "
+              + "GROUP BY status")
+  List<Object[]> contarPorStatus();
 }
