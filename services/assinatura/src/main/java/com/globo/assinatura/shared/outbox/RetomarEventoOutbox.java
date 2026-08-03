@@ -46,6 +46,7 @@ public class RetomarEventoOutbox {
    * @param adminId identificador do administrador que dispara a acao, registrado em auditoria
    * @return o evento retomado, ja em {@link OutboxStatus#RETENTATIVA_DLQ}
    * @throws OutboxEventoNaoEncontradoException se nao existir evento com o identificador informado
+   * @throws OutboxEventoNaoRetomavelException se o evento nao estiver em {@link OutboxStatus#FALHA}
    */
   @Transactional
   public OutboxEvent executar(UUID eventId, String adminId) {
@@ -53,6 +54,9 @@ public class RetomarEventoOutbox {
         outboxRepository
             .buscarPorIdComLock(eventId)
             .orElseThrow(() -> new OutboxEventoNaoEncontradoException(eventId));
+    if (evento.getStatus() != OutboxStatus.FALHA) {
+      throw new OutboxEventoNaoRetomavelException(eventId, evento.getStatus());
+    }
     evento.recuperarParaRetentativa(Instant.now().plus(retryPolicy.calcularProximoAtraso(1)));
     outboxRepository.save(evento);
     log.atInfo()

@@ -1,7 +1,9 @@
 package com.globo.assinatura.shared.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.byLessThan;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -55,6 +57,34 @@ class RetomarEventoOutboxTest {
     assertThat(capturado.getValue().getProximaTentativaEm())
         .as("Proxima tentativa proxima de agora mais o backoff inicial")
         .isCloseTo(Instant.now().plusSeconds(1), byLessThan(2, ChronoUnit.SECONDS));
+  }
+
+  @Test
+  @DisplayName("Deve lancar excecao de nao encontrado para eventId inexistente")
+  void deveLancarExcecaoParaEventIdInexistente() {
+    UUID eventId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    when(outboxRepository.buscarPorIdComLock(eventId)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> retomar.executar(eventId, "admin"))
+        .as("Retomada de evento inexistente rejeitada")
+        .isInstanceOf(OutboxEventoNaoEncontradoException.class);
+
+    verify(outboxRepository, never()).save(org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  @DisplayName("Deve rejeitar retomada de evento que nao esta em falha")
+  void deveRejeitarRetomadaDeEventoForaDeFalha() {
+    UUID eventId = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    OutboxEvent evento =
+        OutboxEvent.criar(eventId, "Assinatura", UUID.randomUUID(), "Evento", "{}");
+    when(outboxRepository.buscarPorIdComLock(eventId)).thenReturn(Optional.of(evento));
+
+    assertThatThrownBy(() -> retomar.executar(eventId, "admin"))
+        .as("Retomada de evento fora de FALHA rejeitada")
+        .isInstanceOf(OutboxEventoNaoRetomavelException.class);
+
+    verify(outboxRepository, never()).save(org.mockito.ArgumentMatchers.any());
   }
 
   private static OutboxEvent eventoEmFalha(UUID eventId) {
