@@ -41,4 +41,33 @@ class MessagingConfigTest {
         .as("Replicacao do topico de assinatura cancelada")
         .isEqualTo((short) 1);
   }
+
+  @Test
+  @DisplayName("Deve declarar particoes, replicacao e retencao explicitas nas DLQs")
+  void deveDeclararConfigExplicitaNasDlqs() {
+    MessagingConfig config = new MessagingConfig();
+
+    NewTopic pagamentoStatusAtualizadoDlq =
+        config.topicoPagamentoStatusAtualizadoDlq("pagamento-status-atualizado-dlq");
+    NewTopic renovacaoResultadoDlq = config.topicoRenovacaoResultadoDlq("renovacao-resultado-dlq");
+
+    assertThat(pagamentoStatusAtualizadoDlq.numPartitions())
+        .as("Particoes da DLQ de status de pagamento")
+        .isEqualTo(3);
+    assertThat(pagamentoStatusAtualizadoDlq.replicationFactor())
+        .as("Replicacao da DLQ de status de pagamento")
+        .isEqualTo((short) 1);
+    assertThat(pagamentoStatusAtualizadoDlq.configs())
+        .as("Retencao da DLQ de status de pagamento")
+        .containsEntry("retention.ms", "604800000");
+    assertThat(renovacaoResultadoDlq.numPartitions())
+        .as("Particoes da DLQ de resultado de renovacao")
+        .isEqualTo(3);
+    assertThat(renovacaoResultadoDlq.replicationFactor())
+        .as("Replicacao da DLQ de resultado de renovacao")
+        .isEqualTo((short) 1);
+    assertThat(renovacaoResultadoDlq.configs())
+        .as("Retencao da DLQ de resultado de renovacao")
+        .containsEntry("retention.ms", "604800000");
+  }
 }

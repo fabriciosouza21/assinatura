@@ -7,6 +7,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.globo.assinatura.shared.kafka.RotasEventoTopicoProperties;
 import java.time.Duration;
 import java.time.Instant;
@@ -21,6 +25,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 
 @ExtendWith(MockitoExtension.class)
@@ -202,6 +207,110 @@ class OutboxPublisherTest {
     assertThat(capturado.getValue().getStatus())
         .as("Terceira falha marca o evento como FALHA")
         .isEqualTo(OutboxStatus.FALHA);
+  }
+
+  @Test
+  @DisplayName("Deve registrar log INFO com chaves unificadas ao publicar com sucesso")
+  void deveRegistrarLogInfoComChavesUnificadasAoPublicarComSucesso() {
+    OutboxEvent evento = eventoPendente("AssinaturaSolicitada");
+    when(kafkaTemplate.send(any(), any(), any()))
+        .thenReturn(CompletableFuture.completedFuture(null));
+    when(outboxRepository.buscarPublicaveis(any(Instant.class), eq(100)))
+        .thenReturn(List.of(evento));
+
+    Logger logger = (Logger) LoggerFactory.getLogger(OutboxPublisher.class);
+    logger.setLevel(Level.DEBUG);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      publisher.publicarPendentes();
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .as("Log INFO de publicacao com chaves unificadas")
+        .anyMatch(
+            e ->
+                e.getLevel() == Level.INFO
+                    && contemChave(e, "event", "outbox_publicado")
+                    && contemChave(e, "eventId", evento.getEventId())
+                    && contemChave(e, "aggregateId", evento.getAggregateId())
+                    && contemChave(e, "topico", "assinatura-solicitada"));
+  }
+
+  @Test
+  @DisplayName("Deve registrar log WARN com chaves unificadas na falha temporaria")
+  void deveRegistrarLogWarnComChavesUnificadasAoFalharTemporariamente() {
+    when(kafkaTemplate.send(any(), any(), any()))
+        .thenReturn(CompletableFuture.failedFuture(new RuntimeException("timeout")));
+    OutboxEvent evento = eventoPendente("AssinaturaSolicitada");
+    when(outboxRepository.buscarPublicaveis(any(Instant.class), eq(100)))
+        .thenReturn(List.of(evento));
+
+    Logger logger = (Logger) LoggerFactory.getLogger(OutboxPublisher.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      publisher.publicarPendentes();
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .as("Log WARN de falha temporaria com chaves unificadas")
+        .anyMatch(
+            e ->
+                e.getLevel() == Level.WARN
+                    && contemChave(e, "event", "outbox_publicacao_falhou")
+                    && contemChave(e, "eventId", evento.getEventId())
+                    && contemChave(e, "aggregateId", evento.getAggregateId())
+                    && contemChave(e, "topico", "assinatura-solicitada")
+                    && contemChave(e, "tentativa", 1)
+                    && contemChave(e, "reasonCode", "envio_falhou")
+                    && contemChave(e, "proximaTentativaEm", evento.getProximaTentativaEm()));
+  }
+
+  @Test
+  @DisplayName("Deve registrar log ERROR com causa e chaves unificadas ao esgotar tentativas")
+  void deveRegistrarLogErrorComCausaAoEsgotarTentativas() {
+    when(kafkaTemplate.send(any(), any(), any()))
+        .thenReturn(CompletableFuture.failedFuture(new RuntimeException("indisponivel")));
+    OutboxEvent evento = eventoPendente("AssinaturaSolicitada");
+    evento.registrarFalha("erro1", Instant.now());
+    evento.registrarFalha("erro2", Instant.now());
+    when(outboxRepository.buscarPublicaveis(any(Instant.class), eq(100)))
+        .thenReturn(List.of(evento));
+
+    Logger logger = (Logger) LoggerFactory.getLogger(OutboxPublisher.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      publisher.publicarPendentes();
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .as("Log ERROR de falha terminal com causa e chaves unificadas")
+        .anyMatch(
+            e ->
+                e.getLevel() == Level.ERROR
+                    && e.getThrowableProxy() != null
+                    && contemChave(e, "event", "outbox_publicacao_esgotada")
+                    && contemChave(e, "eventId", evento.getEventId())
+                    && contemChave(e, "aggregateId", evento.getAggregateId())
+                    && contemChave(e, "topico", "assinatura-solicitada")
+                    && contemChave(e, "tentativa", 3)
+                    && contemChave(e, "reasonCode", "tentativas_esgotadas"));
+  }
+
+  private static boolean contemChave(ILoggingEvent evento, String chave, Object valor) {
+    return evento.getKeyValuePairs().stream()
+        .anyMatch(par -> chave.equals(par.key) && valor.equals(par.value));
   }
 
   private static OutboxEvent eventoPendente(String eventType) {

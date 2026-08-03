@@ -163,6 +163,7 @@ void deveAtualizarUsuario() {
 - Todo log deve possuir `event` estável em `snake_case`. Registre valores dinâmicos com `addKeyValue()` e mantenha a mensagem de `log()` curta e sem interpolação.
 - Use `setCause(exception)` somente no ponto que determina a falha definitiva. Não faça `log-and-throw` quando uma camada superior também registrar a exceção.
 - Use `INFO` para resultados relevantes de negócio, `WARN` para degradações recuperáveis, `ERROR` para falhas definitivas e `DEBUG` para retries, idempotência, deduplicação e decisões técnicas.
+- A falha temporária de publicação da outbox é `WARN` (degradação recuperável observável), não `DEBUG`, mesmo sendo uma retentativa. O sucesso da publicação é `INFO`. Veja `docs/guidelines/logging.md` §8.
 - Não registre payloads, credenciais, tokens, PII, objetos completos ou `exception.getMessage()` como campo.
 - Ao migrar código existente, converta para Fluent API apenas os logs dentro do escopo da tarefa. Não refatore logs não relacionados.
 - Toda cadeia Fluent deve terminar com `log()`.

@@ -74,47 +74,55 @@ public class OutboxPublisher {
   }
 
   private void publicar(OutboxEvent evento) {
+    String topico = null;
     try {
-      String topico = rotas.rotasEventoTopico().get(evento.getEventType());
+      topico = rotas.rotasEventoTopico().get(evento.getEventType());
       if (topico == null) {
         throw new IllegalArgumentException(
             "Sem rota mapeada para o eventType: " + evento.getEventType());
       }
       kafkaTemplate.send(topico, evento.getAggregateId().toString(), evento.getPayload()).get();
       evento.marcarPublicado(Instant.now());
-      log.atDebug()
+      log.atInfo()
           .addKeyValue("event", "outbox_publicado")
           .addKeyValue("eventId", evento.getEventId())
-          .addKeyValue("assinaturaId", evento.getAggregateId())
-          .addKeyValue("topic", topico)
+          .addKeyValue("aggregateId", evento.getAggregateId())
+          .addKeyValue("topico", topico)
           .log("Evento da outbox publicado");
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      tratarFalha(evento, e);
+      tratarFalha(evento, e, topico);
     } catch (ExecutionException e) {
-      tratarFalha(evento, e.getCause());
+      tratarFalha(evento, e.getCause(), topico);
     } catch (RuntimeException e) {
-      tratarFalha(evento, e);
+      tratarFalha(evento, e, topico);
     }
     outboxRepository.save(evento);
   }
 
-  private void tratarFalha(OutboxEvent evento, Throwable erro) {
+  private void tratarFalha(OutboxEvent evento, Throwable erro, String topico) {
     int tentativas = evento.getTentativas() + 1;
     if (retryPolicy.temTentativasRestantes(tentativas)) {
-      log.atDebug()
+      Instant proximaTentativaEm =
+          Instant.now().plus(retryPolicy.calcularProximoAtraso(tentativas));
+      evento.registrarFalha(mensagem(erro), proximaTentativaEm);
+      log.atWarn()
           .addKeyValue("event", "outbox_publicacao_falhou")
           .addKeyValue("eventId", evento.getEventId())
-          .addKeyValue("attempt", tentativas)
+          .addKeyValue("aggregateId", evento.getAggregateId())
+          .addKeyValue("topico", topico)
+          .addKeyValue("tentativa", tentativas)
           .addKeyValue("reasonCode", "envio_falhou")
+          .addKeyValue("proximaTentativaEm", proximaTentativaEm)
           .log("Tentativa de publicacao da outbox falhou");
-      evento.registrarFalha(
-          mensagem(erro), Instant.now().plus(retryPolicy.calcularProximoAtraso(tentativas)));
     } else {
       log.atError()
           .addKeyValue("event", "outbox_publicacao_esgotada")
           .addKeyValue("eventId", evento.getEventId())
-          .addKeyValue("attempt", tentativas)
+          .addKeyValue("aggregateId", evento.getAggregateId())
+          .addKeyValue("topico", topico)
+          .addKeyValue("tentativa", tentativas)
+          .addKeyValue("reasonCode", "tentativas_esgotadas")
           .setCause(erro)
           .log("Publicacao da outbox esgotou as tentativas");
       evento.marcarFalha(mensagem(erro), Instant.now());
