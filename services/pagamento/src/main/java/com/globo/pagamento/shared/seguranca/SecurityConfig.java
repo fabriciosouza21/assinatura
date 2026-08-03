@@ -22,8 +22,8 @@ public class SecurityConfig {
   /**
    * Constrói a cadeia de filtros de segurança.
    *
-   * <p>Libera {@code /actuator/health} e {@code /webhooks/payments}; todas as demais rotas exigem
-   * autenticacao.
+   * <p>Libera {@code /actuator/health}, {@code /actuator/prometheus} e {@code /webhooks/payments};
+   * todas as demais rotas exigem autenticacao.
    *
    * @param http o builder de segurança do Spring
    * @return a cadeia de filtros configurada
@@ -35,7 +35,8 @@ public class SecurityConfig {
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             auth ->
-                auth.requestMatchers("/actuator/health", "/webhooks/payments")
+                auth.requestMatchers(
+                        "/actuator/health", "/actuator/prometheus", "/webhooks/payments")
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, "/cobrancas/**", "/renovacoes/**")
                     .permitAll()

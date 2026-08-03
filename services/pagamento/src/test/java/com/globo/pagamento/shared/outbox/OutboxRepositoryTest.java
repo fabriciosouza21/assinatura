@@ -3,8 +3,11 @@ package com.globo.pagamento.shared.outbox;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -144,6 +147,70 @@ class OutboxRepositoryTest {
     assertThat(recuperaveis)
         .as("Evento em FALHA ha menos de 1h nao e elegivel para recuperacao")
         .isEmpty();
+  }
+
+  @Test
+  @DisplayName("Deve contar eventos agrupados por status")
+  void deveContarEventosPorStatus() {
+    final Map<String, Long> antes = contagensPorStatus();
+    outboxRepository.saveAndFlush(
+        OutboxEvent.criar(
+            UUID.randomUUID(), "Cobranca", UUID.randomUUID(), "PagamentoStatusAtualizado", "{}"));
+    outboxRepository.saveAndFlush(
+        OutboxEvent.criar(
+            UUID.randomUUID(), "Cobranca", UUID.randomUUID(), "PagamentoStatusAtualizado", "{}"));
+    OutboxEvent retentativa =
+        outboxRepository.saveAndFlush(
+            OutboxEvent.criar(
+                UUID.randomUUID(),
+                "Cobranca",
+                UUID.randomUUID(),
+                "PagamentoStatusAtualizado",
+                "{}"));
+    retentativa.marcarFalha("timeout", Instant.now());
+    retentativa.recuperarParaRetentativa(Instant.now());
+    outboxRepository.saveAndFlush(retentativa);
+    OutboxEvent falha =
+        outboxRepository.saveAndFlush(
+            OutboxEvent.criar(
+                UUID.randomUUID(),
+                "Cobranca",
+                UUID.randomUUID(),
+                "PagamentoStatusAtualizado",
+                "{}"));
+    falha.marcarFalha("timeout", Instant.now());
+    outboxRepository.saveAndFlush(falha);
+    OutboxEvent publicado =
+        outboxRepository.saveAndFlush(
+            OutboxEvent.criar(
+                UUID.randomUUID(),
+                "Cobranca",
+                UUID.randomUUID(),
+                "PagamentoStatusAtualizado",
+                "{}"));
+    publicado.marcarPublicado(Instant.now());
+    outboxRepository.saveAndFlush(publicado);
+
+    assertThat(deltaEntre(contagensPorStatus(), antes))
+        .as("Incremento de contagem por status apos os eventos criados no teste")
+        .containsOnly(
+            Map.entry("PENDENTE", 2L),
+            Map.entry("RETENTATIVA_DLQ", 1L),
+            Map.entry("FALHA", 1L),
+            Map.entry("PUBLICADO", 1L));
+  }
+
+  private Map<String, Long> contagensPorStatus() {
+    return outboxRepository.contarPorStatus().stream()
+        .collect(
+            Collectors.toMap(linha -> (String) linha[0], linha -> ((Number) linha[1]).longValue()));
+  }
+
+  private static Map<String, Long> deltaEntre(Map<String, Long> depois, Map<String, Long> antes) {
+    Map<String, Long> delta = new HashMap<>(depois);
+    antes.forEach((status, total) -> delta.merge(status, -total, Long::sum));
+    delta.values().removeIf(total -> total == 0L);
+    return delta;
   }
 
   @Test
