@@ -211,6 +211,54 @@ class GatewayPagamentoClientTest {
   }
 
   @Test
+  @DisplayName("Deve retentar quando o gateway responde 429")
+  void deveRetentarQuandoGatewayResponde429() throws Exception {
+    server.enqueue(new MockResponse().setResponseCode(429));
+    server.enqueue(
+        new MockResponse()
+            .setHeader("Content-Type", "application/json")
+            .setBody(
+                jsonMapper.writeValueAsString(
+                    new CreatePaymentResponse(
+                        "pay_renov", "renov-123", new BigDecimal("19.90"), "BRL", "PIX")))
+            .setResponseCode(201));
+    GatewayPagamentoClient clientComRetry =
+        new GatewayPagamentoClient(
+            WebClient.builder().baseUrl(server.url("/").toString()).build(),
+            "http://pagamento:8080/webhooks/payments",
+            GatewayRetryPolicy.criar(3, Duration.ofMillis(5)));
+
+    CobrancaCriada cobranca =
+        clientComRetry.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90"));
+
+    assertThat(cobranca.paymentId())
+        .as("payment id retornado apos retry de 429")
+        .isEqualTo("pay_renov");
+    assertThat(server.getRequestCount())
+        .as("429 e transitorio e deve gerar retentativa")
+        .isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("Nao deve retentar recusa explicita do gateway")
+  void deveNaoRetentarRecusaExplicitaDoGateway() {
+    server.enqueue(new MockResponse().setResponseCode(422));
+    GatewayPagamentoClient clientComRetry =
+        new GatewayPagamentoClient(
+            WebClient.builder().baseUrl(server.url("/").toString()).build(),
+            "http://pagamento:8080/webhooks/payments",
+            GatewayRetryPolicy.criar(3, Duration.ofMillis(5)));
+
+    assertThatThrownBy(
+            () -> clientComRetry.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90")))
+        .as("recusa explicita do gateway deve virar excecao de dominio")
+        .isInstanceOf(CobrancaGatewayIndisponivelException.class);
+    assertThat(server.getRequestCount())
+        .as("recusa explicita nao deve gerar novas tentativas no gateway")
+        .isEqualTo(1);
+  }
+
+  @Test
   @DisplayName("Deve consultar o status oficial da cobranca por paymentId")
   void deveConsultarStatusPorPaymentId() throws Exception {
     server.enqueue(
