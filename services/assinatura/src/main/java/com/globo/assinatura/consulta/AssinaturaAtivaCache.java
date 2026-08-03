@@ -1,18 +1,50 @@
 package com.globo.assinatura.consulta;
 
 import com.globo.assinatura.consulta.api.AssinaturaResponse;
+import com.globo.assinatura.shared.cache.CacheVersionado;
+import java.time.Duration;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Cache-aside da assinatura ativa do usuario, chaveado por uuid publico.
  *
- * <p>Recupera a representacao da assinatura ativa armazenada para o {@code usuarioUuid}; em miss
- * devolve vazio para a camada de consulta buscar no banco. Falha do cache degrada para miss, nunca
- * para erro da consulta.
+ * <p>A chave de dados segue {@code assinatura:ativa:v{n}:{uuid}}, com {@code n} lido do contador de
+ * versao compartilhado com a listagem ({@code assinatura:list:versao:{uuid}}); a invalidacao apos o
+ * commit dos fluxos de escrita ja incrementa esse contador. Em miss devolve vazio para a camada de
+ * consulta buscar no banco. Falha do cache degrada para miss, nunca para erro da consulta.
  */
 @Component
 public class AssinaturaAtivaCache {
+
+  private static final Logger log = LoggerFactory.getLogger(AssinaturaAtivaCache.class);
+
+  private static final String PREFIXO = "assinatura:ativa";
+
+  private final CacheVersionado cache;
+  private final JsonMapper jsonMapper;
+  private final Duration ttl;
+
+  /**
+   * Constroi o cache com as primitivas do Redis, o serializador JSON e o ttl configurado.
+   *
+   * @param cache primitivas de cache distribuido
+   * @param jsonMapper serializador JSON da assinatura ativa
+   * @param ttlSegundos tempo de vida da assinatura ativa em segundos
+   */
+  public AssinaturaAtivaCache(
+      CacheVersionado cache,
+      JsonMapper jsonMapper,
+      @Value("${app.cache.assinatura-ativa-ttl}") long ttlSegundos) {
+    this.cache = cache;
+    this.jsonMapper = jsonMapper;
+    this.ttl = Duration.ofSeconds(ttlSegundos);
+  }
 
   /**
    * Recupera a assinatura ativa cacheada do usuario.
@@ -21,7 +53,30 @@ public class AssinaturaAtivaCache {
    * @return a assinatura ativa, ou vazio em miss ou em falha do cache
    */
   public Optional<AssinaturaResponse> recuperar(String usuarioUuid) {
-    return Optional.empty();
+    String chave = chaveDe(usuarioUuid);
+    Optional<String> possivelJson = cache.recuperar(chave);
+    if (possivelJson.isEmpty()) {
+      log.atInfo()
+          .addKeyValue("event", "assinatura_ativa_cache_miss")
+          .addKeyValue("usuarioId", usuarioUuid)
+          .log("Assinatura ativa ausente no cache");
+      return Optional.empty();
+    }
+    try {
+      AssinaturaResponse assinatura =
+          jsonMapper.readValue(possivelJson.get(), AssinaturaResponse.class);
+      log.atInfo()
+          .addKeyValue("event", "assinatura_ativa_cache_hit")
+          .addKeyValue("usuarioId", usuarioUuid)
+          .log("Assinatura ativa lida do cache");
+      return Optional.of(assinatura);
+    } catch (JacksonException e) {
+      log.atWarn()
+          .addKeyValue("event", "assinatura_ativa_cache_json_invalido")
+          .addKeyValue("usuarioId", usuarioUuid)
+          .log("JSON da assinatura ativa cacheada ilegivel, tratando como miss");
+      return Optional.empty();
+    }
   }
 
   /**
@@ -31,4 +86,17 @@ public class AssinaturaAtivaCache {
    * @param assinatura representacao da assinatura ativa a armazenar
    */
   public void popular(String usuarioUuid, AssinaturaResponse assinatura) {}
+
+  private String chaveDe(String usuarioUuid) {
+    return PREFIXO + ":v" + versaoAtual(usuarioUuid) + ":" + usuarioUuid;
+  }
+
+  private long versaoAtual(String usuarioUuid) {
+    String possivelVersao = cache.recuperar("assinatura:list:versao:" + usuarioUuid).orElse("0");
+    try {
+      return Long.parseLong(possivelVersao);
+    } catch (NumberFormatException e) {
+      return 0;
+    }
+  }
 }
