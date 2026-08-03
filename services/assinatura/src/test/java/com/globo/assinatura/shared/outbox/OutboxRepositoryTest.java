@@ -156,62 +156,39 @@ class OutboxRepositoryTest {
   }
 
   @Test
-  @DisplayName("Deve contar eventos agrupados por status")
+  @DisplayName("Deve contar eventos agrupados por status monitorado")
   void deveContarEventosPorStatus() {
     final Map<String, Long> antes = contagensPorStatus();
     outboxRepository.saveAndFlush(
         OutboxEvent.criar(
-            UUID.fromString("11111111-1111-1111-1111-111111111111"),
-            "Assinatura",
-            UUID.fromString("22222222-2222-2222-2222-222222222222"),
-            "AssinaturaSolicitada",
-            "{}"));
+            UUID.randomUUID(), "Assinatura", UUID.randomUUID(), "AssinaturaSolicitada", "{}"));
     outboxRepository.saveAndFlush(
         OutboxEvent.criar(
-            UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc"),
-            "Assinatura",
-            UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd"),
-            "AssinaturaSolicitada",
-            "{}"));
+            UUID.randomUUID(), "Assinatura", UUID.randomUUID(), "AssinaturaSolicitada", "{}"));
     OutboxEvent retentativa =
         outboxRepository.saveAndFlush(
             OutboxEvent.criar(
-                UUID.fromString("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
-                "Assinatura",
-                UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff"),
-                "AssinaturaSolicitada",
-                "{}"));
+                UUID.randomUUID(), "Assinatura", UUID.randomUUID(), "AssinaturaSolicitada", "{}"));
     retentativa.marcarFalha("timeout", Instant.now());
     retentativa.recuperarParaRetentativa(Instant.now());
     outboxRepository.saveAndFlush(retentativa);
     OutboxEvent falha =
         outboxRepository.saveAndFlush(
             OutboxEvent.criar(
-                UUID.fromString("33333333-3333-3333-3333-333333333333"),
-                "Assinatura",
-                UUID.fromString("44444444-4444-4444-4444-444444444444"),
-                "AssinaturaSolicitada",
-                "{}"));
+                UUID.randomUUID(), "Assinatura", UUID.randomUUID(), "AssinaturaSolicitada", "{}"));
     falha.marcarFalha("timeout", Instant.now());
     outboxRepository.saveAndFlush(falha);
     OutboxEvent publicado =
         outboxRepository.saveAndFlush(
             OutboxEvent.criar(
-                UUID.fromString("55555555-5555-5555-5555-555555555555"),
-                "Assinatura",
-                UUID.fromString("66666666-6666-6666-6666-666666666666"),
-                "AssinaturaSolicitada",
-                "{}"));
+                UUID.randomUUID(), "Assinatura", UUID.randomUUID(), "AssinaturaSolicitada", "{}"));
     publicado.marcarPublicado(Instant.now());
     outboxRepository.saveAndFlush(publicado);
 
     assertThat(deltaEntre(contagensPorStatus(), antes))
-        .as("Incremento de contagem por status apos os eventos criados no teste")
+        .as("Incremento de contagem por status monitorado apos os eventos criados no teste")
         .containsOnly(
-            Map.entry("PENDENTE", 2L),
-            Map.entry("RETENTATIVA_DLQ", 1L),
-            Map.entry("FALHA", 1L),
-            Map.entry("PUBLICADO", 1L));
+            Map.entry("PENDENTE", 2L), Map.entry("RETENTATIVA_DLQ", 1L), Map.entry("FALHA", 1L));
   }
 
   private Map<String, Long> contagensPorStatus() {
