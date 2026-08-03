@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 @ExtendWith(MockitoExtension.class)
 class OutboxMetricasSchedulerTest {
@@ -62,6 +63,34 @@ class OutboxMetricasSchedulerTest {
         .as("Gauge zera quando nao ha mais eventos em falha")
         .isEqualTo(0.0);
     assertThat(gaugeDe("pendente")).as("Gauge permanece zerado").isEqualTo(0.0);
+  }
+
+  @Test
+  @DisplayName("Deve manter gauges inalterados quando a consulta falha")
+  void deveManterGaugesInalteradosQuandoConsultaFalha() {
+    when(outboxRepository.contarPorStatus()).thenReturn(List.<Object[]>of(linha("FALHA", 3L)));
+    scheduler.atualizarMetricas();
+    when(outboxRepository.contarPorStatus())
+        .thenThrow(new DataAccessResourceFailureException("banco indisponivel"));
+
+    scheduler.atualizarMetricas();
+
+    assertThat(gaugeDe("falha"))
+        .as("Gauge preserva o valor anterior quando a consulta falha")
+        .isEqualTo(3.0);
+  }
+
+  @Test
+  @DisplayName("Deve ignorar status desconhecido na consulta")
+  void deveIgnorarStatusDesconhecido() {
+    when(outboxRepository.contarPorStatus())
+        .thenReturn(List.<Object[]>of(linha("FALHA", 3L), linha("STATUS_FUTURO", 9L)));
+
+    scheduler.atualizarMetricas();
+
+    assertThat(gaugeDe("falha"))
+        .as("Gauge dos status conhecidos atualiza mesmo com status desconhecido")
+        .isEqualTo(3.0);
   }
 
   private Double gaugeDe(String status) {
