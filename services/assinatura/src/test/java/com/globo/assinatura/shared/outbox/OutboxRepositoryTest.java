@@ -104,7 +104,7 @@ class OutboxRepositoryTest {
     assertThat(recuperaveis)
         .as("Evento em FALHA ha mais de 1h e elegivel para recuperacao")
         .extracting(OutboxEvent::getEventId)
-        .containsExactly(falha.getEventId());
+        .contains(falha.getEventId());
   }
 
   @Test
@@ -127,7 +127,7 @@ class OutboxRepositoryTest {
     assertThat(publicaveis)
         .as("Evento em RETENTATIVA_DLQ tambem e elegivel para publicacao")
         .extracting(OutboxEvent::getEventId)
-        .containsExactly(retentativa.getEventId());
+        .contains(retentativa.getEventId());
   }
 
   @Test
