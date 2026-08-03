@@ -1,5 +1,6 @@
 package com.globo.pagamento.gateway;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientException;
 import reactor.core.Exceptions;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
@@ -21,6 +23,7 @@ public class GatewayPagamentoClient {
   private final WebClient webClient;
   private final String notificationUrl;
   private final Retry retry;
+  private final MeterRegistry meterRegistry;
 
   /**
    * Cria o client sem politica de retry, executando uma unica tentativa por chamada.
@@ -40,9 +43,24 @@ public class GatewayPagamentoClient {
    * @param retry politica de retry do Reactor aplicada a todas as chamadas ao gateway
    */
   public GatewayPagamentoClient(WebClient webClient, String notificationUrl, Retry retry) {
+    this(webClient, notificationUrl, retry, null);
+  }
+
+  /**
+   * Cria o client com politica de retry e instrumentacao de metricas para cada tentativa de retry.
+   *
+   * @param webClient web client configurado com a base url do gateway
+   * @param notificationUrl url para notificacoes de webhook futuras
+   * @param retry politica de retry do Reactor aplicada a todas as chamadas ao gateway
+   * @param meterRegistry registro de metricas do Micrometer; pode ser {@code null} para desativar a
+   *     instrumentacao de retry
+   */
+  public GatewayPagamentoClient(
+      WebClient webClient, String notificationUrl, Retry retry, MeterRegistry meterRegistry) {
     this.webClient = webClient;
     this.notificationUrl = notificationUrl;
     this.retry = retry;
+    this.meterRegistry = meterRegistry;
   }
 
   /**
@@ -64,7 +82,8 @@ public class GatewayPagamentoClient {
                 .header("Idempotency-Key", assinaturaId)
                 .bodyValue(request)
                 .retrieve()
-                .toEntity(CreatePaymentResponse.class));
+                .toEntity(CreatePaymentResponse.class),
+            "criarCobranca");
     log.atInfo()
         .addKeyValue("event", "cobranca_criada_gateway")
         .addKeyValue("assinaturaId", assinaturaId)
@@ -97,7 +116,8 @@ public class GatewayPagamentoClient {
                 .header("Idempotency-Key", renovacaoId + ":" + numero)
                 .bodyValue(request)
                 .retrieve()
-                .bodyToMono(CreatePaymentResponse.class));
+                .bodyToMono(CreatePaymentResponse.class),
+            "criarCobrancaRenovacao");
     return new CobrancaCriada(response.id());
   }
 
@@ -118,13 +138,21 @@ public class GatewayPagamentoClient {
                 .get()
                 .uri("/v1/payments/{id}", paymentId)
                 .retrieve()
-                .bodyToMono(PaymentResponse.class));
+                .bodyToMono(PaymentResponse.class),
+            "consultarStatus");
     return StatusGateway.valueOf(response.status());
   }
 
-  private <T> T bloquearComRetry(Mono<T> chamada) {
+  private <T> T bloquearComRetry(Mono<T> chamada, String metodo) {
     try {
-      return chamada.retryWhen(retry).block();
+      Retry retryEfetivo =
+          meterRegistry == null
+              ? retry
+              : Retry.from(
+                  companion ->
+                      Flux.from(retry.generateCompanion(companion))
+                          .doOnNext(sinal -> incrementarRetry(metodo)));
+      return chamada.retryWhen(retryEfetivo).block();
     } catch (WebClientException e) {
       throw new CobrancaGatewayIndisponivelException(e);
     } catch (IllegalStateException e) {
@@ -133,5 +161,9 @@ public class GatewayPagamentoClient {
       }
       throw e;
     }
+  }
+
+  private void incrementarRetry(String metodo) {
+    meterRegistry.counter("pagamento.gateway.retry.tentativas", "metodo", metodo).increment();
   }
 }

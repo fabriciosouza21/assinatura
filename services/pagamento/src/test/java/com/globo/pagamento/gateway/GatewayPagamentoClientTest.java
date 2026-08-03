@@ -7,6 +7,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
@@ -332,6 +333,38 @@ class GatewayPagamentoClientTest {
     assertThat(server.getRequestCount())
         .as("quantidade de tentativas no gateway apos timeout")
         .isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("Deve incrementar contador de retry por metodo do gateway")
+  void deveIncrementarContadorDeRetryPorMetodo() throws Exception {
+    server.enqueue(new MockResponse().setResponseCode(500));
+    server.enqueue(
+        new MockResponse()
+            .setHeader("Content-Type", "application/json")
+            .setBody(
+                jsonMapper.writeValueAsString(
+                    new CreatePaymentResponse(
+                        "pay_renov", "renov-123", new BigDecimal("19.90"), "BRL", "PIX")))
+            .setResponseCode(201));
+    SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    GatewayPagamentoClient clientComRetry =
+        new GatewayPagamentoClient(
+            WebClient.builder().baseUrl(server.url("/").toString()).build(),
+            "http://pagamento:8080/webhooks/payments",
+            GatewayRetryPolicy.criar(3, Duration.ofMillis(5)),
+            registry);
+
+    clientComRetry.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90"));
+
+    assertThat(
+            registry
+                .get("pagamento.gateway.retry.tentativas")
+                .tag("metodo", "criarCobrancaRenovacao")
+                .counter()
+                .count())
+        .as("contador de tentativas de retry do metodo criarCobrancaRenovacao")
+        .isEqualTo(1.0);
   }
 
   @Test
