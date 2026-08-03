@@ -74,8 +74,9 @@ public class OutboxPublisher {
   }
 
   private void publicar(OutboxEvent evento) {
+    String topico = null;
     try {
-      String topico = rotas.rotasEventoTopico().get(evento.getEventType());
+      topico = rotas.rotasEventoTopico().get(evento.getEventType());
       if (topico == null) {
         throw new IllegalArgumentException(
             "Sem rota mapeada para o eventType: " + evento.getEventType());
@@ -90,16 +91,16 @@ public class OutboxPublisher {
           .log("Evento publicado no Kafka");
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      tratarFalha(evento, e);
+      tratarFalha(evento, e, topico);
     } catch (ExecutionException e) {
-      tratarFalha(evento, e.getCause());
+      tratarFalha(evento, e.getCause(), topico);
     } catch (RuntimeException e) {
-      tratarFalha(evento, e);
+      tratarFalha(evento, e, topico);
     }
     outboxRepository.save(evento);
   }
 
-  private void tratarFalha(OutboxEvent evento, Throwable erro) {
+  private void tratarFalha(OutboxEvent evento, Throwable erro, String topico) {
     int tentativas = evento.getTentativas() + 1;
     String mensagem = mensagem(erro);
     if (retryPolicy.temTentativasRestantes(tentativas)) {
@@ -108,6 +109,8 @@ public class OutboxPublisher {
       log.atWarn()
           .addKeyValue("event", "outbox_publicacao_falhou")
           .addKeyValue("eventId", evento.getEventId())
+          .addKeyValue("aggregateId", evento.getAggregateId())
+          .addKeyValue("topico", topico)
           .addKeyValue("tentativa", tentativas)
           .addKeyValue("reasonCode", "envio_falhou")
           .addKeyValue("proximaTentativaEm", evento.getProximaTentativaEm())
@@ -117,8 +120,11 @@ public class OutboxPublisher {
       log.atError()
           .addKeyValue("event", "outbox_publicacao_esgotada")
           .addKeyValue("eventId", evento.getEventId())
+          .addKeyValue("aggregateId", evento.getAggregateId())
+          .addKeyValue("topico", topico)
           .addKeyValue("tentativa", tentativas)
           .addKeyValue("reasonCode", "tentativas_esgotadas")
+          .setCause(erro)
           .log("Tentativas de publicacao esgotadas");
     }
   }
