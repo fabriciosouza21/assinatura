@@ -146,4 +146,7 @@ Convergência: release/0.5.0
 |---|-----------|-----------|--------|
 | 1 | Endpoint e query da consulta da ativa (`GET /assinaturas/ativa`) | — | [x] |
 | 2 | Cache Redis na consulta da ativa com cache negativo | 1 | [x] |
-| 3 | Contrato OpenAPI, versão 0.5.0 e CHANGELOG | 2 | [ ] |
+| 3 | Contrato OpenAPI e CHANGELOG | 2 | [x] |
+
+> O bump de versão para `0.5.0` fica para a `release/0.5.0` (padrão da 0.4.0);
+> o CHANGELOG entra em `[Não publicado]`.
