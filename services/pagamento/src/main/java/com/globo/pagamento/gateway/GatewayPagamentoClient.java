@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientException;
-import reactor.core.Exceptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
@@ -155,11 +154,6 @@ public class GatewayPagamentoClient {
       return chamada.retryWhen(retryEfetivo).block();
     } catch (WebClientException e) {
       throw new CobrancaGatewayIndisponivelException(e);
-    } catch (IllegalStateException e) {
-      if (Exceptions.isRetryExhausted(e)) {
-        throw new CobrancaGatewayIndisponivelException(e);
-      }
-      throw e;
     }
   }
 

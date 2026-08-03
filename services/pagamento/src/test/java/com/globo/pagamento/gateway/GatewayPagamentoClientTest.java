@@ -21,8 +21,8 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.netty.http.client.HttpClient;
-import reactor.util.retry.Retry;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -151,7 +151,7 @@ class GatewayPagamentoClientTest {
         new GatewayPagamentoClient(
             WebClient.builder().baseUrl(server.url("/").toString()).build(),
             "http://pagamento:8080/webhooks/payments",
-            Retry.backoff(3, Duration.ofMillis(5)));
+            GatewayRetryPolicy.criar(3, Duration.ofMillis(5)));
 
     CobrancaCriada cobranca =
         clientComRetry.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90"));
@@ -180,19 +180,20 @@ class GatewayPagamentoClientTest {
         new GatewayPagamentoClient(
             WebClient.builder().baseUrl(server.url("/").toString()).build(),
             "http://pagamento:8080/webhooks/payments",
-            Retry.backoff(3, Duration.ofMillis(5)));
+            GatewayRetryPolicy.criar(3, Duration.ofMillis(5)));
 
     assertThatThrownBy(
             () -> clientComRetry.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90")))
         .as("exaustao do retry deve propagar excecao de dominio, nao RetryExhaustedException")
-        .isInstanceOf(CobrancaGatewayIndisponivelException.class);
+        .isInstanceOf(CobrancaGatewayIndisponivelException.class)
+        .hasRootCauseInstanceOf(WebClientResponseException.class);
     assertThat(server.getRequestCount())
         .as("tentativas no gateway: 1 inicial + 3 retries")
         .isEqualTo(4);
   }
 
   @Test
-  @DisplayName("Nao deve retentar falha de negocio 4xx do gateway")
+  @DisplayName("Deve nao retentar falha de negocio 4xx do gateway")
   void deveNaoRetentarFalhaDeNegocioDoGateway() {
     server.enqueue(new MockResponse().setResponseCode(400));
     GatewayPagamentoClient clientComRetry =
@@ -240,7 +241,36 @@ class GatewayPagamentoClientTest {
   }
 
   @Test
-  @DisplayName("Nao deve retentar recusa explicita do gateway")
+  @DisplayName("Deve retentar quando o gateway responde 408")
+  void deveRetentarQuandoGatewayResponde408() throws Exception {
+    server.enqueue(new MockResponse().setResponseCode(408));
+    server.enqueue(
+        new MockResponse()
+            .setHeader("Content-Type", "application/json")
+            .setBody(
+                jsonMapper.writeValueAsString(
+                    new CreatePaymentResponse(
+                        "pay_renov", "renov-123", new BigDecimal("19.90"), "BRL", "PIX")))
+            .setResponseCode(201));
+    GatewayPagamentoClient clientComRetry =
+        new GatewayPagamentoClient(
+            WebClient.builder().baseUrl(server.url("/").toString()).build(),
+            "http://pagamento:8080/webhooks/payments",
+            GatewayRetryPolicy.criar(3, Duration.ofMillis(5)));
+
+    CobrancaCriada cobranca =
+        clientComRetry.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90"));
+
+    assertThat(cobranca.paymentId())
+        .as("payment id retornado apos retry de 408")
+        .isEqualTo("pay_renov");
+    assertThat(server.getRequestCount())
+        .as("408 e transitorio e deve gerar retentativa")
+        .isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("Deve nao retentar recusa explicita do gateway")
   void deveNaoRetentarRecusaExplicitaDoGateway() {
     server.enqueue(new MockResponse().setResponseCode(422));
     GatewayPagamentoClient clientComRetry =
