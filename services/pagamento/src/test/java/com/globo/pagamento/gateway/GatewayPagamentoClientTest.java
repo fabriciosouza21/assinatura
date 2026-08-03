@@ -183,6 +183,25 @@ class GatewayPagamentoClientTest {
   }
 
   @Test
+  @DisplayName("Nao deve retentar falha de negocio 4xx do gateway")
+  void deveNaoRetentarFalhaDeNegocioDoGateway() {
+    server.enqueue(new MockResponse().setResponseCode(400));
+    GatewayPagamentoClient clientComRetry =
+        new GatewayPagamentoClient(
+            WebClient.builder().baseUrl(server.url("/").toString()).build(),
+            "http://pagamento:8080/webhooks/payments",
+            GatewayRetryPolicy.criar(3, Duration.ofMillis(5)));
+
+    assertThatThrownBy(
+            () -> clientComRetry.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90")))
+        .as("falha de negocio 4xx do gateway deve virar excecao de dominio")
+        .isInstanceOf(CobrancaGatewayIndisponivelException.class);
+    assertThat(server.getRequestCount())
+        .as("falha de negocio nao deve gerar novas tentativas no gateway")
+        .isEqualTo(1);
+  }
+
+  @Test
   @DisplayName("Deve consultar o status oficial da cobranca por paymentId")
   void deveConsultarStatusPorPaymentId() throws Exception {
     server.enqueue(
