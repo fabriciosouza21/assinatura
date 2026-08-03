@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientException;
 import reactor.core.Exceptions;
+import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
 /**
@@ -36,7 +37,7 @@ public class GatewayPagamentoClient {
    *
    * @param webClient web client configurado com a base url do gateway
    * @param notificationUrl url para notificacoes de webhook futuras
-   * @param retry politica de retry do Reactor aplicada a criacao de cobrancas de renovacao
+   * @param retry politica de retry do Reactor aplicada a todas as chamadas ao gateway
    */
   public GatewayPagamentoClient(WebClient webClient, String notificationUrl, Retry retry) {
     this.webClient = webClient;
@@ -56,14 +57,14 @@ public class GatewayPagamentoClient {
     CreatePaymentRequest request =
         new CreatePaymentRequest(assinaturaId, valor, "BRL", "PIX", notificationUrl);
     ResponseEntity<CreatePaymentResponse> response =
-        webClient
-            .post()
-            .uri("/v1/payments")
-            .header("Idempotency-Key", assinaturaId)
-            .bodyValue(request)
-            .retrieve()
-            .toEntity(CreatePaymentResponse.class)
-            .block();
+        bloquearComRetry(
+            webClient
+                .post()
+                .uri("/v1/payments")
+                .header("Idempotency-Key", assinaturaId)
+                .bodyValue(request)
+                .retrieve()
+                .toEntity(CreatePaymentResponse.class));
     log.atInfo()
         .addKeyValue("event", "cobranca_criada_gateway")
         .addKeyValue("assinaturaId", assinaturaId)
@@ -88,26 +89,16 @@ public class GatewayPagamentoClient {
   public CobrancaCriada criarCobrancaRenovacao(String renovacaoId, int numero, BigDecimal valor) {
     CreatePaymentRequest request =
         new CreatePaymentRequest(renovacaoId, valor, "BRL", "PIX", notificationUrl);
-    try {
-      CreatePaymentResponse response =
-          webClient
-              .post()
-              .uri("/v1/payments")
-              .header("Idempotency-Key", renovacaoId + ":" + numero)
-              .bodyValue(request)
-              .retrieve()
-              .bodyToMono(CreatePaymentResponse.class)
-              .retryWhen(retry)
-              .block();
-      return new CobrancaCriada(response.id());
-    } catch (WebClientException e) {
-      throw new CobrancaGatewayIndisponivelException(e);
-    } catch (IllegalStateException e) {
-      if (Exceptions.isRetryExhausted(e)) {
-        throw new CobrancaGatewayIndisponivelException(e);
-      }
-      throw e;
-    }
+    CreatePaymentResponse response =
+        bloquearComRetry(
+            webClient
+                .post()
+                .uri("/v1/payments")
+                .header("Idempotency-Key", renovacaoId + ":" + numero)
+                .bodyValue(request)
+                .retrieve()
+                .bodyToMono(CreatePaymentResponse.class));
+    return new CobrancaCriada(response.id());
   }
 
   /**
@@ -121,16 +112,19 @@ public class GatewayPagamentoClient {
    * @return status oficial reportado pelo gateway
    */
   public StatusGateway consultarStatus(String paymentId) {
+    PaymentResponse response =
+        bloquearComRetry(
+            webClient
+                .get()
+                .uri("/v1/payments/{id}", paymentId)
+                .retrieve()
+                .bodyToMono(PaymentResponse.class));
+    return StatusGateway.valueOf(response.status());
+  }
+
+  private <T> T bloquearComRetry(Mono<T> chamada) {
     try {
-      PaymentResponse response =
-          webClient
-              .get()
-              .uri("/v1/payments/{id}", paymentId)
-              .retrieve()
-              .bodyToMono(PaymentResponse.class)
-              .retryWhen(retry)
-              .block();
-      return StatusGateway.valueOf(response.status());
+      return chamada.retryWhen(retry).block();
     } catch (WebClientException e) {
       throw new CobrancaGatewayIndisponivelException(e);
     } catch (IllegalStateException e) {

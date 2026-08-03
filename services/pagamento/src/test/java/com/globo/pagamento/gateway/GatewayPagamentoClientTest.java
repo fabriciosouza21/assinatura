@@ -232,6 +232,33 @@ class GatewayPagamentoClientTest {
   }
 
   @Test
+  @DisplayName("Deve retentar a criacao de cobranca apos falha transitoria do gateway")
+  void deveRetentarCriacaoDeCobrancaAposFalhaTransitoriaDoGateway() throws Exception {
+    server.enqueue(new MockResponse().setResponseCode(500));
+    server.enqueue(
+        new MockResponse()
+            .setHeader("Content-Type", "application/json")
+            .setBody(
+                jsonMapper.writeValueAsString(
+                    new CreatePaymentResponse(
+                        "pay_123", "assinatura-uuid", new BigDecimal("19.90"), "BRL", "PIX")))
+            .setResponseCode(201));
+    GatewayPagamentoClient clientComRetry =
+        new GatewayPagamentoClient(
+            WebClient.builder().baseUrl(server.url("/").toString()).build(),
+            "http://pagamento:8080/webhooks/payments",
+            GatewayRetryPolicy.criar(3, Duration.ofMillis(5)));
+
+    CobrancaCriada cobranca =
+        clientComRetry.criarCobranca("assinatura-uuid", new BigDecimal("19.90"));
+
+    assertThat(cobranca.paymentId())
+        .as("payment id retornado apos retry com sucesso")
+        .isEqualTo("pay_123");
+    assertThat(server.getRequestCount()).as("quantidade de tentativas no gateway").isEqualTo(2);
+  }
+
+  @Test
   @DisplayName("Deve retentar a consulta de status apos falha transitoria do gateway")
   void deveRetentarConsultaDeStatusAposFalhaTransitoriaDoGateway() throws Exception {
     server.enqueue(new MockResponse().setResponseCode(500));
