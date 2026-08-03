@@ -27,7 +27,7 @@ assinatura  ──AssinaturaSolicitada──▶  kafka  ──▶  pagamento  �
 ## Decisões Técnicas
 
 As decisões que sustentam o sistema, agrupadas por tema. Cada uma resume **o quê**
-e **por quê**. Detalhe completo nas ADRs (`docs/adr/`) e PRDs (`docs/prd/`).
+e **por quê**. Detalhe completo nas ADRs (`docs/adr/`).
 
 ### Arquitetura e organização
 
@@ -47,13 +47,13 @@ e **por quê**. Detalhe completo nas ADRs (`docs/adr/`) e PRDs (`docs/prd/`).
 
 ### Concorrência e consistência
 
-- **Uma assinatura aberta por usuário (BE-2, BE-23).** Índice único parcial em
+- **Uma assinatura aberta por usuário.** Índice único parcial em
   `(usuario_id) WHERE status IN ('AGUARDANDO_PAGAMENTO','ATIVA','EM_RENOVACAO')`
   + checagem de negócio + `SELECT ... FOR UPDATE`. Defesa em profundidade que
   cobre inclusive a janela de renovação.
 - **`FOR UPDATE SKIP LOCKED` nos schedulers e no publisher da outbox.** Múltiplas
   instâncias processam lotes disjuntos sem duplicar trabalho.
-- **Renovação por instante preciso (BE-16 a BE-19).** `proxima_renovacao_em` é
+- **Renovação por instante preciso.** `proxima_renovacao_em` é
   `timestamptz`, varrido com `<= Instant.now(clock)`. Ciclos sub-diários duram o
   tempo exato; atrasos por indisponibilidade são recuperados no sweep seguinte.
 
@@ -66,33 +66,32 @@ e **por quê**. Detalhe completo nas ADRs (`docs/adr/`) e PRDs (`docs/prd/`).
   conhecido antes do commit. Semântica *at-least-once*, com dedup no consumo.
 - **Retry com backoff exponencial + jitter (3 tentativas) na outbox.** Absorve
   tremores curtos do broker sem martelá-lo.
-- **`FALHA` recuperável.** O BE-24 promove eventos em `FALHA` de volta ao ciclo
-  de publicação após quarentena, com limite de ciclos e `FOR UPDATE SKIP LOCKED`.
+- **`FALHA` recuperável.** Um scheduler promove eventos em `FALHA` de volta ao
+  ciclo de publicação após quarentena, com limite de ciclos e `FOR UPDATE SKIP LOCKED`.
 - **DLQ de consumer com replay por configuração.** Um `@KafkaListener` dedicado,
-  desligado por padrão, republica mensagens dos tópicos `*-dlq` no tópico original
-  (BE-27).
+  desligado por padrão, republica mensagens dos tópicos `*-dlq` no tópico original.
 - **Idempotência por `event_id` nos consumers.** `ON CONFLICT DO NOTHING` ou
   `existsByEventId`. Uma reentrega do Kafka nunca duplica efeito de negócio.
 
 ### Integração com o gateway
 
-- **Webhook é fronteira não confiável (BE-6).** HMAC-SHA256 comparado em tempo
+- **Webhook é fronteira não confiável.** HMAC-SHA256 comparado em tempo
   constante, `eventId` deduplicado e status sempre re-consultado no gateway. O
   callback nunca atualiza estado sozinho.
-- **Teto de falhas técnicas do gateway (BE-20).** N falhas técnicas consecutivas
+- **Teto de falhas técnicas do gateway.** N falhas técnicas consecutivas
   esgotam a renovação pelo mesmo fluxo das três recusas. Distinto de recusa de
   negócio: o gateway indisponível não pune o usuário imediatamente, mas a
   indisponibilidade persistente suspende.
-- **Sem retry no cliente HTTP do gateway hoje (dívida, BE-21).** Apenas timeout
-  (2s conexão, 10s resposta). Hoje cada falha técnica conta contra o teto, então
-  três tremores curtos suspendem uma assinatura sã. O BE-21 adiciona backoff no
-  cliente para conter isso.
+- **Retry no cliente HTTP do gateway só para falhas transitórias.** Backoff
+  exponencial com jitter retenta 5xx, 408 e 429; recusas de negócio (4xx) não
+  consomem tentativa. Absorve tremores curtos do gateway, complementando o teto
+  de falhas técnicas.
 - **Mock em Go isolado em `docker/`.** Apenas `net/http`, estado em memória, sem
   persistência. Não é microserviço, é suporte de desenvolvimento.
 
 ### Cache e leitura
 
-- **Cache versionado por `INCR` pós-commit, não por `DEL` (BE-15).** A chave de
+- **Cache versionado por `INCR` pós-commit, não por `DEL`.** A chave de
   leitura inclui a versão; cada escrita incrementa o contador após o commit, e a
   geração anterior vira inalcançável, expirando no TTL. Seguro entre réplicas,
   sem lock distribuído e sem a corrida de repopulação do `DEL`.
@@ -126,7 +125,7 @@ e **por quê**. Detalhe completo nas ADRs (`docs/adr/`) e PRDs (`docs/prd/`).
 - **Cancelamento preserva o acesso até o fim do ciclo.** `ATIVA` ou
   `EM_RENOVACAO` com renovação automática gera `CancelamentoAgendado` (cancela no
   vencimento); demais status cancelam na hora com `AssinaturaCancelada`.
-- **Três recusas suspendem; falha técnica não consome tentativa (BE-10 a BE-13).**
+- **Três recusas suspendem; falha técnica não consome tentativa.**
   Backoff em dias (`1,3` = três tentativas em D+0, D+1, D+3). Indisponibilidade do
   gateway é transient e não conta como recusa de negócio.
 - **`Plano` → valor num enum no Assinatura Service.** O tipo `Plano` é duplicado
@@ -137,14 +136,16 @@ e **por quê**. Detalhe completo nas ADRs (`docs/adr/`) e PRDs (`docs/prd/`).
 
 Toda regra obrigatória do enunciado está implementada em `develop`: adesão com
 pagamento, renovação automática no vencimento, suspensão após três recusas,
-teto de falhas técnicas do gateway, assinatura única inclusive durante a
-renovação, e cancelamento com acesso até o fim do ciclo.
+teto de falhas técnicas do gateway com retry no cliente HTTP, assinatura única
+inclusive durante a renovação, cancelamento com acesso até o fim do ciclo,
+recuperação automática e manual da outbox, replay da DLQ de consumer,
+observabilidade de falhas (gauge Prometheus por status e métricas nos dois
+serviços) e configuração explícita de partitions, replicação e retenção das
+DLTs.
 
-A íntegra do escopo e do andamento, inclusive o que ainda falta (recuperação
-automática da outbox, retry no cliente do gateway, observabilidade de DLQ e
-testes com Testcontainers), vive em `docs/roadmap/`, com o documento
-`2026-08-02-desafio-entrega-consolidada.md` consolidando o estado de ponta a
-ponta.
+Ficam de fora da trunk, ainda em worktree: testes de integração com
+Testcontainers e o bump de versão para `0.5.0`. O detalhamento de escopo e
+andamento vive em `docs/roadmap/`.
 
 ## Como testar via Bruno
 
