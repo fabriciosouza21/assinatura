@@ -53,8 +53,9 @@ humana.
 ### Must Have
 
 - **Listagem de eventos terminais.** Um endpoint lista os eventos em `FALHA`,
-  com filtros úteis ao diagnóstico (tipo de evento, idade), paginado. É o que
-  permite ao operador ver o que está preso e decidir o que retomar.
+  com filtros úteis ao diagnóstico (tipo de evento, falhou há N segundos),
+  paginado. É o que permite ao operador ver o que está preso e decidir o que
+  retomar.
 - **Retomada por `eventId`.** Um endpoint repõe um evento específico,
   identificado pelo seu `eventId`, devolvendo-o ao ciclo de publicação pela
   mesma lógica do scheduler automático (`recuperarParaRetentativa`). O reset é
@@ -91,7 +92,7 @@ humana.
 - **Sem quebra de contrato Kafka.** A retomada devolve o evento ao publisher
   existente, que publica no tópico já mapeado. Nada de tópico novo.
 - **Configuração externalizada.** Se a listagem tiver limites (tamanho de
-  página, idade mínima padrão), seguem o padrão `APP_*`.
+  página, falhou há padrão), seguem o padrão `APP_*`.
 - **Padrão de logs estruturados.** SLF4J Fluent, `event` em `snake_case`, sem
   payload nem PII, em toda nova decisão. Toda cadeia termina em `.log()`. O log
   de auditoria identifica o admin, mas não carrega credencial.
@@ -108,8 +109,9 @@ humana.
 - Dado eventos em `FALHA` na outbox, quando um admin chama o endpoint de
   listagem, então recebe a relação paginada com `eventId`, tipo de evento,
   instante da falha e contador de ciclos.
-- Dado filtros aplicados (tipo de evento, idade), quando o admin consulta, então
-  só os eventos que satisfazem os filtros aparecem.
+- Dado filtros aplicados (tipo de evento, `falhouHaSegundos`), quando o admin
+  consulta, então só os eventos que satisfazem os filtros aparecem: somente os
+  que falharam há pelo menos `falhouHaSegundos` segundos.
 - Dado um usuário sem `ROLE_ADMIN`, quando ele chama a listagem, então recebe
   `403 Forbidden`.
 - Dado um usuário sem token, quando ele chama a listagem, então recebe `401

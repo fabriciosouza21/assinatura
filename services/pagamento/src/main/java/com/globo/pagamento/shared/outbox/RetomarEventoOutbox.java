@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
  * para serializar chamadas concorrentes. A acao fica registrada em log de auditoria com o
  * identificador do administrador.
  *
- * <p>Mantenha em paridade com o {@code RetomarEventoOutbox} de services/pagamento.
+ * <p>Mantenha em paridade com o {@code RetomarEventoOutbox} de services/assinatura.
  */
 @Service
 public class RetomarEventoOutbox {

@@ -43,6 +43,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
   com `404` sem ativa e `403` para `ROLE_ADMIN`. Cache-aside em Redis por
   usuário com cache negativo da ausência (TTL 5 min) e invalidação via
   contador de versão compartilhado com a listagem.
+- **Recuperação manual da outbox** (BE-26, Assinatura e Pagamento): endpoints
+  admin `GET /outbox/falhas` (filtro por `tipoEvento` e `falhouHaSegundos`,
+  paginado) e `POST /outbox/falhas/{eventId}/retomada` (404 inexistente, 409
+  fora de `FALHA`, transição idêntica ao scheduler sob lock pessimista), com
+  `401`/`403` e auditoria em log `outbox_falha_retomada_manual` com o admin.
+  O Pagamento Service ganhou a stack de validação JWT (`APP_JWT_SECRET`), que
+  passa a ser obrigatória fora do perfil dev.
 
 ### Alterado
 - **Precisão de tempo na renovação** (Assinatura Service): `proximaRenovacaoEm`

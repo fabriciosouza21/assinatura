@@ -37,16 +37,15 @@ public class ListarFalhasOutbox {
    * Lista os eventos em falha, filtrados e paginados.
    *
    * @param tipoEvento tipo de evento para filtro exato, ou {@code null} para listar todos
-   * @param idadeMinimaSegundos somente eventos cuja falha ocorreu ha pelo menos essa idade, em
+   * @param falhouHaSegundos somente eventos cuja falha ocorreu ha pelo menos esse numero de
    *     segundos; zero lista todos
    * @param page pagina corrente, comecando em 0
    * @param size tamanho da pagina
    * @return pagina com os eventos em falha e o total ignorando a paginacao
    */
   @Transactional(readOnly = true)
-  public OutboxFalhaLista executar(
-      String tipoEvento, long idadeMinimaSegundos, int page, int size) {
-    Instant limiteFalhouEm = Instant.now().minusSeconds(idadeMinimaSegundos);
+  public OutboxFalhaLista executar(String tipoEvento, long falhouHaSegundos, int page, int size) {
+    Instant limiteFalhouEm = Instant.now().minusSeconds(falhouHaSegundos);
     Page<OutboxEvent> pagina =
         outboxRepository.buscarFalhas(tipoEvento, limiteFalhouEm, PageRequest.of(page, size));
     List<OutboxFalhaItem> items = pagina.getContent().stream().map(OutboxFalhaItem::of).toList();

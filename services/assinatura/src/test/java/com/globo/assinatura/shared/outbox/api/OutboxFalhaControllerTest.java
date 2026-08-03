@@ -77,7 +77,7 @@ class OutboxFalhaControllerTest {
         .perform(
             get("/outbox/falhas")
                 .param("tipoEvento", "AssinaturaSolicitada")
-                .param("idadeMinimaSegundos", "3600")
+                .param("falhouHaSegundos", "3600")
                 .with(authentication(administrador()))
                 .with(csrf()))
         .andExpect(status().isOk())
@@ -96,6 +96,22 @@ class OutboxFalhaControllerTest {
     mockMvc
         .perform(get("/outbox/falhas").with(authentication(cliente())).with(csrf()))
         .andExpect(status().isForbidden());
+  }
+
+  @Test
+  @DisplayName("Deve limitar falhou ha, pagina e tamanho na listagem")
+  void deveLimitarFalhouHaPaginaTamanhoNaListagem() throws Exception {
+    mockMvc
+        .perform(
+            get("/outbox/falhas")
+                .param("falhouHaSegundos", "9223372036854775807")
+                .param("page", "2147483647")
+                .param("size", "500")
+                .with(authentication(administrador()))
+                .with(csrf()))
+        .andExpect(status().isOk());
+
+    verify(listarFalhasOutbox).executar(null, 31_536_000L, 10_000, 100);
   }
 
   @Test

@@ -25,6 +25,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class OutboxFalhaController {
 
   private static final int TAMANHO_MAXIMO = 100;
+  private static final int PAGINA_MAXIMA = 10_000;
+  private static final long FALHOU_HA_MAXIMO_SEGUNDOS = 31_536_000L;
 
   private final ListarFalhasOutbox listarFalhasOutbox;
   private final RetomarEventoOutbox retomarEventoOutbox;
@@ -45,7 +47,8 @@ public class OutboxFalhaController {
    * Lista os eventos da outbox em falha, filtrados e paginados.
    *
    * @param tipoEvento tipo de evento para filtro exato, opcional
-   * @param idadeMinimaSegundos idade minima da falha em segundos, padrao zero
+   * @param falhouHaSegundos somente eventos cuja falha ocorreu ha pelo menos esse numero de
+   *     segundos, padrao zero
    * @param page pagina corrente, comecando em 0
    * @param size tamanho da pagina, limitado a 100
    * @param principal identidade extraida do token JWT
@@ -55,15 +58,15 @@ public class OutboxFalhaController {
   @GetMapping
   public OutboxFalhaLista listar(
       @RequestParam(required = false) String tipoEvento,
-      @RequestParam(defaultValue = "0") long idadeMinimaSegundos,
+      @RequestParam(defaultValue = "0") long falhouHaSegundos,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @AuthenticationPrincipal UsuarioAutenticado principal) {
     exigirAdmin(principal);
     return listarFalhasOutbox.executar(
         tipoEvento,
-        Math.max(idadeMinimaSegundos, 0),
-        Math.max(page, 0),
+        Math.min(Math.max(falhouHaSegundos, 0), FALHOU_HA_MAXIMO_SEGUNDOS),
+        Math.min(Math.max(page, 0), PAGINA_MAXIMA),
         Math.min(Math.max(size, 1), TAMANHO_MAXIMO));
   }
 

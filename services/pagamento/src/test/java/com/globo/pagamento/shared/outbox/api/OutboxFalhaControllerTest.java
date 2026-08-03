@@ -73,7 +73,7 @@ class OutboxFalhaControllerTest {
         .perform(
             get("/outbox/falhas")
                 .param("tipoEvento", "PagamentoStatusAtualizado")
-                .param("idadeMinimaSegundos", "3600")
+                .param("falhouHaSegundos", "3600")
                 .with(authentication(administrador())))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.items[0].eventId").value("11111111-1111-1111-1111-111111111111"))
@@ -97,6 +97,21 @@ class OutboxFalhaControllerTest {
   @DisplayName("Deve retornar 401 sem token na listagem de eventos em falha")
   void deveRetornarUnauthorizedSemTokenNaListagem() throws Exception {
     mockMvc.perform(get("/outbox/falhas")).andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  @DisplayName("Deve limitar falhou ha, pagina e tamanho na listagem")
+  void deveLimitarFalhouHaPaginaTamanhoNaListagem() throws Exception {
+    mockMvc
+        .perform(
+            get("/outbox/falhas")
+                .param("falhouHaSegundos", "9223372036854775807")
+                .param("page", "2147483647")
+                .param("size", "500")
+                .with(authentication(administrador())))
+        .andExpect(status().isOk());
+
+    verify(listarFalhasOutbox).executar(null, 31_536_000L, 10_000, 100);
   }
 
   @Test

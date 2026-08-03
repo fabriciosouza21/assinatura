@@ -40,16 +40,18 @@ class ListarFalhasOutboxTest {
   @DisplayName("Deve repassar tipo, idade minima e paginacao ao repositorio")
   void deveRepassarFiltrosAoRepositorio() {
     when(outboxRepository.buscarFalhas(
-            eq("AssinaturaSolicitada"), any(Instant.class), any(Pageable.class)))
+            eq("PagamentoStatusAtualizado"), any(Instant.class), any(Pageable.class)))
         .thenReturn(paginaVazia(1, 10));
 
-    listar.executar("AssinaturaSolicitada", 3600L, 1, 10);
+    listar.executar("PagamentoStatusAtualizado", 3600L, 1, 10);
 
     ArgumentCaptor<Instant> limiteCapturado = ArgumentCaptor.forClass(Instant.class);
     ArgumentCaptor<Pageable> pageableCapturado = ArgumentCaptor.forClass(Pageable.class);
     verify(outboxRepository)
         .buscarFalhas(
-            eq("AssinaturaSolicitada"), limiteCapturado.capture(), pageableCapturado.capture());
+            eq("PagamentoStatusAtualizado"),
+            limiteCapturado.capture(),
+            pageableCapturado.capture());
     assertThat(limiteCapturado.getValue())
         .as("Limite de idade e aproximadamente agora menos 3600s")
         .isCloseTo(Instant.now().minusSeconds(3600), byLessThan(2, ChronoUnit.SECONDS));
@@ -92,9 +94,9 @@ class ListarFalhasOutboxTest {
     OutboxEvent evento =
         OutboxEvent.criar(
             UUID.fromString("11111111-1111-1111-1111-111111111111"),
-            "Assinatura",
+            "Pagamento",
             UUID.fromString("22222222-2222-2222-2222-222222222222"),
-            "AssinaturaSolicitada",
+            "PagamentoStatusAtualizado",
             "{}");
     for (int ciclo = 0; ciclo < 3; ciclo++) {
       evento.recuperarParaRetentativa(Instant.now().plusSeconds(1));
