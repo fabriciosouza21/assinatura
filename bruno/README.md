@@ -150,6 +150,21 @@ APP_OUTBOX_INTERVALO_MS=1000
 > `EM_RENOVACAO` no ciclo seguinte. Ciclos de um dia ou mais aguardam dias
 > reais.
 
+## Gotchas
+
+- **`make test-integration` derruba a stack inteira, não só o Postgres.** Os
+  targets `test-integration-clean`/`up` rodam `docker compose -f
+  ../../docker-compose.yml down -v --remove-orphans` — o mesmo projeto compose
+  da raiz, então `down -v` derruba `assinatura`, `pagamento`, `kafka`,
+  `mock-pagamento` e `jaeger` e apaga o volume do Postgres. Não rode os testes
+  de integração numa terminal ao lado de uma stack em uso para testes manuais;
+  depois, suba tudo de novo com `docker compose up -d --build` na raiz.
+- **Erros de `Unable to rollback against JDBC Connection` logo após `docker
+  compose up` são esperados e inofensivos**: um tick agendado do publisher da
+  outbox cai no meio do restart, enquanto o Postgres ainda sobe. Somem em
+  ~20s e o fluxo E2E não é afetado; só se preocupar se continuarem depois do
+  healthcheck ficar verde.
+
 ### Fluxo de aprovação
 
 Partindo do **fluxo encadeado completo** (assinatura `ATIVA`, ciclo 1 em
