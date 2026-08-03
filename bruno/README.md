@@ -50,6 +50,9 @@ requests via variáveis capturadas no `after-response`.
    `assinaturaId`.
 4. **Consultar assinatura** → usa o `assinaturaId` capturado, também com
    `Bearer {{token}}`, para acompanhar o estado da assinatura.
+5. **Consultar assinatura ativa** → `GET /assinaturas/ativa`: a mesma consulta
+   sem precisar do `assinaturaId`, devolvendo a assinatura ATIVA do dono do
+   token. Sem assinatura ativa responde `404`; o `admin` do seed recebe `403`.
 
 > As rotas de assinatura exigem JWT (ADR 0003): sem o passo de **Login** elas
 > respondem `401`. O dono vem do token, então `usuarioId` não é mais enviado no
