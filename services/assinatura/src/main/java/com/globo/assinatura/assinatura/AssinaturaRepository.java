@@ -48,6 +48,15 @@ public interface AssinaturaRepository extends JpaRepository<Assinatura, Long> {
   Page<Assinatura> findByUsuarioIdOrderByIdDesc(Long usuarioId, Pageable pageable);
 
   /**
+   * Busca a assinatura de um usuario em um status especifico.
+   *
+   * @param usuarioId identificador interno do usuario dono
+   * @param status status da assinatura procurada
+   * @return a assinatura encontrada, ou vazio se nao existir
+   */
+  Optional<Assinatura> findByUsuarioIdAndStatus(Long usuarioId, StatusAssinatura status);
+
+  /**
    * Busca uma assinatura pelo uuid publico adquirindo um lock pessimista de escrita.
    *
    * <p>Executa {@code SELECT ... FOR UPDATE} em SQL nativo, prendendo a linha da assinatura ate o
