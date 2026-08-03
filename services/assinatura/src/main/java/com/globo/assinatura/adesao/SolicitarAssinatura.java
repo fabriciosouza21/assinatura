@@ -36,7 +36,10 @@ public class SolicitarAssinatura {
   private static final String AGGREGATE_TYPE = "Assinatura";
   private static final String EVENT_TYPE = "AssinaturaSolicitada";
   private static final List<StatusAssinatura> STATUS_ABERTOS =
-      List.of(StatusAssinatura.AGUARDANDO_PAGAMENTO, StatusAssinatura.ATIVA);
+      List.of(
+          StatusAssinatura.AGUARDANDO_PAGAMENTO,
+          StatusAssinatura.ATIVA,
+          StatusAssinatura.EM_RENOVACAO);
 
   private final UsuarioRepository usuarioRepository;
   private final AssinaturaRepository assinaturaRepository;

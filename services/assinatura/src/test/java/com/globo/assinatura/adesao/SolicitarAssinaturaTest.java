@@ -3,6 +3,7 @@ package com.globo.assinatura.adesao;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -18,6 +19,7 @@ import com.globo.assinatura.shared.outbox.OutboxRepository;
 import com.globo.assinatura.shared.outbox.OutboxStatus;
 import com.globo.assinatura.usuario.Usuario;
 import com.globo.assinatura.usuario.UsuarioRepository;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -94,6 +96,41 @@ class SolicitarAssinaturaTest {
 
     assertThatThrownBy(() -> command.executar("uuid-usuario", Plano.BASICO))
         .as("Assinatura aberta deve gerar conflito")
+        .isInstanceOf(AssinaturaAbertaException.class);
+  }
+
+  @Test
+  @DisplayName("Deve consultar assinatura aberta com o conjunto exato de status abertos")
+  void deveConsultarAssinaturaAbertaComConjuntoExatoDeStatus() {
+    Usuario usuario = new Usuario("Fulano", "fulano@example.com");
+    usuario.setId(42L);
+    when(usuarioRepository.findByUuid("uuid-usuario")).thenReturn(Optional.of(usuario));
+    when(assinaturaRepository.save(any(Assinatura.class))).thenAnswer(inv -> inv.getArgument(0));
+
+    command.executar("uuid-usuario", Plano.BASICO);
+
+    verify(assinaturaRepository)
+        .existsByUsuarioIdAndStatusIn(
+            eq(42L),
+            eq(
+                List.of(
+                    StatusAssinatura.AGUARDANDO_PAGAMENTO,
+                    StatusAssinatura.ATIVA,
+                    StatusAssinatura.EM_RENOVACAO)));
+  }
+
+  @Test
+  @DisplayName("Deve lancar conflito ao solicitar para usuario com assinatura em renovacao")
+  void deveLancarConflitoAoSolicitarParaUsuarioComAssinaturaEmRenovacao() {
+    Usuario usuario = new Usuario("Fulano", "fulano@example.com");
+    usuario.setId(42L);
+    when(usuarioRepository.findByUuid("uuid-usuario")).thenReturn(Optional.of(usuario));
+    when(assinaturaRepository.existsByUsuarioIdAndStatusIn(
+            eq(42L), argThat(statuses -> statuses.contains(StatusAssinatura.EM_RENOVACAO))))
+        .thenReturn(true);
+
+    assertThatThrownBy(() -> command.executar("uuid-usuario", Plano.BASICO))
+        .as("Assinatura em renovacao deve gerar conflito")
         .isInstanceOf(AssinaturaAbertaException.class);
   }
 
