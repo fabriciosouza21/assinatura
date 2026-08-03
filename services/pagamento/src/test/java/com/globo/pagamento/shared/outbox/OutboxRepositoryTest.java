@@ -150,7 +150,7 @@ class OutboxRepositoryTest {
   }
 
   @Test
-  @DisplayName("Deve contar eventos agrupados por status")
+  @DisplayName("Deve contar eventos agrupados por status monitorado")
   void deveContarEventosPorStatus() {
     final Map<String, Long> antes = contagensPorStatus();
     outboxRepository.saveAndFlush(
@@ -192,12 +192,9 @@ class OutboxRepositoryTest {
     outboxRepository.saveAndFlush(publicado);
 
     assertThat(deltaEntre(contagensPorStatus(), antes))
-        .as("Incremento de contagem por status apos os eventos criados no teste")
+        .as("Incremento de contagem por status monitorado apos os eventos criados no teste")
         .containsOnly(
-            Map.entry("PENDENTE", 2L),
-            Map.entry("RETENTATIVA_DLQ", 1L),
-            Map.entry("FALHA", 1L),
-            Map.entry("PUBLICADO", 1L));
+            Map.entry("PENDENTE", 2L), Map.entry("RETENTATIVA_DLQ", 1L), Map.entry("FALHA", 1L));
   }
 
   private Map<String, Long> contagensPorStatus() {
