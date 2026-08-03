@@ -122,6 +122,18 @@ class AssinaturaAtivaCacheTest {
         .contains(Optional.empty());
   }
 
+  @Test
+  @DisplayName("Deve ignorar contador ilegivel e usar a versao zero")
+  void deveIgnorarContadorIlegivel() {
+    when(cacheVersionado.recuperar("assinatura:list:versao:" + USUARIO))
+        .thenReturn(Optional.of("abc"));
+    when(cacheVersionado.recuperar("assinatura:ativa:v0:" + USUARIO)).thenReturn(Optional.empty());
+
+    assertThat(cache.recuperar(USUARIO))
+        .as("Contador corrompido deve recair na versao zero")
+        .isEmpty();
+  }
+
   private static AssinaturaResponse assinatura() {
     return new AssinaturaResponse(
         "assinatura-uuid",
