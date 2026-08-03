@@ -3,6 +3,7 @@ package com.globo.assinatura.shared.outbox;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -16,9 +17,9 @@ import org.springframework.stereotype.Component;
  * Publica periodicamente o numero de eventos da outbox por status como metricas do Micrometer,
  * tornando o acumulo de falhas visivel em dashboard sem depender de log ou SQL.
  *
- * <p>Registra no arranque um gauge {@code outbox.eventos} para cada status nao terminal do ciclo de
- * publicacao ({@code PENDENTE}, {@code RETENTATIVA_DLQ} e {@code FALHA}), com tags {@code servico}
- * e {@code status}, e o atualiza periodicamente com a contagem do banco.
+ * <p>Registra no arranque um gauge {@code outbox.eventos} para cada status monitorado do ciclo de
+ * publicacao e recuperacao ({@code PENDENTE}, {@code RETENTATIVA_DLQ} e {@code FALHA}), com tags
+ * {@code servico} e {@code status}, e o atualiza periodicamente com a contagem do banco.
  *
  * <p>Mantenha em paridade com o {@code OutboxMetricasScheduler} de services/pagamento.
  */
@@ -63,16 +64,25 @@ public class OutboxMetricasScheduler {
    * Atualiza os gauges com a contagem corrente de eventos por status na outbox.
    *
    * <p>Conta apenas os status monitorados; statuses fora do monitoramento (como {@code PUBLICADO})
-   * nao produzem gauge.
+   * nao produzem gauge, e statuses desconhecidos na consulta sao ignorados. Quando a consulta
+   * falha, mantem os valores anteriores e registra um warning, preservando o agendamento para a
+   * proxima atualizacao.
    */
   @Scheduled(fixedDelayString = "${app.outbox.metricas.intervalo-ms}")
   public void atualizarMetricas() {
-    Map<OutboxStatus, Long> contadas = new EnumMap<>(OutboxStatus.class);
-    for (Object[] linha : outboxRepository.contarPorStatus()) {
-      contadas.put(OutboxStatus.valueOf((String) linha[0]), ((Number) linha[1]).longValue());
-    }
-    for (OutboxStatus status : STATUS_MONITORADOS) {
-      contagens.get(status).set(contadas.getOrDefault(status, 0L));
+    try {
+      Map<String, Long> contadas = new HashMap<>();
+      for (Object[] linha : outboxRepository.contarPorStatus()) {
+        contadas.put((String) linha[0], ((Number) linha[1]).longValue());
+      }
+      for (OutboxStatus status : STATUS_MONITORADOS) {
+        contagens.get(status).set(contadas.getOrDefault(status.name(), 0L));
+      }
+    } catch (RuntimeException ex) {
+      log.atWarn()
+          .addKeyValue("event", "outbox_metricas_atualizacao_falhou")
+          .log("Falha ao atualizar metricas da outbox; gauges mantem o ultimo valor");
+      return;
     }
     log.atDebug()
         .addKeyValue("event", "outbox_metricas_atualizadas")
