@@ -1,4 +1,4 @@
-package com.globo.assinatura.shared.seguranca;
+package com.globo.pagamento.shared.seguranca;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

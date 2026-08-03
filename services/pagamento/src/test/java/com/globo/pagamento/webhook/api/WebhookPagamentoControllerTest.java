@@ -14,6 +14,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.globo.pagamento.shared.seguranca.JwtService;
 import com.globo.pagamento.shared.seguranca.SecurityConfig;
 import com.globo.pagamento.webhook.ProcessarWebhookPagamento;
 import com.globo.pagamento.webhook.PublicacaoIndisponivelException;
@@ -44,6 +45,7 @@ class WebhookPagamentoControllerTest {
 
   @Autowired private MockMvc mockMvc;
   @MockitoBean private ProcessarWebhookPagamento command;
+  @MockitoBean private JwtService jwtService;
 
   private final JsonMapper jsonMapper = JsonMapper.builder().findAndAddModules().build();
 

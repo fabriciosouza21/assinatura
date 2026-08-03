@@ -57,6 +57,11 @@ spring:
       observation-enabled: true
 
 app:
+  jwt:
+    # Sem fallback: ambientes nao-dev sem APP_JWT_SECRET falham no startup (fail closed).
+    # O default de dev vive em application-dev.yaml.
+    secret: ${APP_JWT_SECRET}
+    expiration-ms: ${APP_JWT_EXPIRATION_MS:3600000}
   gateway:
     base-url: ${APP_GATEWAY_BASE_URL:http://mock-pagamento:8081}
     webhook-secret: ${APP_GATEWAY_WEBHOOK_SECRET:mock-webhook-secret}

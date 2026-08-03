@@ -10,6 +10,7 @@ import com.globo.pagamento.cobranca.Plano;
 import com.globo.pagamento.renovacao.ConsultarRenovacao;
 import com.globo.pagamento.renovacao.RenovacaoNaoEncontradaException;
 import com.globo.pagamento.renovacao.StatusTentativa;
+import com.globo.pagamento.shared.seguranca.JwtService;
 import com.globo.pagamento.shared.seguranca.SecurityConfig;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -34,6 +35,7 @@ class RenovacaoControllerTest {
 
   @Autowired private MockMvc mockMvc;
   @MockitoBean private ConsultarRenovacao consultarRenovacao;
+  @MockitoBean private JwtService jwtService;
 
   @Test
   @DisplayName("Deve retornar 200 com paymentId e statusTentativa quando a renovacao existe")

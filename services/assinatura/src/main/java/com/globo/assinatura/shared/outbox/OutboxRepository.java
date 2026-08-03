@@ -1,9 +1,14 @@
 package com.globo.assinatura.shared.outbox;
 
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -60,6 +65,48 @@ public interface OutboxRepository extends JpaRepository<OutboxEvent, UUID> {
       @Param("limiteFalhouEm") Instant limiteFalhouEm,
       @Param("maxCiclos") int maxCiclos,
       @Param("tamanhoLote") int tamanhoLote);
+
+  /**
+   * Busca um evento pelo identificador, bloqueando a linha para escrita ate o fim da transacao.
+   *
+   * <p>Garante que chamadas concorrentes de retomada manual sobre o mesmo evento se serializem: a
+   * segunda transacao aguarda o lock e observa o status ja transicionado, abortando a propria
+   * retomada.
+   *
+   * @param eventId identificador do evento
+   * @return evento encontrado, ou vazio se nao existir
+   */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("SELECT e FROM OutboxEvent e WHERE e.eventId = :eventId")
+  Optional<OutboxEvent> buscarPorIdComLock(@Param("eventId") UUID eventId);
+
+  /**
+   * Seleciona paginadamente os eventos em {@code FALHA} para a recuperacao manual assistida,
+   * filtrados por tipo de evento e tempo decorrido desde a falha.
+   *
+   * @param tipoEvento tipo de evento para filtro exato, ou {@code null} para listar todos
+   * @param limiteFalhouEm somente eventos cuja falha ocorreu ate este instante (falhou ha N
+   *     segundos)
+   * @param pageable paginacao e ordenacao, sempre por instante da falha do mais antigo
+   * @return pagina de eventos em falha do mais antigo ao mais recente
+   */
+  @Query(
+      nativeQuery = true,
+      value =
+          "SELECT * FROM outbox "
+              + "WHERE status = 'FALHA' "
+              + "AND falhou_em <= :limiteFalhouEm "
+              + "AND (:tipoEvento IS NULL OR event_type = :tipoEvento) "
+              + "ORDER BY falhou_em",
+      countQuery =
+          "SELECT COUNT(*) FROM outbox "
+              + "WHERE status = 'FALHA' "
+              + "AND falhou_em <= :limiteFalhouEm "
+              + "AND (:tipoEvento IS NULL OR event_type = :tipoEvento)")
+  Page<OutboxEvent> buscarFalhas(
+      @Param("tipoEvento") String tipoEvento,
+      @Param("limiteFalhouEm") Instant limiteFalhouEm,
+      Pageable pageable);
 
   /**
    * Conta os eventos da outbox agrupados por {@code status} monitorado, para alimentar as metricas

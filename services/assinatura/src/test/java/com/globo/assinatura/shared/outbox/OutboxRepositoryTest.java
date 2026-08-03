@@ -15,6 +15,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.TestPropertySource;
 
 /**
@@ -225,6 +227,71 @@ class OutboxRepositoryTest {
 
     assertThat(recuperaveis)
         .as("Evento com 1 ciclo usado nao e elegivel quando maxCiclos e 1")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("Deve listar eventos em falha filtrados por tipo e idade minima")
+  void deveListarFalhasPorTipoComIdadeMinima() {
+    OutboxEvent antigo =
+        outboxRepository.saveAndFlush(
+            OutboxEvent.criar(
+                UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd"),
+                "Assinatura",
+                UUID.fromString("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
+                "AssinaturaSolicitada",
+                "{}"));
+    antigo.marcarFalha("timeout", Instant.now().minusSeconds(7200));
+    outboxRepository.saveAndFlush(antigo);
+    OutboxEvent outroTipo =
+        outboxRepository.saveAndFlush(
+            OutboxEvent.criar(
+                UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff"),
+                "Assinatura",
+                UUID.fromString("11111111-2222-3333-4444-555555555555"),
+                "RenovacaoSolicitada",
+                "{}"));
+    outroTipo.marcarFalha("timeout", Instant.now().minusSeconds(7200));
+    outboxRepository.saveAndFlush(outroTipo);
+    OutboxEvent recente =
+        outboxRepository.saveAndFlush(
+            OutboxEvent.criar(
+                UUID.fromString("aaaaaaaa-1111-2222-3333-444444444444"),
+                "Assinatura",
+                UUID.fromString("bbbbbbbb-1111-2222-3333-444444444444"),
+                "AssinaturaSolicitada",
+                "{}"));
+    recente.marcarFalha("timeout", Instant.now().minusSeconds(300));
+    outboxRepository.saveAndFlush(recente);
+
+    Page<OutboxEvent> pagina =
+        outboxRepository.buscarFalhas(
+            "AssinaturaSolicitada", Instant.now().minusSeconds(3600), PageRequest.of(0, 10));
+
+    assertThat(pagina.getContent())
+        .as("Somente falhas do tipo informado com idade minima vencida")
+        .extracting(OutboxEvent::getEventId)
+        .containsExactly(antigo.getEventId());
+    assertThat(pagina.getTotalElements()).as("Total ignorando paginacao").isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("Deve buscar evento por id com lock e vazio para id inexistente")
+  void deveBuscarPorIdComLock() {
+    UUID eventId = UUID.fromString("cccccccc-1111-2222-3333-444444444444");
+    OutboxEvent evento =
+        outboxRepository.saveAndFlush(
+            OutboxEvent.criar(
+                eventId, "Assinatura", UUID.randomUUID(), "AssinaturaSolicitada", "{}"));
+
+    assertThat(outboxRepository.buscarPorIdComLock(eventId))
+        .as("Evento persistido encontrado com lock")
+        .isPresent()
+        .get()
+        .extracting(OutboxEvent::getEventId)
+        .isEqualTo(eventId);
+    assertThat(outboxRepository.buscarPorIdComLock(UUID.randomUUID()))
+        .as("Evento inexistente retorna vazio")
         .isEmpty();
   }
 }

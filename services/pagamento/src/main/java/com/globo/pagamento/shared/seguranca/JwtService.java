@@ -1,4 +1,4 @@
-package com.globo.assinatura.shared.seguranca;
+package com.globo.pagamento.shared.seguranca;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
