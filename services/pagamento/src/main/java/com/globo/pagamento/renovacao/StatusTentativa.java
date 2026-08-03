@@ -4,8 +4,9 @@ package com.globo.pagamento.renovacao;
  * Status de uma tentativa de cobranca de renovacao.
  *
  * <p>Toda tentativa nasce {@link #PENDENTE}. O webhook do gateway pode marca-la como {@link
- * #APROVADA}, {@link #RECUSADA} ou {@link #TENTATIVAS_ESGOTADA}; {@link #CANCELADA} impede uma
- * cobranca apos o cancelamento da assinatura.
+ * #APROVADA}, {@link #RECUSADA} ou {@link #TENTATIVAS_ESGOTADA}; o scheduler pode esgota-la ao
+ * atingir o teto de falhas tecnicas. {@link #CANCELADA} impede uma cobranca apos o cancelamento da
+ * assinatura.
  */
 public enum StatusTentativa {
   /** Tentativa aguardando cobranca ou decisao do gateway. */
@@ -14,7 +15,7 @@ public enum StatusTentativa {
   APROVADA,
   /** Cobranca recusada pelo gateway, com uma nova tentativa agendada. */
   RECUSADA,
-  /** Cobranca recusada sem tentativas restantes; esgota o ciclo da renovacao. */
+  /** Cobranca sem tentativas restantes; esgota o ciclo da renovacao. */
   TENTATIVAS_ESGOTADA,
   /** Cobranca cancelada antes de uma decisao do gateway. */
   CANCELADA
