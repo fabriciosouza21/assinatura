@@ -23,4 +23,12 @@ public class AssinaturaAtivaCache {
   public Optional<AssinaturaResponse> recuperar(String usuarioUuid) {
     return Optional.empty();
   }
+
+  /**
+   * Grava a assinatura ativa do usuario no cache distribuido.
+   *
+   * @param usuarioUuid uuid publico do usuario dono
+   * @param assinatura representacao da assinatura ativa a armazenar
+   */
+  public void popular(String usuarioUuid, AssinaturaResponse assinatura) {}
 }
