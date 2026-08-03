@@ -5,6 +5,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -77,4 +79,31 @@ public interface OutboxRepository extends JpaRepository<OutboxEvent, UUID> {
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("SELECT e FROM OutboxEvent e WHERE e.eventId = :eventId")
   Optional<OutboxEvent> buscarPorIdComLock(@Param("eventId") UUID eventId);
+
+  /**
+   * Seleciona paginadamente os eventos em {@code FALHA} para a recuperacao manual assistida,
+   * filtrados por tipo de evento e idade minima da falha.
+   *
+   * @param tipoEvento tipo de evento para filtro exato, ou {@code null} para listar todos
+   * @param limiteFalhouEm somente eventos cuja falha ocorreu ate este instante (idade minima)
+   * @param pageable paginacao e ordenacao, sempre por instante da falha do mais antigo
+   * @return pagina de eventos em falha do mais antigo ao mais recente
+   */
+  @Query(
+      nativeQuery = true,
+      value =
+          "SELECT * FROM outbox "
+              + "WHERE status = 'FALHA' "
+              + "AND falhou_em <= :limiteFalhouEm "
+              + "AND (:tipoEvento IS NULL OR event_type = :tipoEvento) "
+              + "ORDER BY falhou_em",
+      countQuery =
+          "SELECT COUNT(*) FROM outbox "
+              + "WHERE status = 'FALHA' "
+              + "AND falhou_em <= :limiteFalhouEm "
+              + "AND (:tipoEvento IS NULL OR event_type = :tipoEvento)")
+  Page<OutboxEvent> buscarFalhas(
+      @Param("tipoEvento") String tipoEvento,
+      @Param("limiteFalhouEm") Instant limiteFalhouEm,
+      Pageable pageable);
 }
