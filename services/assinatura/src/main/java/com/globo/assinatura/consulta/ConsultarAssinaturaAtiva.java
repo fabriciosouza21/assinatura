@@ -43,20 +43,21 @@ public class ConsultarAssinaturaAtiva {
   /**
    * Consulta a assinatura ativa do usuario.
    *
-   * <p>Em acerto de cache devolve a representacao armazenada sem consultar o banco; em miss
-   * consulta o banco e popula o cache. Falha do cache degrada para o banco.
+   * <p>Em acerto de cache devolve a representacao armazenada sem consultar o banco; ausencia
+   * cacheada devolve vazio sem consultar o banco. Em miss consulta o banco e popula o cache,
+   * inclusive com a ausencia quando nao ha assinatura ativa. Falha do cache degrada para o banco.
    *
    * @param usuarioUuid uuid publico do usuario dono
    * @return a representacao da assinatura ativa, ou vazio quando ausente
    */
   @Transactional(readOnly = true)
   public Optional<AssinaturaResponse> executar(String usuarioUuid) {
-    Optional<AssinaturaResponse> possivelCacheada = assinaturaAtivaCache.recuperar(usuarioUuid);
-    if (possivelCacheada.isPresent()) {
-      return possivelCacheada;
+    Optional<Optional<AssinaturaResponse>> possivel = assinaturaAtivaCache.recuperar(usuarioUuid);
+    if (possivel.isPresent()) {
+      return possivel.get();
     }
     Optional<AssinaturaResponse> doBanco = buscarNoBanco(usuarioUuid);
-    doBanco.ifPresent(resposta -> assinaturaAtivaCache.popular(usuarioUuid, resposta));
+    assinaturaAtivaCache.popular(usuarioUuid, doBanco);
     return doBanco;
   }
 

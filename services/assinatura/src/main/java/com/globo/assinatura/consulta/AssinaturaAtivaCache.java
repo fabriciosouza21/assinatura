@@ -17,7 +17,8 @@ import tools.jackson.databind.json.JsonMapper;
  * <p>A chave de dados segue {@code assinatura:ativa:v{n}:{uuid}}, com {@code n} lido do contador de
  * versao compartilhado com a listagem ({@code assinatura:list:versao:{uuid}}); a invalidacao apos o
  * commit dos fluxos de escrita ja incrementa esse contador. Em miss devolve vazio para a camada de
- * consulta buscar no banco. Falha do cache degrada para miss, nunca para erro da consulta.
+ * consulta buscar no banco; ausencia cacheada devolve presente com interno vazio, sem consultar o
+ * banco. Falha do cache degrada para miss, nunca para erro da consulta.
  */
 @Component
 public class AssinaturaAtivaCache {
@@ -49,10 +50,14 @@ public class AssinaturaAtivaCache {
   /**
    * Recupera a assinatura ativa cacheada do usuario.
    *
+   * <p>O par opcional externo distingue acerto de miss: presente significa chave lida, com interno
+   * vazio quando a ausencia esta cacheada e interno preenchido em acerto de assinatura.
+   *
    * @param usuarioUuid uuid publico do usuario dono
-   * @return a assinatura ativa, ou vazio em miss ou em falha do cache
+   * @return par opcional em acerto, com interno vazio quando a ausencia esta cacheada; externo
+   *     vazio em miss ou em falha do cache
    */
-  public Optional<AssinaturaResponse> recuperar(String usuarioUuid) {
+  public Optional<Optional<AssinaturaResponse>> recuperar(String usuarioUuid) {
     String chave = chaveDe(usuarioUuid);
     Optional<String> possivelJson = cache.recuperar(chave);
     if (possivelJson.isEmpty()) {
@@ -69,7 +74,7 @@ public class AssinaturaAtivaCache {
           .addKeyValue("event", "assinatura_ativa_cache_hit")
           .addKeyValue("usuarioId", usuarioUuid)
           .log("Assinatura ativa lida do cache");
-      return Optional.of(assinatura);
+      return Optional.of(Optional.ofNullable(assinatura));
     } catch (JacksonException e) {
       log.atWarn()
           .addKeyValue("event", "assinatura_ativa_cache_json_invalido")
@@ -83,11 +88,13 @@ public class AssinaturaAtivaCache {
    * Grava a assinatura ativa do usuario no cache distribuido.
    *
    * @param usuarioUuid uuid publico do usuario dono
-   * @param assinatura representacao da assinatura ativa a armazenar
+   * @param assinatura representacao da assinatura ativa a armazenar, ou vazio para cachear a
+   *     ausencia
    */
-  public void popular(String usuarioUuid, AssinaturaResponse assinatura) {
+  public void popular(String usuarioUuid, Optional<AssinaturaResponse> assinatura) {
     try {
-      cache.gravar(chaveDe(usuarioUuid), jsonMapper.writeValueAsString(assinatura), ttl);
+      cache.gravar(
+          chaveDe(usuarioUuid), jsonMapper.writeValueAsString(assinatura.orElse(null)), ttl);
     } catch (JacksonException e) {
       log.atWarn()
           .addKeyValue("event", "assinatura_ativa_cache_populacao_falhou")

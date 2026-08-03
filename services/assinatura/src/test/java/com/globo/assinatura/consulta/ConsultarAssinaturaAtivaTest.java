@@ -62,11 +62,25 @@ class ConsultarAssinaturaAtivaTest {
   @DisplayName("Deve responder do cache sem consultar o banco em acerto de cache")
   void deveResponderDoCacheSemConsultarBanco() {
     AssinaturaResponse cacheada = criarResposta();
-    when(assinaturaAtivaCache.recuperar(USUARIO_UUID)).thenReturn(Optional.of(cacheada));
+    when(assinaturaAtivaCache.recuperar(USUARIO_UUID))
+        .thenReturn(Optional.of(Optional.of(cacheada)));
 
     Optional<AssinaturaResponse> resposta = query.executar(USUARIO_UUID);
 
     assertThat(resposta).as("Resposta vem do cache").containsSame(cacheada);
+    verify(usuarioRepository, never()).findByUuid(any());
+    verify(assinaturaRepository, never()).findByUsuarioIdAndStatus(any(), any());
+  }
+
+  @Test
+  @DisplayName(
+      "Deve responder vazio do cache sem consultar o banco quando a ausencia esta cacheada")
+  void deveResponderVazioDoCacheSemConsultarBancoQuandoAusenciaCacheada() {
+    when(assinaturaAtivaCache.recuperar(USUARIO_UUID)).thenReturn(Optional.of(Optional.empty()));
+
+    Optional<AssinaturaResponse> resposta = query.executar(USUARIO_UUID);
+
+    assertThat(resposta).as("Ausencia cacheada responde vazio").isEmpty();
     verify(usuarioRepository, never()).findByUuid(any());
     verify(assinaturaRepository, never()).findByUsuarioIdAndStatus(any(), any());
   }
@@ -86,6 +100,20 @@ class ConsultarAssinaturaAtivaTest {
     Optional<AssinaturaResponse> resposta = query.executar(USUARIO_UUID);
 
     assertThat(resposta).as("Assinatura ativa consultada do banco").isPresent();
-    verify(assinaturaAtivaCache).popular(USUARIO_UUID, resposta.orElseThrow());
+    verify(assinaturaAtivaCache).popular(USUARIO_UUID, resposta);
+  }
+
+  @Test
+  @DisplayName("Deve popular ausencia no cache quando o banco nao tem assinatura ativa")
+  void devePopularAusenciaQuandoBancoNaoTemAssinaturaAtiva() {
+    when(assinaturaAtivaCache.recuperar(USUARIO_UUID)).thenReturn(Optional.empty());
+    when(usuarioRepository.findByUuid(USUARIO_UUID)).thenReturn(Optional.of(usuarioComId()));
+    when(assinaturaRepository.findByUsuarioIdAndStatus(USUARIO_INTERNO, StatusAssinatura.ATIVA))
+        .thenReturn(Optional.empty());
+
+    Optional<AssinaturaResponse> resposta = query.executar(USUARIO_UUID);
+
+    assertThat(resposta).as("Sem assinatura ativa responde vazio").isEmpty();
+    verify(assinaturaAtivaCache).popular(USUARIO_UUID, resposta);
   }
 }

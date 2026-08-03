@@ -54,10 +54,10 @@ class AssinaturaAtivaCacheTest {
     when(cacheVersionado.recuperar("assinatura:ativa:v2:" + USUARIO))
         .thenReturn(Optional.of(serializar(assinatura())));
 
-    Optional<AssinaturaResponse> resposta = cache.recuperar(USUARIO);
+    Optional<Optional<AssinaturaResponse>> resposta = cache.recuperar(USUARIO);
 
-    assertThat(resposta).as("Assinatura da versao corrente").isPresent();
-    assertThat(resposta.orElseThrow())
+    assertThat(resposta).as("Assinatura da versao corrente").contains(Optional.of(assinatura()));
+    assertThat(resposta.orElseThrow().orElseThrow())
         .as("Campos da assinatura lida do cache")
         .isEqualTo(assinatura());
   }
@@ -68,7 +68,7 @@ class AssinaturaAtivaCacheTest {
     when(cacheVersionado.recuperar("assinatura:list:versao:" + USUARIO))
         .thenReturn(Optional.empty());
 
-    cache.popular(USUARIO, assinatura());
+    cache.popular(USUARIO, Optional.of(assinatura()));
 
     ArgumentCaptor<String> chaveCaptor = ArgumentCaptor.forClass(String.class);
     ArgumentCaptor<String> valorCaptor = ArgumentCaptor.forClass(String.class);
@@ -81,6 +81,24 @@ class AssinaturaAtivaCacheTest {
   }
 
   @Test
+  @DisplayName("Deve popular ausencia como json nulo")
+  void devePopularAusenciaComoJsonNulo() {
+    when(cacheVersionado.recuperar("assinatura:list:versao:" + USUARIO))
+        .thenReturn(Optional.empty());
+
+    cache.popular(USUARIO, Optional.empty());
+
+    ArgumentCaptor<String> chaveCaptor = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<String> valorCaptor = ArgumentCaptor.forClass(String.class);
+    verify(cacheVersionado)
+        .gravar(chaveCaptor.capture(), valorCaptor.capture(), eq(Duration.ofSeconds(300)));
+    assertThat(chaveCaptor.getValue())
+        .as("Chave da versao corrente")
+        .isEqualTo("assinatura:ativa:v0:" + USUARIO);
+    assertThat(valorCaptor.getValue()).as("Valor serializado da ausencia").isEqualTo("null");
+  }
+
+  @Test
   @DisplayName("Deve tratar json ilegivel no cache como miss")
   void deveTratarJsonIlegivelComoMiss() {
     when(cacheVersionado.recuperar("assinatura:list:versao:" + USUARIO))
@@ -89,6 +107,19 @@ class AssinaturaAtivaCacheTest {
         .thenReturn(Optional.of("{\"nao\": "));
 
     assertThat(cache.recuperar(USUARIO)).as("JSON corrompido deve degradar para miss").isEmpty();
+  }
+
+  @Test
+  @DisplayName("Deve distinguir ausencia cacheada de miss")
+  void deveLerAusenciaCacheadaComoVazio() {
+    when(cacheVersionado.recuperar("assinatura:list:versao:" + USUARIO))
+        .thenReturn(Optional.empty());
+    when(cacheVersionado.recuperar("assinatura:ativa:v0:" + USUARIO))
+        .thenReturn(Optional.of("null"));
+
+    assertThat(cache.recuperar(USUARIO))
+        .as("Ausencia cacheada nao e miss")
+        .contains(Optional.empty());
   }
 
   private static AssinaturaResponse assinatura() {
