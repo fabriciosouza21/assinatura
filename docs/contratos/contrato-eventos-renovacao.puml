@@ -92,8 +92,10 @@ note right of RenovacaoTentativasEsgotadas
   Mesma entrega e dedup de eventId do
   PagamentoRenovacaoAprovado.
 
-  Emitido na 3ª recusa: esgota as tentativas
-  da renovação e leva à suspensão da assinatura.
+  Emitido na 3ª recusa (webhook) ou no teto de
+  falhas tecnicas consecutivas (scheduler):
+  esgota as tentativas da renovação e leva à
+  suspensão da assinatura.
 end note
 
 note bottom of RenovacaoSolicitada
