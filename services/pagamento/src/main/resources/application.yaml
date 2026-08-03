@@ -57,6 +57,9 @@ spring:
       observation-enabled: true
 
 app:
+  jwt:
+    secret: ${APP_JWT_SECRET:ZmIxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTBhYmNkZWYxMjM0NTY3ODkwYWJjZGVmMTIzNDU2Nzg5MGFiY2RlZjEyMzQ1Njc4OTA=}
+    expiration-ms: ${APP_JWT_EXPIRATION_MS:3600000}
   gateway:
     base-url: ${APP_GATEWAY_BASE_URL:http://mock-pagamento:8081}
     webhook-secret: ${APP_GATEWAY_WEBHOOK_SECRET:mock-webhook-secret}
