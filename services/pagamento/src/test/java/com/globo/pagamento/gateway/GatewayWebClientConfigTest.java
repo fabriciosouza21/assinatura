@@ -58,7 +58,15 @@ class GatewayWebClientConfigTest {
   void deveConstruirWebClientDoBuilderInjetado() {
     WebClient.Builder builderSpy = Mockito.spy(WebClient.builder().baseUrl("http://gw"));
 
-    new GatewayWebClientConfig().gatewayPagamentoClient("http://gw", "http://hook", builderSpy);
+    new GatewayWebClientConfig()
+        .gatewayPagamentoClient(
+            "http://gw",
+            "http://hook",
+            builderSpy,
+            2000,
+            10000,
+            new GatewayRetryProperties(3, 1, 2.0, 0.5),
+            null);
 
     verify(builderSpy).build();
   }
@@ -68,7 +76,15 @@ class GatewayWebClientConfigTest {
   void deveAplicarConectorHttpAoBuilderInjetado() {
     WebClient.Builder builderSpy = Mockito.spy(WebClient.builder().baseUrl("http://gw"));
 
-    new GatewayWebClientConfig().gatewayPagamentoClient("http://gw", "http://hook", builderSpy);
+    new GatewayWebClientConfig()
+        .gatewayPagamentoClient(
+            "http://gw",
+            "http://hook",
+            builderSpy,
+            2000,
+            10000,
+            new GatewayRetryProperties(3, 1, 2.0, 0.5),
+            null);
 
     verify(builderSpy).clientConnector(any(ClientHttpConnector.class));
   }

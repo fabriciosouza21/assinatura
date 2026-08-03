@@ -61,6 +61,13 @@ app:
     base-url: ${APP_GATEWAY_BASE_URL:http://mock-pagamento:8081}
     webhook-secret: ${APP_GATEWAY_WEBHOOK_SECRET:mock-webhook-secret}
     webhook-notification-url: ${APP_GATEWAY_WEBHOOK_NOTIFICATION_URL:http://pagamento:8080/webhooks/payments}
+    timeout-conexao-ms: ${APP_GATEWAY_TIMEOUT_CONEXAO_MS:2000}
+    timeout-resposta-ms: ${APP_GATEWAY_TIMEOUT_RESPOSTA_MS:10000}
+    retry:
+      max-attempts: ${APP_GATEWAY_RETRY_MAX_ATTEMPTS:3}
+      backoff-inicial-segundos: ${APP_GATEWAY_RETRY_BACKOFF_INICIAL_SEGUNDOS:1}
+      multiplicador: ${APP_GATEWAY_RETRY_MULTIPLICADOR:2.0}
+      jitter: ${APP_GATEWAY_RETRY_JITTER:0.5}
   renovacao:
     scheduler-intervalo-ms: ${APP_RENOVACAO_SCHEDULER_INTERVALO_MS:5000}
     scheduler-delay-inicial-ms: ${APP_RENOVACAO_SCHEDULER_DELAY_INICIAL_MS:0}
