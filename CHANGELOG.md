@@ -38,6 +38,11 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
   tentativas de cobrança pendentes.
 - Collection do Bruno com fluxos de renovação (aprovação e esgotamento),
   incluindo consulta de renovação no Pagamento Service.
+- **Consulta da assinatura ativa**: `GET /assinaturas/ativa` autenticado (JWT
+  do dono) devolve a assinatura `ATIVA` do usuário como `AssinaturaResponse`,
+  com `404` sem ativa e `403` para `ROLE_ADMIN`. Cache-aside em Redis por
+  usuário com cache negativo da ausência (TTL 5 min) e invalidação via
+  contador de versão compartilhado com a listagem.
 
 ### Alterado
 - **Precisão de tempo na renovação** (Assinatura Service): `proximaRenovacaoEm`
@@ -61,6 +66,9 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
 - **Pacotes reorganizados por capacidade de negócio** (ADR 0002): `adesao`,
   `cadastro`, `renovacao`, `cancelamento` etc. nos dois serviços, com regra de
   dependência `capacidade → núcleo → shared` protegida por testes ArchUnit.
+- **Guards das consultas rejeitam `usuarioId` vazio**: `GET /assinaturas` e
+  `GET /assinaturas/ativa` respondem `403` também para a claim `""`, não só
+  `null` (defesa em profundidade contra bug futuro no login).
 
 ## [0.4.0] - 2026-08-02
 
