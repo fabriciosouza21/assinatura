@@ -106,4 +106,73 @@ class OutboxRepositoryTest {
         .extracting(OutboxEvent::getEventId)
         .containsExactly(falha.getEventId());
   }
+
+  @Test
+  @DisplayName("Deve selecionar tambem eventos em retentativa de DLQ prontos para envio")
+  void deveSelecionarEventosEmRetentativaDlq() {
+    OutboxEvent retentativa =
+        outboxRepository.saveAndFlush(
+            OutboxEvent.criar(
+                UUID.fromString("77777777-7777-7777-7777-777777777777"),
+                "Assinatura",
+                UUID.fromString("88888888-8888-8888-8888-888888888888"),
+                "AssinaturaSolicitada",
+                "{}"));
+    retentativa.marcarFalha("timeout", Instant.now());
+    retentativa.recuperarParaRetentativa(Instant.now());
+    outboxRepository.saveAndFlush(retentativa);
+
+    List<OutboxEvent> publicaveis = outboxRepository.buscarPublicaveis(Instant.now(), 10);
+
+    assertThat(publicaveis)
+        .as("Evento em RETENTATIVA_DLQ tambem e elegivel para publicacao")
+        .extracting(OutboxEvent::getEventId)
+        .containsExactly(retentativa.getEventId());
+  }
+
+  @Test
+  @DisplayName("Nao deve selecionar evento em falha que ainda nao venceu o timeout da DLQ")
+  void naoDeveSelecionarEventoEmFalhaRecente() {
+    OutboxEvent falha =
+        outboxRepository.saveAndFlush(
+            OutboxEvent.criar(
+                UUID.fromString("99999999-9999-9999-9999-999999999999"),
+                "Assinatura",
+                UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                "AssinaturaSolicitada",
+                "{}"));
+    falha.marcarFalha("timeout", Instant.now().minusSeconds(600));
+    outboxRepository.saveAndFlush(falha);
+
+    List<OutboxEvent> recuperaveis =
+        outboxRepository.buscarRecuperaveis(Instant.now().minusSeconds(3600), 3, 10);
+
+    assertThat(recuperaveis)
+        .as("Evento em FALHA ha menos de 1h nao e elegivel para recuperacao")
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("Nao deve selecionar evento que esgotou os ciclos de recuperacao")
+  void naoDeveSelecionarEventoComCiclosEsgotados() {
+    OutboxEvent falha =
+        outboxRepository.saveAndFlush(
+            OutboxEvent.criar(
+                UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                "Assinatura",
+                UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+                "AssinaturaSolicitada",
+                "{}"));
+    falha.marcarFalha("timeout", Instant.now().minusSeconds(3700));
+    falha.recuperarParaRetentativa(Instant.now().minusSeconds(3700));
+    falha.marcarFalha("timeout", Instant.now().minusSeconds(3700));
+    outboxRepository.saveAndFlush(falha);
+
+    List<OutboxEvent> recuperaveis =
+        outboxRepository.buscarRecuperaveis(Instant.now().minusSeconds(3600), 1, 10);
+
+    assertThat(recuperaveis)
+        .as("Evento com 1 ciclo usado nao e elegivel quando maxCiclos e 1")
+        .isEmpty();
+  }
 }
