@@ -85,6 +85,9 @@ app:
       # Intervalo entre republicacoes de uma mesma mensagem que continua falhando
       # no consumer original (bounce), em milissegundos. Default: 1 hora (3600000).
       backoff-interval-ms: ${APP_KAFKA_REPLAY_BACKOFF_INTERVAL_MS:3600000}
+      # Teto de republicacoes de uma mesma mensagem em bounce. Apos o teto, a
+      # mensagem sai do dreno com erro para nao travar o replay indefinidamente.
+      max-bounces: ${APP_KAFKA_REPLAY_MAX_BOUNCES:3}
   outbox:
     intervalo-ms: ${APP_OUTBOX_INTERVALO_MS:5000}
     tamanho-lote: ${APP_OUTBOX_TAMANHO_LOTE:100}
