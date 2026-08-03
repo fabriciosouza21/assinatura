@@ -147,6 +147,9 @@ Ambos os itens foram implementados neste PR (TDD, RED first), ver [Resolvido](#r
   403 com a query nunca chamada).
 - **Static import de `any()`**: `ConsultaAssinaturaAtivaControllerTest` passa a usar
   `import static org.mockito.ArgumentMatchers.any;`, alinhado ao sibling do pacote.
+- **Dedup de `toResponse`**: as 3 cópias idênticas (`ConsultarAssinaturaAtiva`, `ListarAssinaturas`,
+  `ConsultarAssinatura`) viraram o factory `AssinaturaResponse.of(Assinatura, String usuarioUuid)` no
+  próprio record.
 
 ## Acompanhamento
 
@@ -155,9 +158,6 @@ Ambos os itens foram implementados neste PR (TDD, RED first), ver [Resolvido](#r
 - **Race de versão no `popular`** (pré-existente na listagem): resolver o contador uma vez por chamada em
   `executar` e repassar para `buscarNoBanco`/`popular` em **ambos** `AssinaturaAtivaCache` e
   `AssinaturaListaCache`. RED first: teste de concorrência demonstrando stale-write-under-new-version.
-- **Dedup de `toResponse`**: 3 cópias idênticas (`ConsultarAssinaturaAtiva:72-84`,
-  `ListarAssinaturas:85-97`, `ConsultarAssinatura:61-71`). Extrair `AssinaturaResponse.of(Assinatura,
-  uuid)`. Refactor isolado.
 - **Pinar branch "usuário não existe"**: `ConsultarAssinaturaAtivaTest` não cobre `findByUuid` → vazio
   (coberto por composição + integração). Teste unitário `devePopularAusenciaQuandoUsuarioNaoExiste`
   travaria o branch contra refactor de `buscarNoBanco`.

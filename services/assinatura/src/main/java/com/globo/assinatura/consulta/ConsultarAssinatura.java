@@ -58,17 +58,7 @@ public class ConsultarAssinatura {
     if (!podeConsultar(usuario, principal)) {
       throw new AcessoNegadoException();
     }
-    return new AssinaturaResponse(
-        assinatura.getUuid(),
-        usuario.getUuid(),
-        assinatura.getPlano(),
-        assinatura.getDataInicio(),
-        assinatura.getDataExpiracao(),
-        assinatura.getStatus(),
-        assinatura.getInicioCiclo(),
-        assinatura.getFimCiclo(),
-        assinatura.getProximaRenovacaoEm(),
-        assinatura.isRenovacaoAutomatica());
+    return AssinaturaResponse.of(assinatura, usuario.getUuid());
   }
 
   private boolean podeConsultar(Usuario dono, UsuarioAutenticado principal) {

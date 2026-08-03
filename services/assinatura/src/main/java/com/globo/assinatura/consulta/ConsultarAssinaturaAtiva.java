@@ -1,6 +1,5 @@
 package com.globo.assinatura.consulta;
 
-import com.globo.assinatura.assinatura.Assinatura;
 import com.globo.assinatura.assinatura.AssinaturaRepository;
 import com.globo.assinatura.assinatura.StatusAssinatura;
 import com.globo.assinatura.consulta.api.AssinaturaResponse;
@@ -66,20 +65,6 @@ public class ConsultarAssinaturaAtiva {
         .findByUuid(usuarioUuid)
         .map(Usuario::getId)
         .flatMap(id -> assinaturaRepository.findByUsuarioIdAndStatus(id, StatusAssinatura.ATIVA))
-        .map(assinatura -> toResponse(assinatura, usuarioUuid));
-  }
-
-  private AssinaturaResponse toResponse(Assinatura assinatura, String usuarioUuid) {
-    return new AssinaturaResponse(
-        assinatura.getUuid(),
-        usuarioUuid,
-        assinatura.getPlano(),
-        assinatura.getDataInicio(),
-        assinatura.getDataExpiracao(),
-        assinatura.getStatus(),
-        assinatura.getInicioCiclo(),
-        assinatura.getFimCiclo(),
-        assinatura.getProximaRenovacaoEm(),
-        assinatura.isRenovacaoAutomatica());
+        .map(assinatura -> AssinaturaResponse.of(assinatura, usuarioUuid));
   }
 }

@@ -77,22 +77,8 @@ public class ListarAssinaturas {
             possivelUsuario.get().getId(), PageRequest.of(page, size));
     List<AssinaturaResponse> items =
         pagina.getContent().stream()
-            .map(assinatura -> toResponse(assinatura, usuarioUuid))
+            .map(assinatura -> AssinaturaResponse.of(assinatura, usuarioUuid))
             .toList();
     return new AssinaturaLista(items, page, size, pagina.getTotalElements());
-  }
-
-  private AssinaturaResponse toResponse(Assinatura assinatura, String usuarioUuid) {
-    return new AssinaturaResponse(
-        assinatura.getUuid(),
-        usuarioUuid,
-        assinatura.getPlano(),
-        assinatura.getDataInicio(),
-        assinatura.getDataExpiracao(),
-        assinatura.getStatus(),
-        assinatura.getInicioCiclo(),
-        assinatura.getFimCiclo(),
-        assinatura.getProximaRenovacaoEm(),
-        assinatura.isRenovacaoAutomatica());
   }
 }
