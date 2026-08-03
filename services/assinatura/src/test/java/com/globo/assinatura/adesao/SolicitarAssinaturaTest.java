@@ -112,11 +112,14 @@ class SolicitarAssinaturaTest {
     verify(assinaturaRepository)
         .existsByUsuarioIdAndStatusIn(
             eq(42L),
-            eq(
-                List.of(
-                    StatusAssinatura.AGUARDANDO_PAGAMENTO,
-                    StatusAssinatura.ATIVA,
-                    StatusAssinatura.EM_RENOVACAO)));
+            argThat(
+                statuses ->
+                    statuses.size() == 3
+                        && statuses.containsAll(
+                            List.of(
+                                StatusAssinatura.AGUARDANDO_PAGAMENTO,
+                                StatusAssinatura.ATIVA,
+                                StatusAssinatura.EM_RENOVACAO))));
   }
 
   @Test
