@@ -3,15 +3,18 @@
 **Data:** 2026-08-02
 **Versão alvo:** `0.5.0`
 **Branch base:** `develop`
-**PRDs de referência:** `docs/prd/2026-08-02-fechamento-lacunas-desafio.md` e
-`docs/prd/2026-08-02-dlq-recuperacao-observabilidade.md`
+**PRDs de referência:** `docs/prd/2026-08-02-fechamento-lacunas-desafio.md`,
+`docs/prd/2026-08-02-dlq-recuperacao-observabilidade.md`,
+`docs/prd/2026-08-03-recuperacao-automatica-outbox.md` (BE-24) e os PRDs
+focados de BE-20, BE-21, BE-22 e BE-23 em `docs/prd/`.
 
 O desafio exige um sistema de assinaturas com adesão, renovação automática no
 dia do vencimento, suspensão após três cobranças recusadas e cancelamento que
 mantém o acesso até o fim do ciclo. Este roadmap consolida a entrega do início
 ao fim: o que já está em `develop` (marcado como concluído) e o que falta
-(lacunas de robustez, DLQ e fechamento de release, marcados como pendentes ou em
-andamento).
+(recuperação manual, observabilidade, replay de DLQ e fechamento de release,
+marcados como pendentes). Todas as lacunas de robustez e aderência ao enunciado
+foram fechadas nos PRs #32 a #36.
 
 Todas as regras obrigatórias do enunciado já estão implementadas:
 
@@ -51,18 +54,11 @@ Todas as regras obrigatórias do enunciado já estão implementadas:
 | BE-16 a 19 | Precisão de tempo da renovação: domínio, escrita, scheduler por instante e contrato `date-time` | 0.4.0 | [x] |
 | ADR 0002 | Pacotes por capacidade com regras ArchUnit (PR #25) | 0.4.0 | [x] |
 | BE-23 | `EM_RENOVACAO` entra no índice único de assinatura aberta e na rejeição de nova assinatura (PR #33) | 0.5.0 | [x] |
+| BE-22 | Consulta de assinatura ativa via cache (caminho quente Redis, frio banco) com cache de ausência e invalidação por versão (PR #34) | 0.5.0 | [x] |
 
-### Em andamento
+### Pendentes
 
-### BE-22 — Consulta de assinatura ativa com cache
-`feat/consulta-assinatura-ativa-cache`
-- O enunciado pede cache para "consultas de assinaturas ativas"; hoje o cache
-  cobre a listagem em qualquer status.
-- Novo caminho de leitura devolve a assinatura ativa corrente do usuário,
-  servida do Redis no caminho quente e do banco no frio, com invalidação por
-  versão como a da listagem e degradação silenciosa se o Redis falhar.
-- **Estado:** leitura via cache e miss p/ banco commitadas (2 commits); controller
-  e teste do endpoint ainda não commitados (untracked).
+_Nenhuma frente aberta no Assinatura Service._
 
 ---
 
@@ -79,34 +75,21 @@ Todas as regras obrigatórias do enunciado já estão implementadas:
 | BE-13 | Webhook decide a renovação: aprovada encerra, três recusas esgotam | 0.3.0 | [x] |
 | Outbox | Resultados de renovação e cancelamento publicados via outbox com retry e DLQ | 0.3.0 | [x] |
 | BE-20 | Teto de falhas técnicas do gateway: N falhas consecutivas esgotam a renovação (PR #32) | 0.5.0 | [x] |
+| BE-21 | Retry com backoff exponencial + jitter no cliente do gateway, só para falhas transitórias (PR #36) | 0.5.0 | [x] |
 
-### Em andamento
+### Pendentes
 
-### BE-21 — Retentativa com backoff no cliente do gateway
-`feat/retry-backoff-cliente-gateway`
-- O cliente HTTP do gateway passa a aplicar retry com backoff exponencial e
-  jitter para falhas transitórias (timeout, 5xx) antes de propagar.
-- Falha técnica esgotada continua contando contra o teto da BE-20.
-- **Estado:** retry com `Retry.backoff` + wrap em
-  `CobrancaGatewayIndisponivelException` ao esgotar commitado (1 commit); ajustes
-  finais no client e no teste ainda não commitados.
+_Nenhuma frente aberta no Pagamento Service._
 
 ---
 
 ## Infraestrutura compartilhada
 
-### BE-24 — Recuperação automática da outbox
-`feat/recuperacao-automatica-outbox`
-- Eventos marcados `FALHA` ficam presos no banco para sempre nos dois serviços.
-- Um scheduler promove `FALHA` → retentativa após quarentena configurável, com
-  limite de ciclos e `FOR UPDATE SKIP LOCKED` para suportar múltiplas
-  instâncias.
-- **Base pré-existente:** a branch local
-  `worktree-feat-outbox-dlq-recovery` tem o scheduler pronto **somente no
-  Assinatura**, mas embaralhada com a refatoração de pacotes (336 arquivos).
-  Precisa ser isolada por cherry-pick dos 2 commits relevantes (`2f6eaa5`,
-  `c9b6167`) para uma branch limpa a partir de `develop`, depois replicada no
-  Pagamento. **Gargalo do fluxo:** BE-25, BE-26 e BE-28 dependem desta base.
+### Entregues
+
+| ID | Entrega | Release | Status |
+|----|---------|---------|--------|
+| BE-24 | Recuperação automática da outbox nos dois serviços: scheduler promove `FALHA` → `RETENTATIVA_DLQ` após quarentena, com limite de ciclos e `FOR UPDATE SKIP LOCKED` (PR #35) | 0.5.0 | [x] |
 
 ### BE-25 — Observabilidade de falhas
 `feat/observabilidade-dlq`
@@ -158,9 +141,9 @@ Convenção: `[x]` no `develop` · `[~]` em andamento (worktree ativa) · `[ ]` 
 |---|-----------|-----------|--------|
 | 1 | Teto de falhas técnicas do gateway (BE-20) | — | [x] PR #32 |
 | 2 | Conformidade da assinatura única durante renovação (BE-23) | — | [x] PR #33 |
-| 3 | Retry com backoff no cliente do gateway (BE-21) | 1 | [~] worktree |
-| 4 | Consulta de assinatura ativa com cache (BE-22) | — | [~] worktree |
-| 5 | Recuperação automática da outbox nos dois serviços (BE-24) | — | [ ] |
+| 3 | Retry com backoff no cliente do gateway (BE-21) | 1 | [x] PR #36 |
+| 4 | Consulta de assinatura ativa com cache (BE-22) | — | [x] PR #34 |
+| 5 | Recuperação automática da outbox nos dois serviços (BE-24) | — | [x] PR #35 |
 | 6 | Replay da DLQ de consumer (BE-27) | — | [ ] |
 | 7 | Observabilidade de falhas (BE-25) | 5 | [ ] |
 | 8 | Recuperação manual assistida da outbox (BE-26) | 5 | [ ] |
@@ -168,13 +151,13 @@ Convenção: `[x]` no `develop` · `[~]` em andamento (worktree ativa) · `[ ]` 
 | 10 | Testes de integração com Testcontainers (INT-2) | 3-9 | [ ] |
 | 11 | Changelog + bump versão 0.5.0 (DOCS-5) | 3-10 | [ ] |
 
-**Paralelismo:** as frentes 3 e 4 já estão abertas em worktrees disjuntas
-(pagamento/gateway e assinatura/consulta). Assim que uma delas fecha, abrir a 5
-(BE-24), que é o gargalo das 7, 8 e 9 por tocar `shared/outbox` nos dois
-serviços. A 6 (BE-27) é independente e pode abrir a qualquer momento, pois toca
-`shared/kafka` (replay de DLQ de consumer), área distinta da outbox.
+**Próxima frente:** BE-27 (item 6) é o único independente que pode abrir agora,
+pois toca `shared/kafka` (replay de DLQ de consumer), área distinta da outbox.
+BE-25 e BE-26 (itens 7, 8) dependem do BE-24, já entregue, e também podem abrir
+em paralelo entre si desde que em worktrees separadas por serviço, pois ambas
+tocam `shared/outbox`. Em sequência fica BE-28, que precisa de BE-24 e BE-27
+landados para alinhar logging e configuração de DLT.
 
-**Gargalo de migração:** Assinatura em V12, Pagamento em V9 (após BE-20, V10).
-BE-24 pode precisar de migration em ambos os serviços se o status
-`RETENTATIVA_DLQ` exigir coluna. Reservar V13 (Assinatura) e V11 (Pagamento) ao
-abrir as frentes, para evitar quebra de baseline no merge.
+**Numeração de migrations (após BE-20 e BE-24):** Assinatura em V13, Pagamento
+em V11. Próximo número livre: V14 (Assinatura) e V12 (Pagamento). Coordenar ao
+abrir frentes que toquem DB no mesmo serviço.
