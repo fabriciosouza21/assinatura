@@ -69,6 +69,25 @@ requests via variáveis capturadas no `after-response`.
 3. **Simular aprovação** → força `APPROVED` e dispara o webhook para o serviço
    de pagamento.
 
+## Observabilidade (metricas)
+
+Os dois serviços expõem `GET /actuator/prometheus` no formato do Prometheus,
+sem autenticação (`api/assinatura/metricas-prometheus` e
+`api/pagamento/metricas-prometheus`).
+
+- A métrica **`outbox_eventos`** conta os eventos da outbox por status, com as
+  tags `servico` (`assinatura` | `pagamento`) e `status` (`pendente` |
+  `retentativa_dlq` | `falha`), atualizada a cada
+  `APP_OUTBOX_METRICAS_INTERVALO_MS` (default 60s). O gauge de `falha` é o
+  sinal de evento que esgotou as tentativas e ficou terminal.
+- Junto vêm as métricas de JVM e do Kafka (`jvm_memory_*`,
+  `kafka_producer_*`), além das customizadas como
+  `pagamento_gateway_retry_tentativas`.
+
+Para ver o gauge refletir eventos reais: solicite uma assinatura e, com o
+Kafka parado (`docker compose stop kafka`), o evento fica `pendente` e passa a
+`falha` após esgotar as tentativas do publisher.
+
 ## Fluxo encadeado completo (assinatura)
 
 Ponta a ponta, do cadastro do usuário até a assinatura `ATIVA`, sem editar
