@@ -36,10 +36,11 @@ public class SecurityConfig {
   /**
    * Constrói a cadeia de filtros de segurança.
    *
-   * <p>Libera apenas {@code POST /usuarios} (auto-cadastro publico), {@code /auth/login} e {@code
-   * /actuator/health}; todas as demais rotas exigem autenticacao, inclusive as de assinatura. Sem
-   * token, ou com token invalido, a resposta e {@code 401}; o {@code 403} fica reservado a quem
-   * esta autenticado mas nao e dono do recurso.
+   * <p>Libera apenas {@code POST /usuarios} (auto-cadastro publico), {@code /auth/login} e os
+   * endpoints de monitoramento {@code /actuator/health} e {@code /actuator/prometheus}; todas as
+   * demais rotas exigem autenticacao, inclusive as de assinatura. Sem token, ou com token invalido,
+   * a resposta e {@code 401}; o {@code 403} fica reservado a quem esta autenticado mas nao e dono
+   * do recurso.
    *
    * @param http o builder de segurança do Spring
    * @return a cadeia de filtros configurada
@@ -52,7 +53,7 @@ public class SecurityConfig {
             auth ->
                 auth.requestMatchers(HttpMethod.POST, "/usuarios")
                     .permitAll()
-                    .requestMatchers("/auth/login", "/actuator/health")
+                    .requestMatchers("/auth/login", "/actuator/health", "/actuator/prometheus")
                     .permitAll()
                     .anyRequest()
                     .authenticated())
