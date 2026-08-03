@@ -3,6 +3,8 @@ package com.globo.pagamento.gateway;
 import java.time.Duration;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
@@ -16,6 +18,8 @@ import reactor.util.retry.Retry;
  * {@code 429}, nao sao retentadas e propagam imediatamente.
  */
 public final class GatewayRetryPolicy {
+
+  private static final Logger log = LoggerFactory.getLogger(GatewayRetryPolicy.class);
 
   private GatewayRetryPolicy() {}
 
@@ -61,13 +65,20 @@ public final class GatewayRetryPolicy {
                   if (!ehFalhaTransitoria(sinal.failure()) || sinal.totalRetries() >= maxAttempts) {
                     return Mono.error(sinal.failure());
                   }
-                  return Mono.delay(
+                  long tentativa = sinal.totalRetries() + 1;
+                  Duration backoff =
                       calcularBackoff(
-                          sinal.totalRetries() + 1,
+                          tentativa,
                           backoffInicial,
                           multiplicador,
                           jitter,
-                          ThreadLocalRandom.current()));
+                          ThreadLocalRandom.current());
+                  log.atDebug()
+                      .addKeyValue("event", "gateway_retry_tentativa")
+                      .addKeyValue("tentativa", tentativa)
+                      .addKeyValue("backoffMs", backoff.toMillis())
+                      .log("Retentando chamada ao gateway");
+                  return Mono.delay(backoff);
                 }));
   }
 

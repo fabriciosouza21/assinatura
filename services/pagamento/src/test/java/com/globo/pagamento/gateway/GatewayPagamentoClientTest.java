@@ -3,6 +3,10 @@ package com.globo.pagamento.gateway;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
@@ -13,6 +17,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.netty.http.client.HttpClient;
@@ -327,5 +332,52 @@ class GatewayPagamentoClientTest {
     assertThat(server.getRequestCount())
         .as("quantidade de tentativas no gateway apos timeout")
         .isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("Deve registrar log DEBUG por tentativa de retry")
+  void deveRegistrarLogDebugPorTentativaDeRetry() throws Exception {
+    server.enqueue(new MockResponse().setResponseCode(500));
+    server.enqueue(
+        new MockResponse()
+            .setHeader("Content-Type", "application/json")
+            .setBody(
+                jsonMapper.writeValueAsString(
+                    new CreatePaymentResponse(
+                        "pay_renov", "renov-123", new BigDecimal("19.90"), "BRL", "PIX")))
+            .setResponseCode(201));
+    Logger logger = (Logger) LoggerFactory.getLogger(GatewayRetryPolicy.class);
+    logger.setLevel(Level.DEBUG);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      GatewayPagamentoClient clientComRetry =
+          new GatewayPagamentoClient(
+              WebClient.builder().baseUrl(server.url("/").toString()).build(),
+              "http://pagamento:8080/webhooks/payments",
+              GatewayRetryPolicy.criar(3, Duration.ofMillis(5)));
+      clientComRetry.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90"));
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .as("log DEBUG por tentativa de retry do gateway")
+        .anyMatch(
+            evento ->
+                evento.getLevel() == Level.DEBUG
+                    && evento.getKeyValuePairs().stream()
+                        .anyMatch(
+                            par ->
+                                "event".equals(par.key)
+                                    && "gateway_retry_tentativa".equals(par.value))
+                    && evento.getKeyValuePairs().stream()
+                        .anyMatch(
+                            par ->
+                                "tentativa".equals(par.key)
+                                    && "1".equals(String.valueOf(par.value)))
+                    && evento.getKeyValuePairs().stream()
+                        .anyMatch(par -> "backoffMs".equals(par.key)));
   }
 }
