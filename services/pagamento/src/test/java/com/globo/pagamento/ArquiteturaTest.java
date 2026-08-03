@@ -91,6 +91,8 @@ class ArquiteturaTest {
       classes()
           .that()
           .haveSimpleNameEndingWith("Consumer")
+          .and()
+          .resideOutsideOfPackage("..shared..")
           .should()
           .resideInAnyPackage("..evento..");
 
