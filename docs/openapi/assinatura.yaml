@@ -157,6 +157,46 @@ paths:
         '409':
           description: Usuario ja possui assinatura aberta. Corpo vazio.
 
+  /assinaturas/ativa:
+    get:
+      tags: [Assinatura]
+      summary: Consulta a assinatura ativa do dono do token
+      description: |
+        Devolve a assinatura em status ATIVA do usuario do token, ou 404 se nao
+        houver (usuario novo, apenas AGUARDANDO_PAGAMENTO ou apenas fechadas).
+        ROLE_ADMIN, sem usuario de dominio, recebe 403. Resposta no mesmo schema
+        da consulta pontual; cache em Redis por usuario, com invalidacao apos o
+        commit das escritas.
+      operationId: consultarAssinaturaAtiva
+      responses:
+        '200':
+          description: Assinatura ativa do usuario do token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assinatura'
+              examples:
+                ativa:
+                  summary: Assinatura ativa
+                  value:
+                    id: "770e8400-e29b-41d4-a716-446655440000"
+                    usuarioId: "550e8400-e29b-41d4-a716-446655440000"
+                    plano: PREMIUM
+                    dataInicio: "2025-03-10"
+                    dataExpiracao: "2025-04-10"
+                    status: ATIVA
+                    inicioCiclo: "2025-03-10"
+                    fimCiclo: "2025-04-09"
+                    proximaRenovacaoEm: "2025-04-09T12:00:00Z"
+                    renovacaoAutomatica: true
+        '401':
+          description: Token ausente, expirado ou invalido. Corpo vazio.
+        '403':
+          description: |
+            Token sem usuario de dominio (administrador do seed). Corpo vazio.
+        '404':
+          description: Usuario nao possui assinatura ativa. Corpo vazio.
+
   /assinaturas/{uuid}:
     get:
       tags: [Assinatura]

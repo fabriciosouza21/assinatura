@@ -1,0 +1,123 @@
+@startuml
+title Consulta da assinatura ativa com cache distribuído (Redis) e invalidação no write
+
+autonumber
+hide footbox
+
+skinparam backgroundColor #FFFFFF
+skinparam ParticipantPadding 24
+skinparam BoxPadding 10
+skinparam maxMessageSize 110
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor "Cliente" as CLI
+control "Assinatura\nService" as AS
+database "Redis\n(cache)" as REDIS
+database "DB\nAssinaturas" as DBAS
+queue "Kafka" as KAFKA
+control "Scheduler de\nRenovação" as SCHED
+
+== 1. Consulta da ativa com cache (cache-aside) ==
+
+CLI -> AS: GET /assinaturas/ativa\n(token JWT do dono)
+AS -> REDIS: GET assinatura:list:versao:{usuarioUuid}\n(contador de versão, compartilhado com a listagem)
+AS -> REDIS: GET assinatura:ativa:v{versao}:{usuarioUuid}
+
+alt cache hit (assinatura)
+    REDIS --> AS: AssinaturaResponse (JSON)
+    AS --> CLI: 200 OK\nAssinaturaResponse
+else cache hit (ausência cacheada)
+    REDIS --> AS: "null" (sentinel JSON)
+    AS --> CLI: 404 Not Found
+else cache miss
+    AS -> DBAS: Busca usuário pelo uuid público\n(findByUuid)
+    AS -> DBAS: Busca assinatura ATIVA do usuário\n(findByUsuarioIdAndStatus)
+    alt assinatura ativa encontrada
+        AS -> REDIS: SET assinatura:ativa:v{versao}:{usuarioUuid}\nTTL de segurança (ex.: 5 min)
+        AS --> CLI: 200 OK\nAssinaturaResponse
+    else sem assinatura ativa
+        AS -> REDIS: SET assinatura:ativa:v{versao}:{usuarioUuid} = "null"\nTTL de segurança (ex.: 5 min)
+        AS --> CLI: 404 Not Found
+    end
+end
+
+note over REDIS
+  Chave de dados dedicada à consulta
+  ativa (assinatura:ativa), versionada
+  por usuário. O contador de versão é o
+  MESMO da listagem
+  (assinatura:list:versao:{usuarioUuid}):
+  toda invalidação de escrita já o
+  incrementa, invalidando a ativa junto.
+  A ausência é cacheada como JSON "null"
+  (cache negativo); TTL é a rede de
+  segurança para falha de invalidação.
+end note
+
+== 2. Invalidação ao solicitar assinatura (síncrono) ==
+
+CLI -> AS: POST /assinaturas\n{plano}
+AS -> DBAS: Grava assinatura (AGUARDANDO_PAGAMENTO)\ne evento AssinaturaSolicitada na outbox
+AS -> REDIS: INCR assinatura:list:versao:{usuarioUuid}
+
+note over AS
+  Mesma invalidação da listagem, após o
+  commit (after-commit). Nenhum código
+  novo nos fluxos de escrita: o contador
+  compartilhado invalida a ativa junto.
+end note
+
+AS --> CLI: 202 Accepted\n{assinaturaId, status}
+
+== 3. Invalidação ao processar status de pagamento (Kafka) ==
+
+KAFKA -> AS: Consumir PagamentoStatusAtualizado\n{assinaturaId, status}
+AS -> DBAS: Atualizar status (ATIVA ou\nPAGAMENTO_RECUSADO)
+AS -> REDIS: INCR assinatura:list:versao:{usuarioUuid}
+
+== 4. Invalidação ao processar resultado de renovação (Kafka) ==
+
+KAFKA -> AS: Consumir PagamentoRenovacaoAprovado\nou RenovacaoTentativasEsgotadas
+AS -> DBAS: Renovar ciclo (fimCiclo +1)\nou suspender assinatura
+AS -> REDIS: INCR assinatura:list:versao:{usuarioUuid}
+
+== 5. Invalidação no scheduler e no cancelamento (HTTP) ==
+
+SCHED -> AS: Executar varredura de vencimentos
+AS -> DBAS: Seleciona ciclos vencidos, com lock
+
+loop Para cada assinatura vencida
+    alt renovacao_automatica = false
+        AS -> DBAS: Marca assinatura como CANCELADA
+        AS -> REDIS: INCR assinatura:list:versao:{usuarioUuid}
+    else renovacao_automatica = true
+        AS -> DBAS: Cria renovação e grava\nRenovacaoSolicitada na outbox
+        AS -> REDIS: INCR assinatura:list:versao:{usuarioUuid}
+    end
+end
+
+CLI -> AS: POST /assinaturas/{uuid}/cancelamento
+AS -> DBAS: Cancela assinatura (AGENDADO ou IMEDIATO)
+AS -> REDIS: INCR assinatura:list:versao:{usuarioUuid}
+
+== Garantias do padrão ==
+
+note over AS, REDIS
+  - Invalidação somente no write, nunca
+    update do cache (evita corrida).
+  - Invalidação após o commit: se a
+    transação falhar, o cache permanece
+    válido.
+  - TTL como fallback para a janela
+    entre commit e INCR.
+  - Redis indisponível degrada para o
+    banco com WARN, sem derrubar a
+    consulta.
+  - Cache negativo (ausência como
+    "null") com TTL próprio evita
+    martelar o banco para usuários sem
+    assinatura ativa.
+end note
+
+@enduml
