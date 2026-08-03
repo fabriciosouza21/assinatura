@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientException;
+import reactor.core.Exceptions;
 import reactor.util.retry.Retry;
 
 /**
@@ -74,8 +75,9 @@ public class GatewayPagamentoClient {
   /**
    * Cria uma cobranca no gateway para uma tentativa de renovacao da assinatura.
    *
-   * <p>Falhas tecnicas de WebClient sao envolvidas em {@link CobrancaGatewayIndisponivelException};
-   * demais excecoes propagam, distinguindo falha tecnica de bug.
+   * <p>Falhas tecnicas de WebClient e a exaustao do retry sao envolvidas em {@link
+   * CobrancaGatewayIndisponivelException}; demais excecoes propagam, distinguindo falha tecnica de
+   * bug.
    *
    * @param renovacaoId identificador da renovacao, usado como referencia externa
    * @param numero numero da tentativa de cobranca, combinado com {@code renovacaoId} para formar a
@@ -100,6 +102,11 @@ public class GatewayPagamentoClient {
       return new CobrancaCriada(response.id());
     } catch (WebClientException e) {
       throw new CobrancaGatewayIndisponivelException(e);
+    } catch (IllegalStateException e) {
+      if (Exceptions.isRetryExhausted(e)) {
+        throw new CobrancaGatewayIndisponivelException(e);
+      }
+      throw e;
     }
   }
 

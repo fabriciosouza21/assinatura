@@ -162,6 +162,27 @@ class GatewayPagamentoClientTest {
   }
 
   @Test
+  @DisplayName("Deve propagar CobrancaGatewayIndisponivelException apos esgotar o retry")
+  void devePropagarCobrancaGatewayIndisponivelAposEsgotarRetry() {
+    for (int tentativa = 0; tentativa < 4; tentativa++) {
+      server.enqueue(new MockResponse().setResponseCode(503));
+    }
+    GatewayPagamentoClient clientComRetry =
+        new GatewayPagamentoClient(
+            WebClient.builder().baseUrl(server.url("/").toString()).build(),
+            "http://pagamento:8080/webhooks/payments",
+            Retry.backoff(3, Duration.ofMillis(5)));
+
+    assertThatThrownBy(
+            () -> clientComRetry.criarCobrancaRenovacao("renov-123", 1, new BigDecimal("19.90")))
+        .as("exaustao do retry deve propagar excecao de dominio, nao RetryExhaustedException")
+        .isInstanceOf(CobrancaGatewayIndisponivelException.class);
+    assertThat(server.getRequestCount())
+        .as("tentativas no gateway: 1 inicial + 3 retries")
+        .isEqualTo(4);
+  }
+
+  @Test
   @DisplayName("Deve consultar o status oficial da cobranca por paymentId")
   void deveConsultarStatusPorPaymentId() throws Exception {
     server.enqueue(
