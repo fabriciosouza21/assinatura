@@ -33,18 +33,23 @@ public record GatewayRetryProperties(
   /**
    * Cria as propriedades de retry validando os parametros fail-fast.
    *
-   * @throws IllegalArgumentException se {@code maxAttempts} for menor que 1, {@code multiplicador}
-   *     menor que 1 ou {@code jitter} estiver fora do intervalo {@code [0, 1]}
+   * @throws IllegalArgumentException se {@code maxAttempts} for menor que 1, {@code
+   *     backoffInicialSegundos} for menor que 1, {@code multiplicador} for nao finito ou menor que
+   *     1, ou {@code jitter} for nao finito ou estiver fora do intervalo {@code [0, 1]}
    */
   public GatewayRetryProperties {
     if (maxAttempts < 1) {
       throw new IllegalArgumentException("Max attempts deve ser maior ou igual a 1");
     }
-    if (multiplicador < 1) {
-      throw new IllegalArgumentException("Multiplicador deve ser maior ou igual a 1");
+    if (backoffInicialSegundos < 1) {
+      throw new IllegalArgumentException("Backoff inicial deve ser maior ou igual a 1 segundo");
     }
-    if (jitter < 0 || jitter > 1) {
-      throw new IllegalArgumentException("Jitter deve estar entre 0 e 1");
+    if (!Double.isFinite(multiplicador) || multiplicador < 1) {
+      throw new IllegalArgumentException(
+          "Multiplicador deve ser um numero finito maior ou igual a 1");
+    }
+    if (!Double.isFinite(jitter) || jitter < 0 || jitter > 1) {
+      throw new IllegalArgumentException("Jitter deve ser um numero finito entre 0 e 1");
     }
   }
 }

@@ -52,8 +52,8 @@ public final class GatewayRetryPolicy {
    * @param multiplicador fator de crescimento do atraso a cada tentativa, maior ou igual a 1
    * @param jitter amplitude fracionaria do jitter ao redor da base, entre 0 e 1
    * @return politica de retry do Reactor aplicavel a criacao de cobrancas
-   * @throws IllegalArgumentException se {@code multiplicador} for menor que 1 ou {@code jitter}
-   *     estiver fora do intervalo {@code [0, 1]}
+   * @throws IllegalArgumentException se {@code multiplicador} for nao finito ou menor que 1, ou
+   *     {@code jitter} for nao finito ou estiver fora do intervalo {@code [0, 1]}
    */
   public static Retry criar(
       int maxAttempts, Duration backoffInicial, double multiplicador, double jitter) {
@@ -113,11 +113,12 @@ public final class GatewayRetryPolicy {
   }
 
   private static void validarParametros(double multiplicador, double jitter) {
-    if (multiplicador < 1) {
-      throw new IllegalArgumentException("Multiplicador deve ser maior ou igual a 1");
+    if (!Double.isFinite(multiplicador) || multiplicador < 1) {
+      throw new IllegalArgumentException(
+          "Multiplicador deve ser um numero finito maior ou igual a 1");
     }
-    if (jitter < 0 || jitter > 1) {
-      throw new IllegalArgumentException("Jitter deve estar entre 0 e 1");
+    if (!Double.isFinite(jitter) || jitter < 0 || jitter > 1) {
+      throw new IllegalArgumentException("Jitter deve ser um numero finito entre 0 e 1");
     }
   }
 

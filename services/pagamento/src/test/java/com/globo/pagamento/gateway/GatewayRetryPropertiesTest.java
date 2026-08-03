@@ -52,4 +52,37 @@ class GatewayRetryPropertiesTest {
         .as("Criacao com jitter acima de um")
         .isInstanceOf(IllegalArgumentException.class);
   }
+
+  @Test
+  @DisplayName("Deve rejeitar backoff inicial abaixo de um segundo na criacao")
+  void deveRejeitarBackoffInicialAbaixoDeUmSegundo() {
+    assertThatThrownBy(() -> new GatewayRetryProperties(3, 0, 2.0, 0.5))
+        .as("Criacao com backoff inicial zero")
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> new GatewayRetryProperties(3, -1, 2.0, 0.5))
+        .as("Criacao com backoff inicial negativo")
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  @DisplayName("Deve rejeitar multiplicador nao finito (NaN ou infinito) na criacao")
+  void deveRejeitarMultiplicadorNaoFinito() {
+    assertThatThrownBy(() -> new GatewayRetryProperties(3, 1, Double.NaN, 0.5))
+        .as("Criacao com multiplicador NaN")
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> new GatewayRetryProperties(3, 1, Double.POSITIVE_INFINITY, 0.5))
+        .as("Criacao com multiplicador infinito")
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  @DisplayName("Deve rejeitar jitter nao finito (NaN ou infinito) na criacao")
+  void deveRejeitarJitterNaoFinito() {
+    assertThatThrownBy(() -> new GatewayRetryProperties(3, 1, 2.0, Double.NaN))
+        .as("Criacao com jitter NaN")
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> new GatewayRetryProperties(3, 1, 2.0, Double.POSITIVE_INFINITY))
+        .as("Criacao com jitter infinito")
+        .isInstanceOf(IllegalArgumentException.class);
+  }
 }

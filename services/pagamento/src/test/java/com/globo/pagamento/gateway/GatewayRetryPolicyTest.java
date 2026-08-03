@@ -80,4 +80,32 @@ class GatewayRetryPolicyTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("Jitter");
   }
+
+  @Test
+  @DisplayName("Deve rejeitar multiplicador nao finito (NaN ou infinito) na criacao da politica")
+  void deveRejeitarMultiplicadorNaoFinitoNaCriacao() {
+    assertThatThrownBy(() -> GatewayRetryPolicy.criar(3, Duration.ofSeconds(1), Double.NaN, 0.1))
+        .as("Criacao da politica com multiplicador NaN")
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Multiplicador");
+    assertThatThrownBy(
+            () -> GatewayRetryPolicy.criar(3, Duration.ofSeconds(1), Double.POSITIVE_INFINITY, 0.1))
+        .as("Criacao da politica com multiplicador infinito")
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Multiplicador");
+  }
+
+  @Test
+  @DisplayName("Deve rejeitar jitter nao finito (NaN ou infinito) na criacao da politica")
+  void deveRejeitarJitterNaoFinitoNaCriacao() {
+    assertThatThrownBy(() -> GatewayRetryPolicy.criar(3, Duration.ofSeconds(1), 2.0, Double.NaN))
+        .as("Criacao da politica com jitter NaN")
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Jitter");
+    assertThatThrownBy(
+            () -> GatewayRetryPolicy.criar(3, Duration.ofSeconds(1), 2.0, Double.POSITIVE_INFINITY))
+        .as("Criacao da politica com jitter infinito")
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Jitter");
+  }
 }
