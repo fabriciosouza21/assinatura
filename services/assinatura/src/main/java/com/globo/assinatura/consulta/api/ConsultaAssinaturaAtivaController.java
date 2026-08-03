@@ -2,6 +2,7 @@ package com.globo.assinatura.consulta.api;
 
 import com.globo.assinatura.assinatura.AssinaturaNaoEncontradaException;
 import com.globo.assinatura.consulta.ConsultarAssinaturaAtiva;
+import com.globo.assinatura.shared.seguranca.AcessoNegadoException;
 import com.globo.assinatura.shared.seguranca.UsuarioAutenticado;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,9 +31,13 @@ public class ConsultaAssinaturaAtivaController {
    * @param principal identidade extraida do token JWT
    * @return a representacao da assinatura ativa do usuario
    * @throws AssinaturaNaoEncontradaException se o usuario nao tiver assinatura ativa
+   * @throws AcessoNegadoException se o token nao estiver ligado a um usuario de dominio
    */
   @GetMapping("/ativa")
   public AssinaturaResponse consultarAtiva(@AuthenticationPrincipal UsuarioAutenticado principal) {
+    if (principal.usuarioId() == null) {
+      throw new AcessoNegadoException();
+    }
     return consultarAssinaturaAtiva
         .executar(principal.usuarioId())
         .orElseThrow(AssinaturaNaoEncontradaException::new);
