@@ -92,6 +92,30 @@ class TentativaCobrancaTest {
   }
 
   @Test
+  @DisplayName("Deve esgotar as falhas tecnicas quando o teto e igual a um")
+  void deveEsgotarComTetoUm() {
+    TentativaCobranca tentativa = new TentativaCobranca("renov-uuid", 1);
+    tentativa.registrarFalhaTecnica();
+
+    assertThat(tentativa.esgotouFalhasTecnicas(1))
+        .as("Primeira falha tecnica esgota com teto minimo")
+        .isTrue();
+  }
+
+  @Test
+  @DisplayName("Deve esgotar as falhas tecnicas quando o contador ultrapassa o teto")
+  void deveEsgotarQuandoContadorUltrapassaTeto() {
+    TentativaCobranca tentativa = new TentativaCobranca("renov-uuid", 1);
+    for (int i = 0; i < 4; i++) {
+      tentativa.registrarFalhaTecnica();
+    }
+
+    assertThat(tentativa.esgotouFalhasTecnicas(3))
+        .as("Contador acima do teto ainda esgota as falhas tecnicas")
+        .isTrue();
+  }
+
+  @Test
   @DisplayName("Deve zerar o contador de falhas tecnicas quando a cobranca e registrada")
   void deveZerarContadorDeFalhasTecnicasAoRegistrarCobranca() {
     TentativaCobranca tentativa = new TentativaCobranca("renov-uuid", 1);
