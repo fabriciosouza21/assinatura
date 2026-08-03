@@ -1,7 +1,6 @@
 package com.globo.assinatura.shared.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -38,9 +37,10 @@ class OutboxMetricasSchedulerTest {
   @Test
   @DisplayName("Deve atualizar os gauges com a contagem por status do repositorio")
   void deveAtualizarGaugesComContagemPorStatus() {
-    List<OutboxRepository.ContagemStatus> contagens =
-        List.of(contagem("FALHA", 3L), contagem("PENDENTE", 5L), contagem("RETENTATIVA_DLQ", 2L));
-    when(outboxRepository.contarPorStatus()).thenReturn(contagens);
+    when(outboxRepository.contarPorStatus())
+        .thenReturn(
+            List.<Object[]>of(
+                linha("FALHA", 3L), linha("PENDENTE", 5L), linha("RETENTATIVA_DLQ", 2L)));
 
     scheduler.atualizarMetricas();
 
@@ -52,8 +52,7 @@ class OutboxMetricasSchedulerTest {
   @Test
   @DisplayName("Deve zerar status sem eventos na consulta corrente")
   void deveZerarStatusSemEventos() {
-    List<OutboxRepository.ContagemStatus> contagens = List.of(contagem("FALHA", 3L));
-    when(outboxRepository.contarPorStatus()).thenReturn(contagens);
+    when(outboxRepository.contarPorStatus()).thenReturn(List.<Object[]>of(linha("FALHA", 3L)));
     scheduler.atualizarMetricas();
     when(outboxRepository.contarPorStatus()).thenReturn(List.of());
 
@@ -74,10 +73,7 @@ class OutboxMetricasSchedulerTest {
         .value();
   }
 
-  private static OutboxRepository.ContagemStatus contagem(String status, Long total) {
-    OutboxRepository.ContagemStatus contagem = mock(OutboxRepository.ContagemStatus.class);
-    when(contagem.getStatus()).thenReturn(status);
-    when(contagem.getTotal()).thenReturn(total);
-    return contagem;
+  private static Object[] linha(String status, Long total) {
+    return new Object[] {status, total};
   }
 }

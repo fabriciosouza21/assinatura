@@ -6,7 +6,6 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -68,12 +67,10 @@ public class OutboxMetricasScheduler {
    */
   @Scheduled(fixedDelayString = "${app.outbox.metricas.intervalo-ms}")
   public void atualizarMetricas() {
-    Map<OutboxStatus, Long> contadas =
-        outboxRepository.contarPorStatus().stream()
-            .collect(
-                Collectors.toMap(
-                    contagem -> OutboxStatus.valueOf(contagem.getStatus()),
-                    OutboxRepository.ContagemStatus::getTotal));
+    Map<OutboxStatus, Long> contadas = new EnumMap<>(OutboxStatus.class);
+    for (Object[] linha : outboxRepository.contarPorStatus()) {
+      contadas.put(OutboxStatus.valueOf((String) linha[0]), ((Number) linha[1]).longValue());
+    }
     for (OutboxStatus status : STATUS_MONITORADOS) {
       contagens.get(status).set(contadas.getOrDefault(status, 0L));
     }

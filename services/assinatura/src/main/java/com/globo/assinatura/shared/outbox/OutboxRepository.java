@@ -65,26 +65,11 @@ public interface OutboxRepository extends JpaRepository<OutboxEvent, UUID> {
    * Conta os eventos da outbox agrupados por {@code status}, para alimentar as metricas de
    * monitoramento do ciclo de publicacao e recuperacao.
    *
-   * @return uma linha por status com o nome do status e a quantidade de eventos
+   * <p>Cada linha contem o nome do status na primeira posicao e a quantidade de eventos na segunda,
+   * uma linha por status existente.
+   *
+   * @return linhas de status e contagem
    */
-  @Query(nativeQuery = true, value = "SELECT status, COUNT(*) AS total FROM outbox GROUP BY status")
-  List<ContagemStatus> contarPorStatus();
-
-  /** Projecao de contagem de eventos da outbox para um status. */
-  interface ContagemStatus {
-
-    /**
-     * Retorna o nome do status.
-     *
-     * @return nome do status, como persistido na coluna {@code status}
-     */
-    String getStatus();
-
-    /**
-     * Retorna a quantidade de eventos no status.
-     *
-     * @return total de eventos
-     */
-    Long getTotal();
-  }
+  @Query(nativeQuery = true, value = "SELECT status, COUNT(*) FROM outbox GROUP BY status")
+  List<Object[]> contarPorStatus();
 }
