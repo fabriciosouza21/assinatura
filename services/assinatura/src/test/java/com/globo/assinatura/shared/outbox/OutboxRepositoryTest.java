@@ -83,4 +83,27 @@ class OutboxRepositoryTest {
         .extracting(OutboxEvent::getEventId)
         .doesNotContain(publicado.getEventId());
   }
+
+  @Test
+  @DisplayName("Deve selecionar evento em falha ha mais tempo que o timeout da DLQ")
+  void deveSelecionarEventoEmFalhaVencido() {
+    OutboxEvent falha =
+        outboxRepository.saveAndFlush(
+            OutboxEvent.criar(
+                UUID.fromString("55555555-5555-5555-5555-555555555555"),
+                "Assinatura",
+                UUID.fromString("66666666-6666-6666-6666-666666666666"),
+                "AssinaturaSolicitada",
+                "{}"));
+    falha.marcarFalha("timeout", Instant.now().minusSeconds(3700));
+    outboxRepository.saveAndFlush(falha);
+
+    List<OutboxEvent> recuperaveis =
+        outboxRepository.buscarRecuperaveis(Instant.now().minusSeconds(3600), 3, 10);
+
+    assertThat(recuperaveis)
+        .as("Evento em FALHA ha mais de 1h e elegivel para recuperacao")
+        .extracting(OutboxEvent::getEventId)
+        .containsExactly(falha.getEventId());
+  }
 }
