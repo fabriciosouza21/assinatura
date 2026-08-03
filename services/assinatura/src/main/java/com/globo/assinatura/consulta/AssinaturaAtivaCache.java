@@ -85,7 +85,16 @@ public class AssinaturaAtivaCache {
    * @param usuarioUuid uuid publico do usuario dono
    * @param assinatura representacao da assinatura ativa a armazenar
    */
-  public void popular(String usuarioUuid, AssinaturaResponse assinatura) {}
+  public void popular(String usuarioUuid, AssinaturaResponse assinatura) {
+    try {
+      cache.gravar(chaveDe(usuarioUuid), jsonMapper.writeValueAsString(assinatura), ttl);
+    } catch (JacksonException e) {
+      log.atWarn()
+          .addKeyValue("event", "assinatura_ativa_cache_populacao_falhou")
+          .addKeyValue("usuarioId", usuarioUuid)
+          .log("Falha ao serializar assinatura ativa para o cache");
+    }
+  }
 
   private String chaveDe(String usuarioUuid) {
     return PREFIXO + ":v" + versaoAtual(usuarioUuid) + ":" + usuarioUuid;

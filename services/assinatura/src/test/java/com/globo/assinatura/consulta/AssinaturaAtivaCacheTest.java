@@ -1,14 +1,23 @@
 package com.globo.assinatura.consulta;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.globo.assinatura.assinatura.Plano;
+import com.globo.assinatura.assinatura.StatusAssinatura;
+import com.globo.assinatura.consulta.api.AssinaturaResponse;
 import com.globo.assinatura.shared.cache.CacheVersionado;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import tools.jackson.databind.json.JsonMapper;
@@ -35,5 +44,72 @@ class AssinaturaAtivaCacheTest {
     when(cacheVersionado.recuperar("assinatura:ativa:v0:" + USUARIO)).thenReturn(Optional.empty());
 
     assertThat(cache.recuperar(USUARIO)).as("Chave ausente deve resultar em miss").isEmpty();
+  }
+
+  @Test
+  @DisplayName("Deve ler a assinatura da versao corrente do contador")
+  void deveLerAssinaturaDaVersaoCorrente() {
+    when(cacheVersionado.recuperar("assinatura:list:versao:" + USUARIO))
+        .thenReturn(Optional.of("2"));
+    when(cacheVersionado.recuperar("assinatura:ativa:v2:" + USUARIO))
+        .thenReturn(Optional.of(serializar(assinatura())));
+
+    Optional<AssinaturaResponse> resposta = cache.recuperar(USUARIO);
+
+    assertThat(resposta).as("Assinatura da versao corrente").isPresent();
+    assertThat(resposta.orElseThrow())
+        .as("Campos da assinatura lida do cache")
+        .isEqualTo(assinatura());
+  }
+
+  @Test
+  @DisplayName("Deve popular a assinatura na chave da versao corrente com ttl")
+  void devePopularAssinaturaNaChaveDaVersaoCorrenteComTtl() {
+    when(cacheVersionado.recuperar("assinatura:list:versao:" + USUARIO))
+        .thenReturn(Optional.empty());
+
+    cache.popular(USUARIO, assinatura());
+
+    ArgumentCaptor<String> chaveCaptor = ArgumentCaptor.forClass(String.class);
+    ArgumentCaptor<String> valorCaptor = ArgumentCaptor.forClass(String.class);
+    verify(cacheVersionado)
+        .gravar(chaveCaptor.capture(), valorCaptor.capture(), eq(Duration.ofSeconds(300)));
+    assertThat(chaveCaptor.getValue())
+        .as("Chave da versao corrente")
+        .isEqualTo("assinatura:ativa:v0:" + USUARIO);
+    assertThat(valorCaptor.getValue()).as("Valor serializado").isEqualTo(serializar(assinatura()));
+  }
+
+  @Test
+  @DisplayName("Deve tratar json ilegivel no cache como miss")
+  void deveTratarJsonIlegivelComoMiss() {
+    when(cacheVersionado.recuperar("assinatura:list:versao:" + USUARIO))
+        .thenReturn(Optional.empty());
+    when(cacheVersionado.recuperar("assinatura:ativa:v0:" + USUARIO))
+        .thenReturn(Optional.of("{\"nao\": "));
+
+    assertThat(cache.recuperar(USUARIO)).as("JSON corrompido deve degradar para miss").isEmpty();
+  }
+
+  private static AssinaturaResponse assinatura() {
+    return new AssinaturaResponse(
+        "assinatura-uuid",
+        USUARIO,
+        Plano.PREMIUM,
+        LocalDate.of(2026, 8, 1),
+        LocalDate.of(2026, 8, 31),
+        StatusAssinatura.ATIVA,
+        LocalDate.of(2026, 8, 1),
+        LocalDate.of(2026, 8, 31),
+        Instant.parse("2026-08-31T00:00:00Z"),
+        true);
+  }
+
+  private String serializar(AssinaturaResponse assinatura) {
+    try {
+      return JsonMapper.builder().build().writeValueAsString(assinatura);
+    } catch (Exception e) {
+      throw new IllegalStateException(e);
+    }
   }
 }
