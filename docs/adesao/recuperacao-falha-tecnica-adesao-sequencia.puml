@@ -1,0 +1,34 @@
+@startuml recuperacao-falha-tecnica-adesao-sequencia
+!theme plain
+title Recuperacao de falha tecnica na adesao
+
+actor "Pagamento\nService" as P
+participant "Scheduler\nAdesao" as S
+participant "Gateway" as G
+database "DB" as DB
+actor "Assinatura\nService" as A
+
+P -> DB: consome AssinaturaSolicitada\ncria CobrancaAdesaoTentativa(PENDENTE)
+note right: o consumer nao chama o gateway;\no scheduler assume a cobranca
+
+loop a cada 5s
+  S -> DB: SELECT ... FOR UPDATE SKIP LOCKED\n(PENDENTE sem paymentId e vencida)
+  S -> G: criarCobranca(assinaturaId, valor)
+  alt gateway indisponivel
+    G --> S: CobrancaGatewayIndisponivelException
+    S -> S: registrarFalhaTecnica()
+    alt falhasTecnicas == teto (3)
+      S -> DB: esgotar() = ESGOTADA
+      S -> DB: gravar outbox AssinaturaAdesaoEsgotada
+      S -> A: publica topico adesao-resultado
+      A -> A: falharPagamento()\nAGUARDANDO_PAGAMENTO -> PAGAMENTO_FALHOU
+    else abaixo do teto
+      S -> DB: agendarPara(now + 60s)\nsegue PENDENTE
+    end
+  else gateway aceita
+    G --> S: CobrancaCriada(paymentId)
+    S -> DB: registrarCobranca = COBRADA\ngrava Cobranca (correlacao)
+    note over A: fluxo tradicional de webhook assume:\nAPPROVED -> ATIVA\nREJECTED -> PAGAMENTO_RECUSADO
+  end
+end
+@enduml
