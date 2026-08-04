@@ -1,0 +1,75 @@
+@startuml
+title Replay da DLQ de consumer — republicação controlada (BE-27)
+
+autonumber
+hide footbox
+skinparam responseMessageBelowArrow true
+
+participant "Consumer original\n(DefaultErrorHandler)" as ORIG
+queue "Tópico *-dlq" as DLQ
+participant "ReplayDlqConsumer\n(@KafkaListener)" as REPLAY
+queue "Tópico original" as TOPICO
+participant "Consumer de destino" as DEST
+
+== Falha de consumo (contexto) ==
+
+ORIG -> DLQ: esgotou retentativas do error handler\nDeadLetterPublishingRecoverer anexa\nheader kafka_dlt-original-topic
+note right of DLQ
+  Disjunta da DLQ da outbox: aqui o evento
+  chegou ao Kafka, mas o listener não conseguiu
+  processar. Tópicos (3 partições, replicação 1,
+  retenção 7 dias):
+  Assinatura: pagamento-status-atualizado-dlq,
+               renovacao-resultado-dlq
+  Pagamento:  assinatura-solicitada-dlq,
+              renovacao-solicitada-dlq,
+              cancelamento-agendado-dlq,
+              assinatura-cancelada-dlq
+end note
+
+== Replay (ligado por configuração) ==
+
+note over REPLAY
+  Listener dedicado, desligado por padrão
+  (app.kafka.replay.auto-startup=false).
+  groupId próprio (*-replay-dlq), ackMode MANUAL.
+  Ativado só quando se quer drenar a DLQ.
+end note
+
+DLQ -> REPLAY: ConsumerRecord{key, value, headers}
+REPLAY -> REPLAY: ler header kafka_dlt-original-topic
+
+alt header ausente OU tópico != origem sem "-dlq"
+  REPLAY -> REPLAY: log WARN (descarta, ack)
+else tópico original válido
+  alt tentativas >= maxBounces
+    REPLAY -> REPLAY: log ERROR replay_dlq_bounces_esgotados\n(ack, sai do dreno)
+  else dentro do intervalo de bounce
+    REPLAY -> REPLAY: ack.nack(espera)\nadia próxima republicação
+  else pronto para republicar
+    REPLAY -> TOPICO: ProducerRecord{mesma key, mesmo value,\nheaders app-replay-republish,\napp-replay-attempts=N+1}\nsend().get() (síncrono)
+    TOPICO --> REPLAY: ack Kafka
+    REPLAY -> REPLAY: ack do offset na DLQ
+  end
+end
+
+== Reingresso seguro ==
+
+TOPICO -> DEST: mensagem republicada
+note right of DEST
+  Seguro pela idempotência do consumer original:
+  - guards por eventId (tabelas *_evento_processado)
+  - unicidade por chave natural (assinaturaId, renovacaoId)
+  - Idempotency-Key no gateway (adesão/renovação)
+  Um redelivery nunca duplica efeito de negócio.
+end note
+
+legend bottom
+  |= Tópicos DLQ |= Declarados por cada serviço (3 partições, replicação 1, retenção 7 dias, BE-28) |
+  |= auto-startup |= false por padrão; ligar via APP_KAFKA_REPLAY_AUTO_STARTUP=true quando drenar |
+  |= maxBounces |= teto de republicações por mensagem (default 3); esgotou = ERROR + ack |
+  |= backoffIntervalMs |= intervalo entre bounces da mesma mensagem (default 1h) |
+  |= Relação com outbox |= Disjunta: outbox (FALHA) recupera falha de publicação; DLQ de consumer recupera falha de consumo |
+endlegend
+
+@enduml

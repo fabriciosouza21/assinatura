@@ -143,9 +143,26 @@ observabilidade de falhas (gauge Prometheus por status e métricas nos dois
 serviços) e configuração explícita de partitions, replicação e retenção das
 DLTs.
 
-Ficam de fora da trunk, ainda em worktree: testes de integração com
-Testcontainers e o bump de versão para `0.5.0`. O detalhamento de escopo e
-andamento vive em `docs/roadmap/`.
+Fica de fora da trunk, ainda em worktree: teste de integração com
+Testcontainers. O detalhamento de escopo e andamento vive em `docs/roadmap/`.
+
+## Documentação visual
+
+Diagramas PlantUML (`docs/**/*.puml`) organizados por capacidade. Use-os para
+entender o fluxo antes de mergulhar no código.
+
+- **Adesão** (`docs/adesao/`): login/cadastro, publicação da `AssinaturaSolicitada`
+  via outbox, criação de cobrança no gateway e o ciclo de vida completo da outbox
+  (estados, classes, modelo de dados, DLQ, recuperação automática e manual,
+  observabilidade, replay da DLQ de consumer, retry no cliente do gateway).
+- **Assinatura** (`docs/assinatura/`): fluxo ponta-a-ponta, listagem e consulta da
+  ativa com cache em Redis.
+- **Renovação** (`docs/renovacao/`): renovação automática e o mecanismo de retries
+  com três contadores independentes.
+- **Cancelamento** (`docs/cancelamento/`): cancelamento com acesso preservado até o
+  fim do ciclo.
+- **Contratos** (`docs/contratos/`): eventos Kafka (adesão, renovação) e o mock do
+  meio de pagamento.
 
 ## Como testar via Bruno
 

@@ -6,34 +6,38 @@ hide empty description
 [*] --> PENDENTE : assinatura e evento\nconfirmados na mesma transação
 
 PENDENTE --> PUBLICADO : Kafka confirmou\n[ACK]
-PENDENTE --> PENDENTE : publicação falhou\n[tentativas < 3]\n/ agendar backoff + jitter
-PENDENTE --> FALHA : terceira tentativa falhou\n/ registrar erro e falhou_em
+PENDENTE --> PENDENTE : publicação falhou\n[tentativas < max-tentativas]\n/ agendar backoff + jitter
+PENDENTE --> FALHA : esgotou as tentativas\n/ registrar erro e falhou_em
 
-FALHA --> PENDENTE : causa corrigida\n/ reprocessar e zerar tentativas
-FALHA --> DESCARTADO : falha permanente\n/ encerramento operacional
+FALHA --> RETENTATIVA_DLQ : scheduler recuperou\n(falhou_em <= agora - timeout\nE ciclos < max-ciclos)\n/ zerar tentativas\nincrementar ciclos\nagendar com backoff
+
+RETENTATIVA_DLQ --> PUBLICADO : Kafka confirmou\n[ACK]
+RETENTATIVA_DLQ --> FALHA : esgotou as tentativas\n/ atualizar falhou_em
 
 PUBLICADO --> [*]
-DESCARTADO --> [*]
 
 note right of PENDENTE
-  Somente eventos PENDENTES com
+  PENDENTE e RETENTATIVA_DLQ com
   proxima_tentativa_em <= now()
   são selecionados pelo publisher.
 end note
 
-note right of FALHA
-  Estado de dead letter persistido.
-  Não há retry automático.
+note right of RETENTATIVA_DLQ
+  Evento recuperado da DLQ.
+  Volta ao critério de seleção do
+  publisher pelo mesmo fluxo do
+  PENDENTE (RetryPolicy completa).
 end note
 
-note right of DESCARTADO
-  Não implementado / fora de escopo:
-  OutboxStatus no código atual só tem
-  PENDENTE, PUBLICADO e FALHA. As
-  transições FALHA -> PENDENTE (reprocessar)
-  e FALHA -> DESCARTADO dependem de um
-  serviço de recuperação manual que
-  também não existe (ver PRD da outbox).
+note right of FALHA
+  Dead letter persistida. Saídas:
+  - automática: scheduler promove
+    a RETENTATIVA_DLQ após quarentena,
+    enquanto ciclos < max-ciclos.
+  - manual: POST /outbox/falhas/{eventId}/retomada
+    ignora o teto de ciclos.
+  Ao atingir max-ciclos sem retomada
+  manual, o evento fica terminal em FALHA.
 end note
 
 note bottom of PUBLICADO

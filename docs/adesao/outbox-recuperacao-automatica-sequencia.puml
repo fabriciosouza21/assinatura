@@ -1,0 +1,62 @@
+@startuml
+title Recuperação automática da outbox — scheduler (BE-24)
+
+autonumber
+hide footbox
+skinparam responseMessageBelowArrow true
+
+participant "Scheduler de\nRecuperação" as REC
+database "Banco de Dados" as DB
+participant "Outbox Publisher" as PUB
+queue "Kafka" as KAFKA
+
+== Tick agendado ==
+
+REC -> REC: @Scheduled(fixedDelay = dlq.intervalo-ms)\nlimiteFalhouEm = agora - timeout-segundos
+REC -> DB: @Transactional\nSELECT * FROM outbox\nWHERE status = 'FALHA'\n  AND falhou_em <= :limiteFalhouEm\n  AND ciclos_recuperacao < :maxCiclos\nORDER BY falhou_em\nFOR UPDATE SKIP LOCKED\nLIMIT :tamanhoLote
+
+alt lote vazio (nada em quarentena ou todos no teto)
+  DB --> REC: vazio
+else lote com eventos elegíveis
+  DB --> REC: eventos em FALHA (mais antigos primeiro)
+
+  loop para cada evento do lote
+    alt evento lança RuntimeException (isolado)
+      REC -> REC: log WARN outbox_dlq_falha_isolada\n{lote segue}
+    else saudável
+      REC -> DB: recuperarParaRetentativa\nstatus: FALHA → RETENTATIVA_DLQ\ntentativas = 0\nciclosRecuperacao++\nproximaTentativaEm = agora + backoff(1) + jitter
+      REC -> REC: log INFO outbox_dlq_recuperada\n{eventId, aggregateId, ciclo}
+    end
+  end
+
+  REC -> REC: commit da transação\nlog DEBUG outbox_dlq_batch_fim
+end
+
+== Devolução ao publisher ==
+
+note over REC, PUB
+  Eventos em RETENTATIVA_DLQ entram no critério
+  de seleção do publisher (buscarPublicaveis filtra
+  PENDENTE e RETENTATIVA_DLQ) e percorrem a RetryPolicy
+  completa na próxima rodada.
+end note
+
+PUB -> DB: SELECT ... WHERE status IN\n('PENDENTE','RETENTATIVA_DLQ')\nAND proxima_tentativa_em <= now()\nFOR UPDATE SKIP LOCKED
+DB --> PUB: evento recuperado
+PUB -> KAFKA: publicar
+
+alt Kafka confirmou
+  KAFKA --> PUB: ACK
+  PUB -> DB: status → PUBLICADO
+else esgotou a RetryPolicy de novo
+  PUB -> DB: marcarFalha\nstatus → FALHA, atualiza falhouEm
+  note right of DB
+    Reinicia a quarentena e volta a ser
+    elegível ao scheduler enquanto
+    ciclos_recuperacao < max-ciclos.
+    Ao atingir o teto, fica terminal em FALHA
+    (saída só pela retomada manual, BE-26).
+  end note
+end
+
+@enduml

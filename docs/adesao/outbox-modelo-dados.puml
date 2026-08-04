@@ -19,8 +19,20 @@ entity assinatura {
   * usuario_id: BIGINT <<FK>>
   * plano: VARCHAR
   * status: VARCHAR
-  data_inicio: DATE
-  data_expiracao: DATE
+  inicio_ciclo: TIMESTAMPTZ
+  fim_ciclo: TIMESTAMPTZ
+  proxima_renovacao_em: TIMESTAMPTZ
+  * renovacao_automatica: BOOLEAN
+}
+
+entity renovacao {
+  * id: BIGSERIAL <<PK>>
+  --
+  * uuid: VARCHAR(36) <<UK>>
+  * assinatura_id: BIGINT <<FK>>
+  * numero_ciclo: INTEGER
+  * ciclo_referencia: TIMESTAMPTZ
+  * status: VARCHAR(32)
 }
 
 entity outbox {
@@ -32,6 +44,7 @@ entity outbox {
   * payload: JSONB
   * status: VARCHAR
   * tentativas: SMALLINT
+  * ciclos_recuperacao: SMALLINT
   * proxima_tentativa_em: TIMESTAMPTZ
   * criado_em: TIMESTAMPTZ
   publicado_em: TIMESTAMPTZ
@@ -40,29 +53,41 @@ entity outbox {
 }
 
 usuario ||--o{ assinatura : possui
+assinatura ||--o{ renovacao : gera
 assinatura ||..o{ outbox : aggregate_id\nreferência lógica
 
 note right of assinatura
-  Índice único parcial:
+  Índice único parcial (uma assinatura
+  aberta por usuário, inclusive na
+  janela de renovação):
 
   UNIQUE (usuario_id)
   WHERE status IN
-  ('AGUARDANDO_PAGAMENTO', 'ATIVA')
+  ('AGUARDANDO_PAGAMENTO', 'ATIVA', 'EM_RENOVACAO')
+end note
+
+note right of renovacao
+  Renovação única por assinatura+ciclo:
+
+  UNIQUE (assinatura_id, ciclo_referencia)
 end note
 
 note right of outbox
-  Índice para polling:
+  Índice de polling do publisher:
 
   (status, proxima_tentativa_em, criado_em)
-  WHERE status = 'PENDENTE'
+  WHERE status IN ('PENDENTE', 'RETENTATIVA_DLQ')
+
+  Índice de recuperação (DLQ):
+
+  (falhou_em, ciclos_recuperacao)
+  WHERE status = 'FALHA'
 end note
 
 note bottom of outbox
   event_id permanece o mesmo durante os
-  retries automáticos.
-
-  Reprocessamento manual: não implementado /
-  fora de escopo no código atual.
+  retries e a recuperação, preservando
+  a deduplicação no consumo.
 end note
 
 @enduml

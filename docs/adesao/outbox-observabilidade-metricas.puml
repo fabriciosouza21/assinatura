@@ -1,0 +1,48 @@
+@startuml
+title Observabilidade de falhas da outbox — gauge Prometheus (BE-25)
+
+autonumber
+hide footbox
+skinparam responseMessageBelowArrow true
+
+participant "Scheduler de\nMétricas" as MET
+database "Banco de Dados" as DB
+queue "Prometheus" as PROM
+actor "Operação" as OPS
+
+== Tick agendado ==
+
+MET -> MET: @Scheduled(fixedDelay = metricas.intervalo-ms)\ngauges nascem em 0 no boot
+MET -> DB: SELECT status, COUNT(*) FROM outbox\nWHERE status IN ('PENDENTE','RETENTATIVA_DLQ','FALHA')\nGROUP BY status
+
+alt contagem falha (RuntimeException)
+  DB --> MET: erro
+  MET -> MET: log WARN outbox_metricas_atualizacao_falhou\nmantém o último valor dos gauges
+else contagem ok
+  DB --> MET: linhas (status, count)\nstatus ausente vira 0
+  MET -> MET: atualizar AtomicLong por status\nlog DEBUG outbox_metricas_atualizadas
+end
+
+== Exposição ==
+
+MET -> PROM: Gauge outbox.eventos\ntags: servico=${spring.application.name}\n        status={pendente|retentativa_dlq|falha}
+note right of PROM
+  Um gauge por status monitorado.
+  PUBLICADO não tem gauge (não é falha nem backlog).
+  Endpoint /actuator/prometheus é público
+  (sem JWT), liberado no SecurityConfig.
+end note
+
+== Consumo operacional ==
+
+PROM -> PROM: scrape a cada intervalo
+OPS -> PROM: dashboard/alerta\noutbox_eventos{status="falha"} em alta
+note right of OPS
+  Acúmulo em FALHA dispara investigação.
+  Distinção entre retentativa_dlq (em ciclo)
+  e falha (terminal ou em quarentena) guia
+  a decisão entre aguardar o scheduler
+  automático e retomar manualmente (BE-26).
+end note
+
+@enduml

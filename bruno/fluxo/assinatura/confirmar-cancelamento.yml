@@ -1,0 +1,23 @@
+info:
+  name: Confirmar cancelamento
+  type: http
+  seq: 8
+
+http:
+  method: GET
+  url: "{{assinaturaUrl}}/assinaturas/ativa"
+  headers:
+    - name: Authorization
+      value: "Bearer {{token}}"
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // Após cancelamento imediato (CANCELADA), /ativa responde 404 (sem ativa).
+        // Após cancelamento agendado (ATIVA até o fim do ciclo), responde 200 enquanto o ciclo durar.
+        const status = res.getStatus();
+        expect(status, "404 (sem ativa) ou 200 (agendado, ativa até o ciclo)").to.be.oneOf([200, 404]);
+
+settings:
+  encodeUrl: true

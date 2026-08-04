@@ -1,0 +1,21 @@
+info:
+  name: Listar falhas da outbox (assinatura)
+  type: http
+  seq: 10
+
+http:
+  method: GET
+  url: "{{assinaturaUrl}}/outbox/falhas?page=0&size=20"
+  headers:
+    - name: Authorization
+      value: "Bearer {{tokenAdmin}}"
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        expect(res.getStatus()).to.equal(200);
+        expect(res.body.items, "lista de falhas").to.be.an('array');
+
+settings:
+  encodeUrl: true

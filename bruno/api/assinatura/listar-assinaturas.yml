@@ -1,0 +1,23 @@
+info:
+  name: Listar assinaturas
+  type: http
+  seq: 8
+
+http:
+  method: GET
+  url: "{{assinaturaUrl}}/assinaturas?page=0&size=20"
+  headers:
+    - name: Authorization
+      value: "Bearer {{token}}"
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        expect(res.getStatus()).to.equal(200);
+        expect(res.body.items, "lista de assinaturas").to.be.an('array');
+        expect(res.body.page).to.equal(0);
+        expect(res.body.size).to.equal(20);
+
+settings:
+  encodeUrl: true

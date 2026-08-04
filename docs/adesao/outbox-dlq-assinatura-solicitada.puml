@@ -1,5 +1,5 @@
 @startuml
-title DLQ da outbox — falha de publicação e reprocessamento
+title DLQ da outbox — falha de publicação e recuperação (automática + manual)
 
 autonumber
 hide footbox
@@ -8,79 +8,99 @@ skinparam responseMessageBelowArrow true
 control "Outbox Publisher" as OP
 database "Banco de Dados" as DB
 queue "Kafka" as KAFKA
-control "Monitoramento\n(não implementado)" as MON
-actor "Operação" as OPS
-control "Recuperação Outbox\n(não implementado)" as REC
+control "Scheduler de\nRecuperação" as REC
+control "Scheduler de\nMétricas" as MET
+queue "Prometheus" as PROM
+actor "Operação\n(admin)" as OPS
+control "Endpoint\nRetomada Manual" as EP
 
 == Tentativa de publicação ==
 
-OP -> DB: Busca próximo evento PENDENTE vencido\nna tabela outbox, com lock
+OP -> DB: Busca evento PENDENTE/RETENTATIVA_DLQ vencido\ncom lock (SKIP LOCKED)
 DB --> OP: AssinaturaSolicitada
 OP -> KAFKA: Publicar evento\nkey = assinaturaId
 
 alt Kafka confirmou a publicação
   KAFKA --> OP: ACK
-  OP -> DB: Marca evento como PUBLICADO\nna tabela outbox
+  OP -> DB: Marca evento como PUBLICADO
 else Erro ou timeout
   KAFKA --> OP: falha
-  OP -> DB: Incrementa tentativas e registra\nerro na tabela outbox
+  OP -> DB: Incrementa tentativas e registra erro
 
-  alt tentativas < 3
+  alt tentativas < max-tentativas
     OP -> DB: Mantém PENDENTE e agenda\npróxima tentativa (backoff + jitter)
-  else tentativas = 3
-    OP -> DB: Marca evento como FALHA\nna tabela outbox
+  else tentativas esgotaram
+    OP -> DB: Marca evento como FALHA\nregistra falhou_em
   end
 end
 
 note over OP, DB
-  O publisher busca somente eventos PENDENTES.
-  Um evento com status FALHA deixa de ser
-  reprocessado automaticamente.
+  O publisher busca PENDENTE e RETENTATIVA_DLQ.
+  Um evento só vai a FALHA quando a RetryPolicy
+  esgota, saindo do critério de seleção do publisher.
 end note
 
-== DLQ persistida ==
+== Recuperação automática (scheduler) ==
 
-note over MON, REC
-  Não implementado / fora de escopo no código atual.
-  Não existem Monitoramento nem Recuperação Outbox;
-  o PRD da outbox lista a interface humana de
-  reprocessamento de eventos FALHA como Out of Scope.
-end note
+REC -> DB: SELECT status='FALHA' AND falhou_em <= agora - timeout\nAND ciclos_recuperacao < max-ciclos\nFOR UPDATE SKIP LOCKED
+DB --> REC: eventos em quarentena, abaixo do teto
 
-MON -> DB: Consulta eventos com status FALHA\nna tabela outbox
-DB --> MON: eventos que esgotaram as tentativas
-MON --> OPS: Gerar alerta\n{eventId, tipo, ultimoErro}
-
-OPS -> REC: Consultar evento com falha
-REC -> DB: Busca evento por eventId\nna tabela outbox
-DB --> REC: payload, tentativas e último erro
-REC --> OPS: detalhes para diagnóstico
-
-alt Causa corrigida
-  OPS -> REC: Reprocessar eventId
-  REC -> DB: Volta evento para PENDENTE,\nzera tentativas e erro\nna tabela outbox
-  REC --> OPS: evento liberado para reprocessamento
-else Falha permanente
-  OPS -> REC: Encerrar eventId
-  REC -> DB: Marca evento como DESCARTADO\nna tabela outbox
-  REC --> OPS: evento encerrado
+loop para cada evento do lote
+  REC -> DB: FALHA → RETENTATIVA_DLQ\nzera tentativas, incrementa ciclos\nagenda com backoff + jitter
 end
 
+note over REC
+  A quarentena (timeout-segundos, default 1h)
+  dá tempo da causa raiz passar antes de
+  repromover. O teto (max-ciclos, default 3)
+  limita os ciclos automáticos; ao atingi-lo
+  o evento fica terminal em FALHA.
+end note
+
+note over OP, REC
+  Eventos em RETENTATIVA_DLQ voltam ao critério
+  de seleção do publisher e percorrem a RetryPolicy
+  completa. Se falharem de novo, retornam a FALHA
+  e são elegíveis a um novo ciclo enquanto
+  ciclos < max-ciclos.
+end note
+
+== Recuperação manual (endpoint admin) ==
+
+MET -> DB: SELECT status, COUNT(*) WHERE status IN\n('PENDENTE','RETENTATIVA_DLQ','FALHA') GROUP BY status
+MET --> PROM: gauge outbox.eventos\n{servico, status}
+OPS --> PROM: detecta acúmulo em FALHA
+
+OPS -> EP: POST /outbox/falhas/{eventId}/retomada\n(JWT ROLE_ADMIN)
+alt 401 sem token / 403 não admin
+  EP --> OPS: erro
+else evento inexistente
+  EP --> OPS: 404
+else evento não está em FALHA
+  EP --> OPS: 409 (concorrência ou duplicado)
+else em FALHA
+  EP -> DB: buscarPorIdComLock (PESSIMISTIC_WRITE)\nrecuperarParaRetentativa\n(ignora o teto de ciclos)
+  EP --> OPS: 200 { eventId, status=RETENTATIVA_DLQ }
+end
+
+note over EP
+  A retomada manual usa a mesma transição do
+  scheduler, sob lock pessimista, mas ignora o
+  teto de ciclos: é a saída para eventos terminais.
+  Auditoria em log: event=outbox_falha_retomada_manual,
+  com eventId, eventType e adminId (e-mail).
+end note
+
 note over DB, KAFKA
-  A linha com status FALHA funciona como a DLQ durável.
+  A linha com status FALHA funciona como DLQ durável.
   Não se depende de publicar a falha em uma DLQ do Kafka,
   pois o Kafka pode ser justamente o recurso indisponível.
 end note
 
-note over OPS, REC
-  O reprocessamento mantém o mesmo eventId.
-  O consumidor continua responsável pela deduplicação.
-end note
-
 note over KAFKA
-  A DLQ do consumidor é um fluxo diferente:
-  aplica-se quando o evento foi publicado com sucesso,
-  mas algum consumidor não conseguiu processá-lo.
+  A DLQ de consumer é disjunta: aplica-se quando o evento
+  foi publicado com sucesso, mas algum consumidor não
+  conseguiu processá-lo. Tem replay próprio.
 end note
 
 @enduml

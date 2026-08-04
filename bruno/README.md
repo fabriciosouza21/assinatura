@@ -17,13 +17,16 @@ As variáveis de ambiente apontam para as portas do compose:
 ```
 bruno/
 ├── api/                  # endpoints, organizados por serviço
-│   ├── assinatura/       #   Assinatura Service (usuarios, auth, assinaturas)
-│   ├── pagamento/        #   Pagamento Service (cobranças)
+│   ├── assinatura/       #   Assinatura Service (usuarios, auth, assinaturas,
+│   │                     #     cancelamento, outbox admin)
+│   ├── pagamento/        #   Pagamento Service (cobranças, outbox admin)
 │   ├── mock-gateway/     #   mock do gateway de pagamento
 │   └── renovacao/        #   consultas do fluxo de renovação
 ├── fluxo/                # fluxos encadeados, prontos para rodar em ordem
-│   ├── assinatura/       #   adesão ponta a ponta (cadastro → ATIVA)
-│   └── renovacao/        #   renovação (decisão manual no mock)
+│   ├── assinatura/       #   adesão ponta a ponta (cadastro → ATIVA → cancelar)
+│   ├── renovacao/        #   renovação (decisão manual no mock)
+│   ├── outbox/           #   recuperação manual da outbox no Assinatura
+│   └── outbox-pagamento/ #   recuperação manual da outbox no Pagamento
 ├── environments/         # environments (Local)
 ├── opencollection.yml
 └── README.md
@@ -208,3 +211,48 @@ rápida), o mesmo caminho com recusas suspende a assinatura:
    `paymentId`, e o mock só aceita a transição `PENDING → REJECTED`.
 5. **Consultar assinatura** (`fluxo/renovacao/consultar-assinatura`) → status
    `SUSPENSA`.
+
+## Cancelamento
+
+Cancelamento pelo dono da assinatura (`POST /assinaturas/{uuid}/cancelamento`),
+autenticado com o mesmo `token` do fluxo de adesão. A resposta depende do status
+corrente:
+
+- `ATIVA` ou `EM_RENOVACAO` com renovação automática: **agendado**. O status se
+  mantém e `acessoAte` traz o `fimCiclo` (acesso preservado até o fim do ciclo).
+- `AGUARDANDO_PAGAMENTO`, `SUSPENSA` ou `PAGAMENTO_RECUSADO`: **imediato**. Status
+  `CANCELADA`, `acessoAte` nulo.
+- `CANCELADA`: idempotente (responde `200` novamente).
+
+Requests: `api/assinatura/cancelar-assinatura` (isolado) e
+`fluxo/assinatura/cancelar-assinatura` seguido de
+`fluxo/assinatura/confirmar-cancelamento` (consulta `/ativa` para verificar o
+efeito: `404` após imediato, `200` enquanto o ciclo durar após agendado).
+
+## Outbox (recuperação manual)
+
+Endpoints admin para listar eventos em `FALHA` na outbox e retomá-los manualmente.
+Existem nos dois serviços (`assinatura` e `pagamento`) pelo mesmo contrato. Exigem
+`ROLE_ADMIN`: use o login admin (`api/assinatura/login-admin`, `admin` /
+`admin123`), que captura `tokenAdmin`. O token do cliente recebe `403`.
+
+- `GET /outbox/falhas?tipoEvento=&falhouHaSegundos=&page=&size=` → `200` com a
+  página de falhas (`{ eventId, eventType, falhouEm, ciclosRecuperacao }`).
+  `tipoEvento` filtra (ex.: `AssinaturaSolicitada`); `falhouHaSegundos` restringe
+  a falhas antigas (ex.: `3600` = há mais de 1h).
+- `POST /outbox/falhas/{eventId}/retomada` → `200 { eventId, status }` com
+  `status=RETENTATIVA_DLQ`. `404` se inexistente; `409` se não está em `FALHA`
+  (concorrência ou duplicado). A retomada ignora o teto de ciclos do scheduler
+  automático — é a saída para eventos terminais.
+
+Fluxos encadeados: `fluxo/outbox/` (Assinatura) e `fluxo/outbox-pagamento/`
+(Pagamento). Cada um faz login admin → listar falhas (captura `eventId` da
+primeira) → retomar. O `eventId` é específico por serviço.
+
+> Para gerar falhas reais: solicite uma assinatura e, com o Kafka parado
+> (`docker compose stop kafka`), o evento esgota as tentativas e vira `FALHA`
+> após `APP_OUTBOX_MAX_TENTATIVAS` (default 3). O scheduler de recuperação
+> automática promove `FALHA → RETENTATIVA_DLQ` após `APP_OUTBOX_DLQ_TIMEOUT_SEGUNDOS`
+> (default 1h) e até `APP_OUTBOX_DLQ_MAX_CICLOS` (default 3); ao atingir o teto,
+> só a retomada manual tira o evento de `FALHA`.
+
