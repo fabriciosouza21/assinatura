@@ -8,6 +8,8 @@ public enum StatusAssinatura {
   ATIVA,
   /** Pagamento recusado. */
   PAGAMENTO_RECUSADO,
+  /** Adesao esgotada por falhas tecnicas do gateway de pagamento. */
+  PAGAMENTO_FALHOU,
   /** Ciclo vencido e renovacao em andamento, aguardando o resultado da cobranca. */
   EM_RENOVACAO,
   /** Acesso suspenso apos o esgotamento das tentativas de cobranca da renovacao. */

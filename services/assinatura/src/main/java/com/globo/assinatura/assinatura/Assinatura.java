@@ -189,7 +189,8 @@ public class Assinatura {
     }
     if (this.status == StatusAssinatura.SUSPENSA
         || this.status == StatusAssinatura.AGUARDANDO_PAGAMENTO
-        || this.status == StatusAssinatura.PAGAMENTO_RECUSADO) {
+        || this.status == StatusAssinatura.PAGAMENTO_RECUSADO
+        || this.status == StatusAssinatura.PAGAMENTO_FALHOU) {
       this.renovacaoAutomatica = false;
       this.status = StatusAssinatura.CANCELADA;
       this.fimCiclo = null;
@@ -229,6 +230,14 @@ public class Assinatura {
       return;
     }
     this.status = StatusAssinatura.PAGAMENTO_RECUSADO;
+  }
+
+  /** Transita o ciclo de vida para pagamento falhou apos o esgotamento das falhas tecnicas. */
+  public void falharPagamento() {
+    if (this.status != StatusAssinatura.AGUARDANDO_PAGAMENTO) {
+      return;
+    }
+    this.status = StatusAssinatura.PAGAMENTO_FALHOU;
   }
 
   /**
