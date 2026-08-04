@@ -5,9 +5,9 @@ CREATE TABLE cobranca_adesao_tentativa (
     payment_id            VARCHAR(64),
     status                VARCHAR(32)     NOT NULL,
     falhas_tecnicas       INTEGER         NOT NULL DEFAULT 0,
-    proxima_tentativa_em  TIMESTAMP,
-    criado_em             TIMESTAMP       NOT NULL DEFAULT now(),
-    atualizado_em         TIMESTAMP       NOT NULL DEFAULT now()
+    proxima_tentativa_em  TIMESTAMPTZ,
+    criado_em             TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    atualizado_em         TIMESTAMPTZ     NOT NULL DEFAULT now()
 );
 
 CREATE UNIQUE INDEX uq_cobranca_adesao_tentativa_assinatura

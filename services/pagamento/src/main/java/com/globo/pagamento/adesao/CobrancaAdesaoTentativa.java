@@ -43,6 +43,10 @@ public class CobrancaAdesaoTentativa {
 
   private Instant proximaTentativaEm;
 
+  private Instant criadoEm;
+
+  private Instant atualizadoEm;
+
   /** Construtor sem argumentos exigido pelo provedor JPA. */
   protected CobrancaAdesaoTentativa() {}
 
@@ -130,6 +134,24 @@ public class CobrancaAdesaoTentativa {
   }
 
   /**
+   * Retorna o instante de criacao do registro.
+   *
+   * @return instante de criacao, ou {@code null} antes da persistencia
+   */
+  public Instant getCriadoEm() {
+    return criadoEm;
+  }
+
+  /**
+   * Retorna o instante da ultima atualizacao do registro.
+   *
+   * @return instante da ultima atualizacao, ou {@code null} antes da persistencia
+   */
+  public Instant getAtualizadoEm() {
+    return atualizadoEm;
+  }
+
+  /**
    * Contabiliza uma falha tecnica do gateway nesta tentativa.
    *
    * @throws IllegalStateException se a tentativa ja tiver sido decidida
@@ -161,6 +183,19 @@ public class CobrancaAdesaoTentativa {
   public void esgotar() {
     exigirPendente();
     this.status = StatusTentativaAdesao.ESGOTADA;
+  }
+
+  /**
+   * Agenda o instante a partir do qual a tentativa fica elegivel para cobranca.
+   *
+   * @param instante instante da cobranca; nao pode ser nulo
+   * @throws IllegalArgumentException se {@code instante} for nulo
+   */
+  public void agendarPara(Instant instante) {
+    if (instante == null) {
+      throw new IllegalArgumentException("proximaTentativaEm nao pode ser nulo");
+    }
+    this.proximaTentativaEm = instante;
   }
 
   /**
