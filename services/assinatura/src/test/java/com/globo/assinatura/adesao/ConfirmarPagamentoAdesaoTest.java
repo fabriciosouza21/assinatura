@@ -497,6 +497,29 @@ class ConfirmarPagamentoAdesaoTest {
     verify(cacheVersionado, never()).invalidarAposCommit(any());
   }
 
+  @Test
+  @DisplayName("Deve manter pagamento falhou ao receber aprovacao tardia (race com esgotamento)")
+  void deveManterPagamentoFalhouAoReceberAprovacaoTardia() {
+    Assinatura assinatura = new Assinatura(42L, Plano.PREMIUM);
+    assinatura.falharPagamento();
+    when(assinaturaRepository.buscarPorUuidParaAtualizacao(assinatura.getUuid()))
+        .thenReturn(Optional.of(assinatura));
+    PagamentoStatusAtualizado evento =
+        new PagamentoStatusAtualizado(
+            UUID.randomUUID(),
+            Instant.now(),
+            UUID.fromString(assinatura.getUuid()),
+            StatusPagamento.APPROVED,
+            UUID.randomUUID());
+
+    command.executar(evento);
+
+    assertThat(assinatura.getStatus())
+        .as("Status preservado apos race com esgotamento")
+        .isEqualTo(StatusAssinatura.PAGAMENTO_FALHOU);
+    verify(pagamentoEventoProcessadoRepository).save(any());
+  }
+
   private Usuario donoDaAssinatura() {
     Usuario dono = new Usuario("Fulano", "fulano@example.com");
     dono.setId(42L);
