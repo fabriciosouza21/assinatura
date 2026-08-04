@@ -1,0 +1,93 @@
+@startuml
+title Outbox — modelo de dados
+
+hide circle
+skinparam linetype ortho
+
+entity usuario {
+  * id: BIGINT <<PK>>
+  --
+  * uuid: UUID <<UK>>
+  * nome: VARCHAR
+  * email: VARCHAR
+}
+
+entity assinatura {
+  * id: BIGINT <<PK>>
+  --
+  * uuid: VARCHAR(36) <<UK>>
+  * usuario_id: BIGINT <<FK>>
+  * plano: VARCHAR
+  * status: VARCHAR
+  inicio_ciclo: TIMESTAMPTZ
+  fim_ciclo: TIMESTAMPTZ
+  proxima_renovacao_em: TIMESTAMPTZ
+  * renovacao_automatica: BOOLEAN
+}
+
+entity renovacao {
+  * id: BIGSERIAL <<PK>>
+  --
+  * uuid: VARCHAR(36) <<UK>>
+  * assinatura_id: BIGINT <<FK>>
+  * numero_ciclo: INTEGER
+  * ciclo_referencia: TIMESTAMPTZ
+  * status: VARCHAR(32)
+}
+
+entity outbox {
+  * event_id: UUID <<PK>>
+  --
+  * aggregate_type: VARCHAR
+  * aggregate_id: UUID
+  * event_type: VARCHAR
+  * payload: JSONB
+  * status: VARCHAR
+  * tentativas: SMALLINT
+  * ciclos_recuperacao: SMALLINT
+  * proxima_tentativa_em: TIMESTAMPTZ
+  * criado_em: TIMESTAMPTZ
+  publicado_em: TIMESTAMPTZ
+  falhou_em: TIMESTAMPTZ
+  ultimo_erro: TEXT
+}
+
+usuario ||--o{ assinatura : possui
+assinatura ||--o{ renovacao : gera
+assinatura ||..o{ outbox : aggregate_id\nreferência lógica
+
+note right of assinatura
+  Índice único parcial (uma assinatura
+  aberta por usuário, inclusive na
+  janela de renovação):
+
+  UNIQUE (usuario_id)
+  WHERE status IN
+  ('AGUARDANDO_PAGAMENTO', 'ATIVA', 'EM_RENOVACAO')
+end note
+
+note right of renovacao
+  Renovação única por assinatura+ciclo:
+
+  UNIQUE (assinatura_id, ciclo_referencia)
+end note
+
+note right of outbox
+  Índice de polling do publisher:
+
+  (status, proxima_tentativa_em, criado_em)
+  WHERE status IN ('PENDENTE', 'RETENTATIVA_DLQ')
+
+  Índice de recuperação (DLQ):
+
+  (falhou_em, ciclos_recuperacao)
+  WHERE status = 'FALHA'
+end note
+
+note bottom of outbox
+  event_id permanece o mesmo durante os
+  retries e a recuperação, preservando
+  a deduplicação no consumo.
+end note
+
+@enduml

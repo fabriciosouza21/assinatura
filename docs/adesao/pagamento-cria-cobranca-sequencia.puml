@@ -1,0 +1,119 @@
+@startuml
+title BE-5 — Criar cobrança a partir de AssinaturaSolicitada
+caption Branch: feat/pagamento-cria-cobranca
+
+autonumber
+hide footbox
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundCorner 10
+skinparam defaultFontName "DejaVu Sans"
+skinparam defaultFontSize 13
+skinparam ArrowColor #475569
+skinparam ArrowThickness 1.2
+skinparam ParticipantBorderColor #64748B
+skinparam ParticipantBackgroundColor #F8FAFC
+skinparam ParticipantFontColor #0F172A
+skinparam DatabaseBorderColor #64748B
+skinparam DatabaseBackgroundColor #F0FDF4
+skinparam QueueBorderColor #64748B
+skinparam QueueBackgroundColor #EAF2FF
+skinparam NoteBackgroundColor #FFFBEB
+skinparam NoteBorderColor #D97706
+skinparam NoteFontColor #78350F
+skinparam sequence {
+  MessageAlign center
+  ResponseMessageBelowArrow true
+  ParticipantPadding 24
+  BoxPadding 12
+}
+
+queue "Kafka" as KAFKA
+control "Pagamento Service\nConsumer" as PS
+participant "WebClient" as WC
+participant "Gateway Mock" as GATEWAY
+database "Pagamento DB" as DB
+queue "AssinaturaSolicitada.DLQ" as DLQ
+
+KAFKA -> PS: AssinaturaSolicitada\n{assinatura_uuid, usuario_uuid,\nplano, valor}
+activate PS
+
+PS -> PS: Validar os dados necessários
+
+alt Evento inválido
+    PS -> DLQ: Encaminhar evento e motivo da falha
+    PS -> KAFKA: Confirmar consumo do evento original
+else Evento válido
+    note over PS, GATEWAY
+      Todas as tentativas usam:
+      Idempotency-Key: assinatura_uuid
+    end note
+
+    loop No máximo 3 tentativas, com jitter entre repetições
+        PS -> DB: Buscar correlação por assinatura_uuid
+
+        alt Cobrança já correlacionada
+            DB --> PS: {paymentId, status: "PENDING"}
+            PS -> PS: Marcar processamento como concluído
+        else Correlação inexistente
+            DB --> PS: Não encontrada
+
+            PS -> WC: Criar cobrança
+            activate WC
+
+            note right of WC
+              Base URL:
+              app.gateway.base-url
+            end note
+
+            WC -> GATEWAY: POST /v1/payments\nIdempotency-Key: assinatura_uuid
+            activate GATEWAY
+
+            alt Resposta válida
+                GATEWAY --> WC: 201 Created\n{paymentId, status: "PENDING"}
+                deactivate GATEWAY
+                WC --> PS: {paymentId, status: "PENDING"}
+                deactivate WC
+
+                PS -> DB: Persistir correlação\nassinatura_uuid ↔ paymentId\nstatus = PENDING
+
+                note right of DB
+                  Persistência idempotente
+                  por assinatura_uuid.
+                end note
+
+                alt Persistência concluída
+                    DB --> PS: Sucesso
+                    PS -> PS: Marcar processamento como concluído
+                else Falha na persistência
+                    DB --> PS: Erro transitório
+                    PS -> PS: Manter evento não confirmado
+                end
+            else Timeout, erro HTTP ou resposta inválida
+                GATEWAY --> WC: Falha
+                deactivate GATEWAY
+                WC --> PS: Erro transitório
+                deactivate WC
+                PS -> PS: Manter evento não confirmado
+            end
+        end
+    end
+
+    alt Processamento concluído
+        PS -> KAFKA: Confirmar consumo e registrar offset
+    else Três tentativas esgotadas
+        PS -> DLQ: Encaminhar evento e última falha
+        PS -> KAFKA: Confirmar consumo do evento original
+    end
+end
+
+deactivate PS
+
+note over KAFKA, DLQ
+  O retry pertence ao consumer do Pagamento Service.
+  O outbox apenas publica AssinaturaSolicitada no Kafka.
+  Webhook e PagamentoStatusAtualizado pertencem ao BE-6.
+end note
+
+@enduml

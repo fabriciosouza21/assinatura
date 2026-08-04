@@ -1,6 +1,6 @@
 # Roadmap: Docker para todos os serviços + Mock de pagamento
 
-**PRD:** (não há PRD formal; escopo derivado da conversa e dos diagramas `docs/cadastro-usuario-assinatura.puml` e `docs/mock-meio-pagamento.puml`)
+**PRD:** (não há PRD formal; escopo derivado da conversa e dos diagramas `docs/adesao/cadastro-usuario-assinatura.puml` e `docs/contratos/mock-meio-pagamento.puml`)
 **Versão alvo:** `0.1.0` (primeiro milestone com ambiente local completo)
 **Branch:** `feat/setup-docker-mock-pagamento`
 **Data:** 2026-07-29
@@ -72,7 +72,7 @@ Corrija qualquer uma antes de começar:
 - Estado em memória (map com mutex). Sem persistência.
 - Endpoint de simulação (`/v1/mock/...`) permite forçar aprovação/recusa para
   testes.
-- Contrato igual ao definido em `docs/mock-meio-pagamento.puml`.
+- Contrato igual ao definido em `docs/contratos/mock-meio-pagamento.puml`.
 
 ### MOCK-2 — Webhook do mock
 `feat: adiciona disparo de webhook do mock com assinatura hmac`

@@ -1,0 +1,90 @@
+@startuml
+title Renovação automática — mecanismo de retries (3 contadores independentes)
+
+skinparam backgroundColor #FFFFFF
+skinparam component {
+  BackgroundColor<<outbox>>    #EAF2F8
+  BackgroundColor<<consumer>>  #FDF2E9
+  BackgroundColor<<cobranca>>  #E8F8F5
+  BackgroundColor<<terminal>>  #FADBD8
+  FontSize 12
+}
+skinparam ArrowColor #566573
+skinparam note {
+  BackgroundColor #FCF3CF
+}
+
+' Os tres dominios de falha. Cada um tem seu proprio contador de retry,
+' sua propria janela de tempo e seu proprio terminal. Esgotar um NAO
+' dispara o outro: sao independentes por design (D-R4).
+
+package "1. Retentativa de publicacao (produtor)" as P1 <<outbox>> {
+  component "Scheduler\nOutboxPublisher\n@Scheduled" as OB_SCHED
+  database "tabela outbox\n(Assinatura)\ntentativas = 0..3" as OB_DB
+  queue "Kafka" as OB_KAFKA
+  component "**FALHA**\nDLQ do produtor\n(persistida no banco)" as OB_DLQ <<terminal>>
+}
+
+package "2. Retentativa de consumo (consumidor)" as P2 <<consumer>> {
+  queue "Kafka" as CON_KAFKA
+  component "DefaultErrorHandler\n3 tentativas + backoff\n+ jitter" as CON_EH
+  component "**Kafka DLT**\nrenovacao-solicitada-dlq\nrenovacao-resultado-dlq" as CON_DLQ <<terminal>>
+  database "DB Pagamentos\n/ DB Assinatura" as CON_DB
+}
+
+package "3. Retentativa de cobranca (negocio)" as P3 <<cobranca>> {
+  component "Scheduler\ntentativa_cobranca\n@Scheduled" as CB_SCHED
+  database "tabela tentativa_cobranca\nnumero = 1..3" as CB_DB
+  component "Gateway de\nPagamento" as CB_GW
+  queue "Kafka\nRenovacaoTentativasEsgotadas" as CB_KAFKA <<terminal>>
+}
+
+' Encadeamento: o evento flui da publicacao ao consumo. A cobranca
+' e um ciclo paralelo disparado pelo consumer, nao encadeado nos retries.
+
+OB_SCHED -down-> OB_DB : busca eventos PENDENTES, com lock
+OB_SCHED -down-> OB_KAFKA : kafkaTemplate.send
+OB_KAFKA --> OB_SCHED : ACK => status PUBLICADO
+OB_SCHED -down-> OB_DB : falha: tentativas++\nreagendar com backoff
+OB_DB -down-> OB_DLQ : tentativas = 3\nstatus FALHA (nao chega ao Kafka)
+
+CON_KAFKA -down-> CON_EH : entrega at-least-once
+CON_EH -down-> CON_DB : processa (idempotente por eventId)
+CON_EH -down-> CON_DLQ : 3 falhas tecnicas\npayload invalido / erro de banco
+
+CB_SCHED -down-> CB_DB : busca vencida\nproxima_tentativa_em <= now()
+CB_SCHED -down-> CB_GW : POST /v1/payments\nIdempotency-Key = renovacaoId:tentativa
+CB_GW --> CB_SCHED : 201 PENDING
+CB_GW -[#bold]-> CB_DB : webhook APPROVED/REJECTED\n(decide a tentativa)
+CB_DB -down-> CB_KAFKA : 3 recusas seguidas\nTENTATIVAS_ESGOTADAS
+
+note right of P1
+  **Janela:** segundos
+  **Alvo:** colocar o evento DENTRO do Kafka
+  **Nao retenta:** consumo, gateway, negocio
+end note
+
+note right of P2
+  **Janela:** segundos
+  **Alvo:** processar o evento que CHEGOU ao Kafka
+  **Nao suspende a assinatura:**
+  falha tecnica de consumo nao e
+  resultado de negocio (D-R4)
+end note
+
+note right of P3
+  **Janela:** dias (D+1, D+3, D+7)
+  **Alvo:** cobrar no gateway apos DECISAO de recusa
+  **Retry tecnico curto** reusa a mesma
+  Idempotency-Key e NAO incrementa
+  o numero da tentativa
+end note
+
+legend bottom
+  |= Contador |= Onde mora |= Janela |= Resultado ao esgotar |
+  | outbox.tentativas | DB Assinatura (tabela outbox) | segundos | status FALHA (DLQ do produtor) |
+  | consumer.tentativas | Kafka (DefaultErrorHandler) | segundos | Kafka DLT (topico-dlq) |
+  | cobranca.tentativas | DB Pagamento (tentativa_cobranca) | dias | suspensao da assinatura (resultado de negocio) |
+endlegend
+
+@enduml

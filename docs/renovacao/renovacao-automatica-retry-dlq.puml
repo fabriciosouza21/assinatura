@@ -1,0 +1,226 @@
+@startuml
+title Renovação automática — retries, Outbox e DLQ
+scale 0.68
+
+autonumber
+hide footbox
+
+skinparam backgroundColor #FFFFFF
+skinparam ParticipantPadding 20
+skinparam BoxPadding 12
+skinparam maxMessageSize 110
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+box "Microserviço de Assinaturas" #EAF2F8
+participant "Scheduler de\nRenovação" as SCHED
+control "Assinatura\nService" as AS
+database "DB\nAssinaturas" as DBAS
+participant "Outbox\nPublisher" as OUTBOX
+end box
+
+box "Mensageria" #FDF2E9
+queue "Kafka" as KAFKA
+queue "Kafka DLT" as DLT
+end box
+
+box "Microserviço de Pagamentos" #E8F8F5
+control "Pagamento\nService" as PS
+database "DB\nPagamentos" as DBPS
+end box
+
+participant "Gateway de\nPagamento" as GATEWAY
+
+== Criar renovação ==
+
+SCHED -> AS: Processar assinaturas vencidas
+AS -> DBAS: Seleciona ciclos com fim_ciclo <= now(),\ncom lock
+DBAS --> AS: Assinatura bloqueada
+
+alt renovacao_automatica = false
+    AS -> DBAS: Marca assinatura como CANCELADA
+
+    note over AS, DBAS
+      O acesso permaneceu ativo até o fim do ciclo.
+      Nenhuma cobrança de renovação é criada.
+    end note
+else renovacao_automatica = true
+    AS -> DBAS: Grava renovação\n(assinatura_id, ciclo_referencia)
+    DBAS --> AS: renovacaoId
+    AS -> DBAS: Marca assinatura como EM_RENOVACAO
+    AS -> DBAS: Grava evento na tabela outbox\n{\n eventId,\n tipo: "RenovacaoSolicitada",\n status: "PENDENTE",\n tentativas: 0\n}
+end
+
+note over AS, DBAS
+  Renovação e evento Outbox são gravados
+  atomicamente na mesma transação.
+end note
+
+== Retry de publicação da Outbox ==
+
+loop No máximo 3 tentativas de publicação
+    OUTBOX -> DBAS: Busca próximo evento PENDENTE\nvencido na tabela outbox, com lock
+    DBAS --> OUTBOX: RenovacaoSolicitada
+    OUTBOX -> KAFKA: Publicar RenovacaoSolicitada\nkey = assinaturaId\nmesmo eventId
+
+    alt Kafka confirmou
+        KAFKA --> OUTBOX: ACK
+        OUTBOX -> DBAS: Marca evento como PUBLICADO\nna tabela outbox
+
+        note right of OUTBOX
+          Encerra o retry
+          de publicação.
+        end note
+    else Erro ou timeout
+        KAFKA --> OUTBOX: Falha
+        OUTBOX -> DBAS: Incrementa tentativas e registra\nerro na tabela outbox
+
+        alt tentativas < 3
+            OUTBOX -> DBAS: Mantém PENDENTE e agenda\npróxima tentativa (backoff + jitter)
+        else tentativas = 3
+            OUTBOX -> DBAS: Marca evento como FALHA\nna tabela outbox
+        end
+    end
+end
+
+note over DBAS, KAFKA
+  outbox.status = FALHA é a DLQ do produtor.
+  O evento não chegou ao Kafka e deve gerar alerta.
+
+  Após corrigir a causa, a operação redefine o evento
+  como PENDENTE, mantendo o mesmo eventId.
+end note
+
+== Retry técnico do consumidor ==
+
+loop No máximo 3 tentativas de processamento
+    KAFKA -> PS: RenovacaoSolicitada\n{eventId, renovacaoId, assinaturaId, valor}
+    PS -> DBPS: Deduplica eventId e cria pagamento\ne tentativa número 1
+
+    alt Evento processado
+        PS --> KAFKA: Confirmar offset
+
+        note right of PS
+          O consumo termina após
+          persistir a tentativa.
+        end note
+    else Erro técnico de processamento
+        alt processamento < 3
+            PS --> KAFKA: Não confirmar offset\nReprocessar com backoff
+        else processamento = 3
+            PS -> DLT: RenovacaoSolicitada\n+ tópico original\n+ erro\n+ tentativas
+            DLT --> PS: ACK
+            PS --> KAFKA: Confirmar offset original
+        end
+    end
+end
+
+note over DLT, PS
+  A DLT trata falha técnica do consumidor:
+  payload inválido, erro de banco ou bug inesperado.
+
+  Um evento na DLT não suspende a assinatura.
+  Após a correção, ele é republicado com o mesmo eventId.
+end note
+
+== Tentativas de cobrança ==
+
+loop No máximo 3 tentativas de cobrança
+    PS -> DBPS: Buscar tentativa vencida\nproxima_tentativa_em <= now()
+    DBPS --> PS: {renovacaoId, tentativa, valor}
+
+    PS -> GATEWAY: POST /v1/payments\nIdempotency-Key: renovacaoId:tentativa
+
+    note over PS, GATEWAY
+      Timeout, conexão ou erro 5xx:
+      retry técnico curto com a mesma Idempotency-Key.
+
+      O retry técnico não incrementa
+      o número da tentativa de cobrança.
+    end note
+
+    alt Falha técnica após o retry curto
+        PS -> DBPS: Marca tentativa como\nAGUARDANDO_RETRY_TECNICO\ne agenda novo horário (backoff)
+
+        note right of PS
+          Não suspende a assinatura
+          e não consome tentativa.
+        end note
+    else Gateway aceitou a requisição
+        GATEWAY --> PS: 201 Created\n{paymentId, status: "PENDING"}
+        PS -> DBPS: Persiste paymentId\n(status = PENDENTE)
+
+        GATEWAY -> PS: POST /webhooks/payments\n{eventId, paymentId}
+        PS -> GATEWAY: GET /v1/payments/{paymentId}
+        GATEWAY --> PS: {status: "APPROVED" | "REJECTED" | "PENDING"}
+
+        alt status = APPROVED
+            PS -> DBPS: Marca tentativa como APROVADA
+            PS -> KAFKA: PagamentoRenovacaoAprovado\n{eventId, renovacaoId, assinaturaId}
+            KAFKA --> PS: ACK
+            PS -> DBPS: Marcar eventId como processado
+            PS --> GATEWAY: 200 OK
+
+            note right of PS
+              Encerra as tentativas
+              de cobrança.
+            end note
+        else status = REJECTED e tentativa < 3
+            PS -> DBPS: Marca tentativa como RECUSADA
+            PS -> DBPS: Cria próxima tentativa\ncom data configurada
+            PS -> DBPS: Marcar eventId como processado
+            PS --> GATEWAY: 200 OK
+        else status = REJECTED e tentativa = 3
+            PS -> DBPS: Marca pagamento como\nTENTATIVAS_ESGOTADAS
+            PS -> KAFKA: RenovacaoTentativasEsgotadas\n{eventId, renovacaoId, assinaturaId}
+            KAFKA --> PS: ACK
+            PS -> DBPS: Marcar eventId como processado
+            PS --> GATEWAY: 200 OK
+        else status = PENDING
+            PS -> DBPS: Marcar eventId como processado
+            PS --> GATEWAY: 200 OK
+
+            note right of PS
+              Aguarda novo webhook.
+              PENDING não consome tentativa.
+            end note
+        end
+    end
+end
+
+note over PS, DBPS
+  REJECTED é resultado de negócio, não DLQ.
+
+  Somente três recusas definitivas produzem
+  RenovacaoTentativasEsgotadas.
+end note
+
+== Atualizar assinatura ==
+
+KAFKA -> AS: PagamentoRenovacaoAprovado\nou RenovacaoTentativasEsgotadas
+AS -> DBAS: Deduplica eventId e bloqueia\nassinatura e renovação
+
+alt PagamentoRenovacaoAprovado
+    AS -> DBAS: Marca renovação como APROVADA
+    AS -> DBAS: Marca assinatura como ATIVA\n(inicio_ciclo = fim_ciclo_anterior,\nfim_ciclo = próximo vencimento,\nproxima_renovacao_em = fim_ciclo)
+    AS -> DBAS: Grava evento AssinaturaRenovada\nna tabela outbox
+else RenovacaoTentativasEsgotadas
+    AS -> DBAS: Marca renovação como TENTATIVAS_ESGOTADAS
+    AS -> DBAS: Marca assinatura como SUSPENSA
+    AS -> DBAS: Grava evento AssinaturaSuspensa\nna tabela outbox
+end
+
+note over AS, OUTBOX
+  Os eventos AssinaturaRenovada e AssinaturaSuspensa
+  reutilizam o mesmo Outbox Publisher, retry e
+  tratamento status = FALHA.
+end note
+
+legend bottom
+  |= Contador |= Responsabilidade |= Resultado após esgotar |
+  | outbox.tentativas | Publicar no Kafka | Outbox status FALHA |
+  | consumer.tentativas | Processar evento | Kafka DLT |
+  | pagamento.tentativas | Cobrar renovação | Suspender assinatura |
+endlegend
+
+@enduml

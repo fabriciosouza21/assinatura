@@ -1,0 +1,154 @@
+@startuml
+title Outbox — diagrama de classes
+
+hide circle
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+package "Domínio de assinatura" {
+  class Assinatura <<Entity>> {
+    - id: Long
+    - uuid: String
+    - usuarioId: Long
+    - plano: Plano
+    - status: StatusAssinatura
+    - inicioCiclo: Instant
+    - fimCiclo: Instant
+    - proximaRenovacaoEm: Instant
+    - renovacaoAutomatica: boolean
+  }
+
+  class AssinaturaSolicitada <<Domain Event>> {
+    + eventId: UUID
+    + ocorridoEm: Instant
+    + assinaturaId: UUID
+    + usuarioId: UUID
+    + plano: Plano
+    + valor: BigDecimal
+  }
+
+  note right of Assinatura
+    valor não é persistido na entidade;
+    é derivado de Plano.valor() apenas
+    ao montar o evento AssinaturaSolicitada.
+    O ciclo de renovação (inicio/fim/proxima)
+    usa instantes precisos para permitir
+    ciclos sub-diários.
+  end note
+
+  interface AssinaturaRepository {
+    + save(assinatura: Assinatura): Assinatura
+  }
+
+  class SolicitarAssinatura <<Application Service>> {
+    + executar(usuarioUuid: String, plano: Plano): Assinatura
+  }
+}
+
+package "Outbox" {
+  class OutboxEvent <<Entity>> {
+    - eventId: UUID
+    - aggregateType: String
+    - aggregateId: UUID
+    - eventType: String
+    - payload: JSON
+    - status: OutboxStatus
+    - tentativas: int
+    - ciclosRecuperacao: int
+    - proximaTentativaEm: Instant
+    - criadoEm: Instant
+    - publicadoEm: Instant
+    - falhouEm: Instant
+    - ultimoErro: String
+    + marcarPublicado(publicadoEm: Instant)
+    + registrarFalha(erro: String, proximaTentativa: Instant)
+    + marcarFalha(erro: String, falhouEm: Instant)
+    + recuperarParaRetentativa(proximaTentativa: Instant)
+  }
+
+  enum OutboxStatus {
+    PENDENTE
+    PUBLICADO
+    FALHA
+    RETENTATIVA_DLQ
+  }
+
+  interface OutboxRepository {
+    + save(evento: OutboxEvent)
+    + buscarPublicaveis(agora: Instant, limite: int): List<OutboxEvent>
+    + buscarRecuperaveis(limiteFalhouEm: Instant, maxCiclos: int, limite: int): List<OutboxEvent>
+    + buscarPorIdComLock(eventId: UUID): Optional<OutboxEvent>
+    + contarPorStatus(): List<Object[]>
+  }
+
+  class OutboxPublisher <<Scheduled Service>> {
+    - kafkaTemplate: KafkaTemplate
+    + publicarPendentes()
+  }
+
+  class OutboxRecuperacaoScheduler <<Scheduled Service>> {
+    + recuperarFalhas()
+  }
+
+  class OutboxMetricasScheduler <<Scheduled Service>> {
+    + atualizarMetricas()
+  }
+
+  class RetomarEventoOutbox <<Application Service>> {
+    + executar(eventId: UUID, adminId: String): OutboxEvent
+  }
+
+  class ListarFalhasOutbox <<Application Service>> {
+    + executar(tipoEvento, falhouHaSegundos, page, size): OutboxFalhaLista
+  }
+
+  class RetryPolicy {
+    - maximoTentativas: int
+    - backoffInicial: Duration
+    - jitter: double
+    + calcularProximoAtraso(tentativa: int): Duration
+  }
+}
+
+note right of OutboxStatus
+  RETENTATIVA_DLQ marca eventos promovidos
+  a partir de FALHA, devolvidos ao critério de
+  seleção do publisher. Não há DESCARTADO:
+  quem atinge max-ciclos sem retomada manual
+  permanece terminal em FALHA.
+end note
+
+note right of OutboxEvent
+  recuperarParaRetentativa: status → RETENTATIVA_DLQ,
+  zera tentativas, incrementa ciclosRecuperacao e
+  agenda proximaTentativaEm. falhouEm e ultimoErro
+  permanecem como histórico do último esgotamento.
+end note
+
+SolicitarAssinatura --> AssinaturaRepository
+SolicitarAssinatura --> OutboxRepository
+SolicitarAssinatura ..> AssinaturaSolicitada : cria
+AssinaturaSolicitada ..> OutboxEvent : serializado como
+OutboxEvent --> OutboxStatus
+
+OutboxPublisher --> OutboxRepository
+OutboxPublisher --> RetryPolicy
+OutboxRecuperacaoScheduler --> OutboxRepository
+OutboxRecuperacaoScheduler ..> OutboxEvent : recuperarParaRetentativa
+OutboxMetricasScheduler --> OutboxRepository
+RetomarEventoOutbox --> OutboxRepository
+RetomarEventoOutbox ..> OutboxEvent : recuperarParaRetentativa
+ListarFalhasOutbox --> OutboxRepository
+
+note right of SolicitarAssinatura
+  Assinatura e OutboxEvent são
+  persistidos na mesma transação.
+end note
+
+note bottom of RetryPolicy
+  Backoff exponencial com jitter.
+  A terceira falha encerra
+  o retry automático.
+end note
+
+@enduml

@@ -1,0 +1,26 @@
+info:
+  name: Listar falhas da outbox (assinatura)
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{assinaturaUrl}}/outbox/falhas?page=0&size=20"
+  headers:
+    - name: Authorization
+      value: "Bearer {{tokenAdmin}}"
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        expect(res.getStatus()).to.equal(200);
+        expect(res.body.items, "lista de falhas").to.be.an('array');
+        // Captura o eventId da primeira falha para o passo de retomada.
+        // Se items estiver vazio, não há o que retomar — pare o fluxo aqui.
+        if (res.body.items.length > 0) {
+          bru.setVar("eventId", res.body.items[0].eventId);
+        }
+
+settings:
+  encodeUrl: true

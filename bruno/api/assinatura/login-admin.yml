@@ -1,0 +1,30 @@
+info:
+  name: Login admin
+  type: http
+  seq: 7
+
+http:
+  method: POST
+  url: "{{assinaturaUrl}}/auth/login"
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "username": "admin",
+        "password": "{{password}}"
+      }
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        bru.setVar("tokenAdmin", res.body.token);
+        expect(res.getStatus()).to.equal(200);
+        expect(res.body.token, "token admin capturado").to.be.a('string');
+        expect(res.body.tokenType).to.equal("Bearer");
+
+settings:
+  encodeUrl: true

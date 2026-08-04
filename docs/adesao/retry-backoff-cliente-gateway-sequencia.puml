@@ -1,0 +1,84 @@
+@startuml
+title Retentativa com backoff no cliente do gateway (BE-21)
+
+autonumber
+hide footbox
+skinparam responseMessageBelowArrow true
+
+participant "CobrancaRenovacaoScheduler" as SCH
+participant "GatewayPagamentoClient\n(WebClient)" as CLI
+participant "GatewayRetryPolicy" as POL
+queue "Gateway (mock)" as GW
+participant "TentativaCobranca" as TENT
+
+== Chamada ao gateway (3 pontos de entrada) ==
+
+note over SCH, CLI
+  Três chamadas passam pelo mesmo cliente:
+  - criarCobranca(assinaturaId, valor) — adesão
+  - criarCobrancaRenovacao(renovacaoId, numero, valor) — scheduler
+  - consultarStatus(paymentId) — webhook
+  Cada uma envia Idempotency-Key (adesão: assinaturaId;
+  renovação: renovacaoId:numero) e passa por bloquearComRetry.
+end note
+
+SCH -> CLI: criarCobrancaRenovacao(renovacaoId, numero, valor)
+CLI -> CLI: POST /v1/payments\nIdempotency-Key: renovacaoId:numero\nbloquearComRetry(retry, companion)
+
+loop retentativa (até max-attempts, default 3)
+  CLI -> GW: envia requisição
+  alt sucesso (2xx)
+    GW --> CLI: resposta
+    CLI -> CLI: métrica pagamento.gateway.retry.tentativas\n{metodo} (se houver)
+    CLI --> SCH: CobrancaCriada
+  else falha transitória\n(WebClientRequestException, 5xx, 408, 429)
+    GW --> CLI: erro
+    CLI -> POL: ehFalhaTransitoria(erro)? sim
+    POL --> CLI: calcularBackoff(tentativa)\nbase * multiplicador^(n-1) * (1 ± jitter)
+    CLI -> CLI: Mono.delay(backoff)
+  else falha de negócio (4xx exceto 408/429)
+    GW --> CLI: erro
+    note right of CLI
+      Não retenta: propaga imediato.
+      Não conta contra o teto de falhas técnicas
+      (é recusa de negócio, não indisponibilidade).
+    end note
+  end
+end
+
+alt retry esgotou em falha transitória
+  CLI -> CLI: envolve WebClientException\n→ CobrancaGatewayIndisponivelException
+  CLI --> SCH: CobrancaGatewayIndisponivelException
+else sucesso entre falhas (reset)
+  SCH -> TENT: registrarCobranca(paymentId)
+  TENT -> TENT: falhasTecnicas = 0\n(zera contador)
+end
+
+== Teto de falhas técnicas do scheduler (BE-20) ==
+
+alt CobrancaGatewayIndisponivelException
+  SCH -> TENT: registrarFalhaTecnica()
+  TENT -> TENT: falhasTecnicas++
+
+  alt falhasTecnicas >= teto-falhas-tecnicas (default 3)
+    SCH -> TENT: esgotar()
+    SCH -> SCH: publica RenovacaoTentativasEsgotadas via outbox\n→ suspensão da assinatura
+    note right of SCH
+      O retry do cliente absorve tremores curtos.
+      Só após o cliente esgotar por teto-falhas-tecnicas
+      ciclos consecutivos do scheduler a assinatura é suspensa.
+      Um sucesso no meio zera o contador.
+    end note
+  else abaixo do teto
+    SCH -> TENT: salva PENDENTE\npróximo ciclo do scheduler
+  end
+end
+
+legend bottom
+  |= Retry do cliente |= Absorve falhas transitórias do gateway (5xx, 408, 429, timeout/conexão) com backoff exponencial + jitter; 4xx de negócio não retenta |
+  |= max-attempts |= Retentativas no cliente (default 3); APP_GATEWAY_RETRY_MAX_ATTEMPTS |
+  ||= Teto de falhas técnicas |= Falhas técnicas consecutivas (após o retry do cliente esgotar) que suspendem a assinatura (default 3); APP_RENOVACAO_TETO_FALHAS_TECNICAS |
+  ||= Reset do teto |= Um sucesso (registrarCobranca) zera falhasTecnicas; só consecutivas contam |
+endlegend
+
+@enduml

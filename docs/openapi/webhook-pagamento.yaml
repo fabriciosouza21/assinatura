@@ -1,0 +1,183 @@
+openapi: 3.1.0
+info:
+  title: Webhook de pagamento
+  description: |
+    Endpoint exposto pelo Pagamento Service para receber a notificação de
+    pagamento enviada pelo gateway (mock).
+
+    O gateway chama este endpoint após decidir uma cobrança. O corpo não carrega
+    o status: o Pagamento Service consulta o status oficial no gateway
+    (`GET /v1/payments/{paymentId}`), normaliza e publica `PagamentoStatusAtualizado`
+    no Kafka, só então confirma o recebimento (publish-then-ACK).
+
+    Contrato de referência:
+      - `docs/mock-meio-pagamento.puml`
+      - `docs/contrato-eventos-kafka.puml`
+      - `docs/prd/2026-07-30-webhook-pagamento.md`
+  version: 0.1.0
+servers:
+  - url: http://pagamento:8080
+    description: Rede interna do docker-compose
+  - url: http://localhost:18082
+    description: Host local (porta publicada)
+tags:
+  - name: webhook
+    description: Notificações recebidas do gateway de pagamento
+paths:
+  /webhooks/payments:
+    post:
+      tags: [webhook]
+      summary: Recebe notificação de pagamento
+      description: |
+        O gateway notifica o resultado de uma cobrança. Autenticação por HMAC:
+        o header `X-Mock-Signature` é `sha256=` + HMAC-SHA256 do corpo bruto,
+        usando a chave `app.gateway.webhook-secret`.
+
+        Processamento:
+        1. Valida a assinatura HMAC. Inválida ou ausente -> `401`.
+        2. Consulta o status oficial no gateway (`GET /v1/payments/{paymentId}`).
+        3. Normaliza: `APPROVED`/`PENDING` mantêm o nome; `REJECTED`/`CANCELLED`/`EXPIRED` viram `REJECTED`.
+        4. Publica `PagamentoStatusAtualizado` no tópico `pagamento-status-atualizado`.
+        5. Só retorna `200` após o Kafka confirmar (publish-then-ACK).
+
+        Idempotência por `eventId` (= `X-Mock-Event-Id`): reenvios da mesma
+        notificação não republicam o evento. O `eventId` só é registrado após o
+        publish bem-sucedido.
+      operationId: receberWebhookPagamento
+      parameters:
+        - $ref: '#/components/parameters/XMockEventId'
+        - $ref: '#/components/parameters/XMockSignature'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookEvent'
+            examples:
+              aprovado:
+                summary: Pagamento aprovado (status no corpo é só ilustrativo)
+                value:
+                  id: evt_a1b2c3
+                  type: payment.updated
+                  data:
+                    paymentId: pay_9f8e7d
+                    externalReference: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        '200':
+          description: |
+            Notificação aceita e processada. O evento `PagamentoStatusAtualizado`
+            foi publicado no Kafka.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookAck'
+              examples:
+                ok:
+                  value:
+                    received: true
+                    eventId: evt_a1b2c3
+        '401':
+          description: |
+            Assinatura HMAC ausente ou inválida. O gateway deve corrigir o segredo
+            antes de reenviar.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                assinaturaInvalida:
+                  value:
+                    erro: assinatura_hmac_invalida
+        '503':
+          description: |
+            Falha ao publicar no Kafka (ou ao consultar o gateway). Não confirma
+            o recebimento para que o gateway possa reenviar. Sem efeito colateral
+            publicado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              examples:
+                publishFalhou:
+                  value:
+                    erro: publicacao_indisponivel
+
+components:
+  parameters:
+    XMockEventId:
+      name: X-Mock-Event-Id
+      in: header
+      required: true
+      description: |
+        Identificador único do evento. Igual ao `id` do corpo. Usado como chave
+        de dedup ponta a ponta e como `eventId` do `PagamentoStatusAtualizado`.
+      schema:
+        type: string
+        format: uuid
+      example: 550e8400-e29b-41d4-a716-446655440000
+    XMockSignature:
+      name: X-Mock-Signature
+      in: header
+      required: true
+      description: |
+        `sha256=` + HMAC-SHA256 do corpo bruto da requisição, em hexadecimal,
+        usando a chave `app.gateway.webhook-secret`.
+      schema:
+        type: string
+        pattern: '^sha256=[a-f0-9]+$'
+      example: sha256=5d41402abc4b2a76b9719d911017c592...
+  schemas:
+    WebhookEvent:
+      type: object
+      description: Notificação enviada pelo gateway.
+      required: [id, type, data]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ID do evento. Replicado no header `X-Mock-Event-Id`.
+          example: 550e8400-e29b-41d4-a716-446655440000
+        type:
+          type: string
+          const: payment.updated
+          description: Tipo da notificação.
+        data:
+          type: object
+          required: [paymentId, externalReference]
+          additionalProperties: false
+          properties:
+            paymentId:
+              type: string
+              format: uuid
+              description: ID da cobrança no gateway. Usado para consultar o status oficial.
+              example: 550e8400-e29b-41d4-a716-446655440000
+            externalReference:
+              type: string
+              format: uuid
+              description: |
+                `assinatura_uuid` cadastrado na criação da cobrança. Liga o webhook
+                de volta à assinatura e vira o `assinaturaId` do evento publicado.
+              example: 550e8400-e29b-41d4-a716-446655440000
+    WebhookAck:
+      type: object
+      required: [received, eventId]
+      additionalProperties: false
+      properties:
+        received:
+          type: boolean
+          description: Confirma recebimento e processamento.
+          example: true
+        eventId:
+          type: string
+          description: Echo do `X-Mock-Event-Id`, para correlação.
+          example: evt_a1b2c3
+    Erro:
+      type: object
+      required: [erro]
+      additionalProperties: false
+      properties:
+        erro:
+          type: string
+          enum: [assinatura_hmac_invalida, publicacao_indisponivel]
+          description: Código do erro.

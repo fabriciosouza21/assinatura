@@ -5,6 +5,39 @@ spring:
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
 
+  # Desabilita o exportador de metricas OTLP para evitar tentativas de conexao locais; o servico exporta apenas traces.
+  # Sem isso, o OtlpMeterRegistry tenta publicar em localhost:4318 dentro do container
+  # e gera WARNs de conexao recusada a cada minuto.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.micrometer.metrics.autoconfigure.export.otlp.OtlpMetricsExportAutoConfiguration
+
+  task:
+    scheduling:
+      pool:
+        # Schedulers de lote (publisher, recuperacao da DLQ, cobranca e metricas
+        # da outbox) rodam em threads dedicadas: o envio Kafka bloqueante do
+        # publisher nao pode atrasar os demais jobs agendados.
+        size: ${SPRING_TASK_SCHEDULING_POOL_SIZE:4}
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/pagamento}
+    username: ${SPRING_DATASOURCE_USERNAME:assinatura}
+    password: ${SPRING_DATASOURCE_PASSWORD:assinatura}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
@@ -12,17 +45,89 @@ spring:
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      observation-enabled: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        delivery.timeout.ms: 5000
+        request.timeout.ms: 3000
+    template:
+      observation-enabled: true
 
 app:
+  jwt:
+    # Sem fallback: ambientes nao-dev sem APP_JWT_SECRET falham no startup (fail closed).
+    # O default de dev vive em application-dev.yaml.
+    secret: ${APP_JWT_SECRET}
+    expiration-ms: ${APP_JWT_EXPIRATION_MS:3600000}
   gateway:
     base-url: ${APP_GATEWAY_BASE_URL:http://mock-pagamento:8081}
     webhook-secret: ${APP_GATEWAY_WEBHOOK_SECRET:mock-webhook-secret}
+    webhook-notification-url: ${APP_GATEWAY_WEBHOOK_NOTIFICATION_URL:http://pagamento:8080/webhooks/payments}
+    timeout-conexao-ms: ${APP_GATEWAY_TIMEOUT_CONEXAO_MS:2000}
+    timeout-resposta-ms: ${APP_GATEWAY_TIMEOUT_RESPOSTA_MS:10000}
+    retry:
+      max-attempts: ${APP_GATEWAY_RETRY_MAX_ATTEMPTS:3}
+      backoff-inicial-segundos: ${APP_GATEWAY_RETRY_BACKOFF_INICIAL_SEGUNDOS:1}
+      multiplicador: ${APP_GATEWAY_RETRY_MULTIPLICADOR:2.0}
+      jitter: ${APP_GATEWAY_RETRY_JITTER:0.5}
+  renovacao:
+    scheduler-intervalo-ms: ${APP_RENOVACAO_SCHEDULER_INTERVALO_MS:5000}
+    scheduler-delay-inicial-ms: ${APP_RENOVACAO_SCHEDULER_DELAY_INICIAL_MS:0}
+    tentativas-backoff-dias: ${APP_RENOVACAO_TENTATIVAS_BACKOFF_DIAS:1,3}
+    teto-falhas-tecnicas: ${APP_RENOVACAO_TETO_FALHAS_TECNICAS:3}
+  kafka:
+    rotas-evento-topico:
+      PagamentoStatusAtualizado: ${APP_KAFKA_ROTAS_PAGAMENTO_STATUS_ATUALIZADO:pagamento-status-atualizado}
+      PagamentoRenovacaoAprovado: ${APP_KAFKA_ROTAS_PAGAMENTO_RENOVACAO_APROVADO:renovacao-resultado}
+      RenovacaoTentativasEsgotadas: ${APP_KAFKA_ROTAS_RENOVACAO_TENTATIVAS_ESGOTADAS:renovacao-resultado}
+    replay:
+      # Listener de replay da DLQ de consumer, desligado por padrao. O operador
+      # liga (true) e reinicia o servico quando quer drenar os topicos *-dlq.
+      auto-startup: ${APP_KAFKA_REPLAY_AUTO_STARTUP:false}
+      # Intervalo entre republicacoes de uma mesma mensagem que continua falhando
+      # no consumer original (bounce), em milissegundos. Default: 1 hora (3600000).
+      backoff-interval-ms: ${APP_KAFKA_REPLAY_BACKOFF_INTERVAL_MS:3600000}
+      # Teto de republicacoes de uma mesma mensagem em bounce. Apos o teto, a
+      # mensagem sai do dreno com erro para nao travar o replay indefinidamente.
+      max-bounces: ${APP_KAFKA_REPLAY_MAX_BOUNCES:3}
+  outbox:
+    intervalo-ms: ${APP_OUTBOX_INTERVALO_MS:5000}
+    tamanho-lote: ${APP_OUTBOX_TAMANHO_LOTE:100}
+    max-tentativas: ${APP_OUTBOX_MAX_TENTATIVAS:3}
+    backoff-inicial-segundos: ${APP_OUTBOX_BACKOFF_INICIAL_SEGUNDOS:1}
+    jitter-millis: ${APP_OUTBOX_JITTER_MILLIS:500}
+    dlq:
+      intervalo-ms: ${APP_OUTBOX_DLQ_INTERVALO_MS:60000}
+      timeout-segundos: ${APP_OUTBOX_DLQ_TIMEOUT_SEGUNDOS:3600}
+      max-ciclos: ${APP_OUTBOX_DLQ_MAX_CICLOS:3}
+    metricas:
+      intervalo-ms: ${APP_OUTBOX_METRICAS_INTERVALO_MS:60000}
 
 management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,prometheus
+  tracing:
+    sampling:
+      probability: ${MANAGEMENT_TRACING_SAMPLING_PROBABILITY:1.0}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+
+logging:
+  structured:
+    format:
+      console: ecs
+  level:
+    root: INFO
+    com.globo: INFO
+    org.apache.kafka: WARN
+    org.springframework: WARN
+    org.hibernate.orm: WARN
+    org.flywaydb: WARN

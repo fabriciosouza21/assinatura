@@ -6,10 +6,14 @@ services:
       POSTGRES_DB: assinatura
       POSTGRES_USER: assinatura
       POSTGRES_PASSWORD: assinatura
+      # Bancos adicionais criados na primeira inicialização (volume vazio)
+      # pelo script montado em /docker-entrypoint-initdb.d.
+      POSTGRES_MULTIPLE_DATABASES: pagamento
     ports:
       - "5433:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/create-multiple-postgresql-databases.sh:/docker-entrypoint-initdb.d/create-multiple-postgresql-databases.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U assinatura -d assinatura"]
       interval: 10s
@@ -45,13 +49,28 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       CLUSTER_ID: MiNpbDqFTc6T7jrQ7zT10A
+    volumes:
+      # /mnt/shared/config e o ponto de override oficial da imagem apache/kafka:
+      # o KafkaDockerWrapper copia estes arquivos para /opt/kafka/config no startup.
+      # Aqui silenciamos o console (docker logs) para WARN+, mantendo o server.log
+      # interno em INFO para depuracao via docker exec.
+      - ./docker/kafka/log4j.properties:/mnt/shared/config/log4j.properties:ro
     ports:
       - "9092:9092"
     healthcheck:
-      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/9092"]
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 10
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    container_name: assinatura-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+      - "4318:4318"
 
   assinatura:
     build:
@@ -59,7 +78,9 @@ services:
       dockerfile: Dockerfile
     container_name: assinatura-app
     # Sobrepoẽ defaults do application.yaml para os hosts internos do Docker.
-    # APP_JWT_SECRET não é repetido: a app recorre ao default do application.yaml.
+    # APP_JWT_SECRET não é repetido: no perfil dev (default do compose), a app
+    # recorre ao default de application-dev.yaml. Em ambientes não-dev, defina
+    # a variável (sem ela o startup falha de propósito).
     # Para customizar qualquer valor, copie .env.example para .env e ajuste.
     env_file:
       - path: .env
@@ -72,6 +93,8 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: "6379"
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      OTEL_SERVICE_NAME: assinatura
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318/v1/traces}
     ports:
       - "18080:8080"
     depends_on:
@@ -93,14 +116,25 @@ services:
       context: services/pagamento
       dockerfile: Dockerfile
     container_name: assinatura-pagamento
+    env_file:
+      - path: .env
+        required: false
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pagamento
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-assinatura}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-assinatura}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       APP_GATEWAY_BASE_URL: http://mock-pagamento:8081
       APP_GATEWAY_WEBHOOK_SECRET: ${MOCK_WEBHOOK_SECRET:-mock-webhook-secret}
+      APP_GATEWAY_WEBHOOK_NOTIFICATION_URL: http://pagamento:8080/webhooks/payments
+      OTEL_SERVICE_NAME: pagamento
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318/v1/traces}
     ports:
       - "18082:8080"
     depends_on:
+      postgres:
+        condition: service_healthy
       kafka:
         condition: service_healthy
       mock-pagamento:
@@ -120,6 +154,8 @@ services:
     environment:
       MOCK_PORT: "8081"
       MOCK_WEBHOOK_SECRET: ${MOCK_WEBHOOK_SECRET:-mock-webhook-secret}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318/v1/traces}
+      OTEL_SERVICE_NAME: mock-pagamento
     ports:
       - "8081:8081"
     healthcheck:

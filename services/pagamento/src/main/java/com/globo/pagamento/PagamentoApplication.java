@@ -2,6 +2,7 @@ package com.globo.pagamento;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Ponto de entrada do Pagamento Service.
@@ -10,6 +11,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * status final no Kafka para o Assinatura Service consumir.
  */
 @SpringBootApplication
+@EnableScheduling
 public class PagamentoApplication {
 
   /**

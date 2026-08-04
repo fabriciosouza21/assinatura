@@ -45,6 +45,23 @@ Seguir GitFlow.
 
 Nomes de branch em kebab-case, sem acentos. Verbo no infinitivo descrevendo a entrega.
 
+## Worktrees
+
+Trabalho paralelo acontece em *git worktrees* dentro de `.worktrees/`, na **raiz
+do projeto** (não em diretórios externos ao repositório). Isso mantém todas as
+árvores de trabalho próximas ao clone principal e compartilhando o mesmo `.git`.
+
+```bash
+git worktree add .worktrees/<nome-da-branch> -b feat/<nome> develop
+cd .worktrees/<nome-da-branch>
+```
+
+- Diretório `.worktrees/` já está no `.gitignore` (não é versionado).
+- Uma worktree por branch. Remova com `git worktree remove .worktrees/<nome>`
+  ao terminar e fazer o merge.
+- Numere migrations coordenando entre worktrees do mesmo serviço para não
+  colidir (ver plano de implementação em `docs/roadmap/`).
+
 ## Estilo de código — Java
 
 Aplica-se a `services/assinatura` e `services/pagamento`. Ambos seguem
@@ -79,6 +96,15 @@ make test-integration-up    # apenas sobe o Postgres e aguarda a porta 5433
 make test-integration-down  # derruba o Postgres
 ```
 
+> **Nota:** os testes de integração compartilham a base na porta 5433 sem
+> cleanup entre si, então **rodem sempre via `make test-integration`, que
+> recria o Postgres do zero**. Execuções isoladas ou contra base já populada
+> geram `unique constraint` duplicado e falsos negativos. `@Transactional` não
+> resolve o caso: os testes com `@EmbeddedKafka` gravam via consumer numa
+> thread própria, fora do rollback do teste.
+
+
+
 O hook `pre-commit` (em `.githooks/`) roda `make lint` automaticamente em cada
 serviço de `services/` que tiver arquivos `.java` no stage. Bypass:
 `SKIP_PRE_COMMIT=1 git commit ...`.
@@ -89,7 +115,7 @@ Mock isolado de meio de pagamento. **Não faz parte do projeto principal.**
 
 - Apenas biblioteca padrão (`net/http`), sem framework.
 - `gofmt` para formatação. Estado em memória (map + mutex), sem persistência.
-- Contrato do mock em `docs/mock-meio-pagamento.puml`.
+- Contrato do mock em `docs/contratos/mock-meio-pagamento.puml`.
 
 Comandos (a partir de `docker/mock-pagamento`):
 
@@ -131,9 +157,37 @@ void deveAtualizarUsuario() {
 }
 ```
 
+## Logging
+
+- Use SLF4J Fluent API em todo log novo ou alterado: `atInfo()`, `atWarn()`, `atError()`, `atDebug()` ou `atTrace()`.
+- Todo log deve possuir `event` estável em `snake_case`. Registre valores dinâmicos com `addKeyValue()` e mantenha a mensagem de `log()` curta e sem interpolação.
+- Use `setCause(exception)` somente no ponto que determina a falha definitiva. Não faça `log-and-throw` quando uma camada superior também registrar a exceção.
+- Use `INFO` para resultados relevantes de negócio, `WARN` para degradações recuperáveis, `ERROR` para falhas definitivas e `DEBUG` para retries, idempotência, deduplicação e decisões técnicas.
+- A falha temporária de publicação da outbox é `WARN` (degradação recuperável observável), não `DEBUG`, mesmo sendo uma retentativa. O sucesso da publicação é `INFO`. Veja `docs/guidelines/logging.md` §8.
+- Não registre payloads, credenciais, tokens, PII, objetos completos ou `exception.getMessage()` como campo.
+- Ao migrar código existente, converta para Fluent API apenas os logs dentro do escopo da tarefa. Não refatore logs não relacionados.
+- Toda cadeia Fluent deve terminar com `log()`.
+
+Exemplo:
+
+```java
+log.atInfo()
+    .addKeyValue("event", "assinatura_solicitada")
+    .addKeyValue("usuarioId", usuarioId)
+    .addKeyValue("plano", plano)
+    .log("Assinatura solicitada");
+```
+
+
+## Comentários e JavaDocs
+
+- Descreva apenas o comportamento atual, o propósito e as regras permanentes do código.
+- Não inclua etapas do planejamento, identificadores de tarefas, fases de implementação ou comportamentos futuros.
+- Mantenha informações como, tickets e ordem de implementação somente nos documentos de planejamento.
+
 ## Documentação
 
-- Diagramas de sequência em `docs/*.puml`.
+- Diagramas de sequência em `docs/**/*.puml`.
 - Roadmap em `docs/roadmap/`.
 - Histórico de mudanças em `CHANGELOG.md`.
 - Setup e validação em `README.md`.

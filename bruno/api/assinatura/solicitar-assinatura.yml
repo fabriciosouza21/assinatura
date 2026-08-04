@@ -1,0 +1,31 @@
+info:
+  name: Solicitar assinatura
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{assinaturaUrl}}/assinaturas"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: Authorization
+      value: "Bearer {{token}}"
+  body:
+    type: json
+    data: |-
+      {
+        "plano": "PREMIUM"
+      }
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        bru.setVar("assinaturaId", res.body.id);
+        expect(res.getStatus()).to.equal(202);
+        expect(res.body.id, "assinaturaId capturado").to.be.a('string');
+        expect(res.body.status).to.equal("AGUARDANDO_PAGAMENTO");
+
+settings:
+  encodeUrl: true

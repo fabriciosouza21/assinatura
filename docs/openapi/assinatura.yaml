@@ -1,0 +1,423 @@
+openapi: 3.0.3
+info:
+  title: Assinatura Service API
+  description: |
+    Endpoints de solicitacao e consulta de assinatura. A assinatura nasce
+    AGUARDANDO_PAGAMENTO, torna-se ATIVA na aprovacao do pagamento e daí segue o
+    ciclo de renovacao automatica (EM_RENOVACAO, SUSPENSA, CANCELADA).
+
+    Todas as rotas exigem JWT emitido por `POST /auth/login` (ver ADR 0003). O
+    dono da assinatura vem sempre do token: o corpo da solicitacao carrega
+    apenas o plano, e a consulta so devolve a assinatura ao proprio dono ou a um
+    administrador.
+
+    O cancelamento tem contrato proprio:
+    `docs/openapi/cancelamento-assinatura.yaml`.
+  version: 0.3.0
+servers:
+  - url: http://localhost:18080
+    description: Local (docker-compose)
+tags:
+  - name: Assinatura
+    description: Solicitacao e consulta de assinatura
+
+security:
+  - bearerAuth: []
+
+paths:
+  /assinaturas:
+    get:
+      tags: [Assinatura]
+      summary: Lista as assinaturas do usuario autenticado
+      description: |
+        Devolve as assinaturas do usuario do token, paginadas, da mais recente
+        para a mais antiga (dataInicio desc, com fallback para a mais
+        recentemente criada). Usuario sem assinaturas recebe lista vazia com
+        `total` zero. O administrador, sem `usuarioId` no token, recebe 403.
+
+        A resposta pode vir do cache Redis (cache-aside por usuario e pagina,
+        TTL de 5 minutos). Mudancas em assinaturas invalidam o cache apos o
+        commit da escrita; nos fluxos assincronos (pagamento, renovacao) a
+        lista reflete o estado persistido em poucos segundos.
+      operationId: listarAssinaturas
+      parameters:
+        - name: page
+          in: query
+          required: false
+          description: Pagina a retornar, comecando em 0.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          example: 0
+        - name: size
+          in: query
+          required: false
+          description: Quantidade de itens por pagina (maximo 100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          example: 20
+      responses:
+        '200':
+          description: Pagina de assinaturas do usuario autenticado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssinaturaLista'
+              example:
+                items:
+                  - id: "770e8400-e29b-41d4-a716-446655440000"
+                    usuarioId: "550e8400-e29b-41d4-a716-446655440000"
+                    plano: PREMIUM
+                    dataInicio: "2025-03-10"
+                    dataExpiracao: "2025-04-10"
+                    status: ATIVA
+                    inicioCiclo: "2025-03-10"
+                    fimCiclo: "2025-04-10"
+                    proximaRenovacaoEm: "2025-04-10"
+                    renovacaoAutomatica: true
+                  - id: "660e8400-e29b-41d4-a716-446655440000"
+                    usuarioId: "550e8400-e29b-41d4-a716-446655440000"
+                    plano: BASICO
+                    dataInicio: "2025-01-10"
+                    dataExpiracao: "2025-02-10"
+                    status: CANCELADA
+                    inicioCiclo: "2025-01-10"
+                    fimCiclo: "2025-02-10"
+                    proximaRenovacaoEm: "2025-02-10"
+                    renovacaoAutomatica: true
+                page: 0
+                size: 20
+                total: 2
+        '401':
+          description: Token ausente, expirado ou invalido. Corpo vazio.
+        '403':
+          description: |
+            Token valido sem usuario de dominio ligado (por exemplo, o
+            administrador do seed), que portanto nao possui assinaturas a
+            listar. Corpo vazio.
+    post:
+      tags: [Assinatura]
+      summary: Solicita uma assinatura
+      description: |
+        Cria uma assinatura em AGUARDANDO_PAGAMENTO para o usuario do token.
+        Regra "um usuario, uma assinatura aberta": se ja existe assinatura em
+        AGUARDANDO_PAGAMENTO ou ATIVA para esse usuario, retorna 409.
+
+        O dono nao vem no corpo: campos extras enviados sao ignorados. A
+        assinatura nasce sempre AGUARDANDO_PAGAMENTO, e dataInicio e
+        dataExpiracao sao definidas na ativacao, quando o pagamento e aprovado.
+      operationId: solicitarAssinatura
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssinaturaSolicitacao'
+            examples:
+              premium:
+                summary: Solicitacao de plano PREMIUM
+                value:
+                  plano: PREMIUM
+      responses:
+        '202':
+          description: Assinatura criada em AGUARDANDO_PAGAMENTO.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssinaturaCriada'
+              example:
+                id: "770e8400-e29b-41d4-a716-446655440000"
+                status: AGUARDANDO_PAGAMENTO
+        '400':
+          description: Corpo invalido (campos ausentes, plano nao suportado, uuid malformado).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                status: 400
+                title: Requisicao invalida
+                errors:
+                  - campo: plano
+                    motivo: deve ser um dos planos suportados (BASICO, PREMIUM, FAMILIA)
+        '401':
+          description: Token ausente, expirado ou invalido. Corpo vazio.
+        '403':
+          description: |
+            Token valido sem usuario de dominio ligado (por exemplo, o
+            administrador do seed), que portanto nao pode assinar. Corpo vazio.
+        '404':
+          description: |
+            O usuario do token nao corresponde a nenhum usuario cadastrado.
+            Corpo vazio.
+        '409':
+          description: Usuario ja possui assinatura aberta. Corpo vazio.
+
+  /assinaturas/ativa:
+    get:
+      tags: [Assinatura]
+      summary: Consulta a assinatura ativa do dono do token
+      description: |
+        Devolve a assinatura em status ATIVA do usuario do token, ou 404 se nao
+        houver (usuario novo, apenas AGUARDANDO_PAGAMENTO ou apenas fechadas).
+        ROLE_ADMIN, sem usuario de dominio, recebe 403. Resposta no mesmo schema
+        da consulta pontual; cache em Redis por usuario, com invalidacao apos o
+        commit das escritas.
+      operationId: consultarAssinaturaAtiva
+      responses:
+        '200':
+          description: Assinatura ativa do usuario do token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assinatura'
+              examples:
+                ativa:
+                  summary: Assinatura ativa
+                  value:
+                    id: "770e8400-e29b-41d4-a716-446655440000"
+                    usuarioId: "550e8400-e29b-41d4-a716-446655440000"
+                    plano: PREMIUM
+                    dataInicio: "2025-03-10"
+                    dataExpiracao: "2025-04-10"
+                    status: ATIVA
+                    inicioCiclo: "2025-03-10"
+                    fimCiclo: "2025-04-09"
+                    proximaRenovacaoEm: "2025-04-09T12:00:00Z"
+                    renovacaoAutomatica: true
+        '401':
+          description: Token ausente, expirado ou invalido. Corpo vazio.
+        '403':
+          description: |
+            Token sem usuario de dominio (administrador do seed). Corpo vazio.
+        '404':
+          description: Usuario nao possui assinatura ativa. Corpo vazio.
+
+  /assinaturas/{uuid}:
+    get:
+      tags: [Assinatura]
+      summary: Consulta uma assinatura pelo uuid publico
+      description: |
+        Devolve a representacao completa da assinatura ao proprio dono.
+        Assinatura de outro usuario retorna 403; ROLE_ADMIN consulta qualquer
+        uma. dataInicio, dataExpiracao e os campos de ciclo sao nulos enquanto
+        a assinatura aguarda pagamento.
+      operationId: consultarAssinatura
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          description: uuid publico da assinatura.
+          schema:
+            type: string
+            format: uuid
+          example: "770e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Assinatura encontrada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assinatura'
+              examples:
+                aguardando:
+                  summary: Aguardando pagamento (datas nulas)
+                  value:
+                    id: "770e8400-e29b-41d4-a716-446655440000"
+                    usuarioId: "550e8400-e29b-41d4-a716-446655440000"
+                    plano: PREMIUM
+                    dataInicio: null
+                    dataExpiracao: null
+                    status: AGUARDANDO_PAGAMENTO
+                    inicioCiclo: null
+                    fimCiclo: null
+                    proximaRenovacaoEm: null
+                    renovacaoAutomatica: true
+                ativa:
+                  summary: Assinatura ativa
+                  value:
+                    id: "770e8400-e29b-41d4-a716-446655440000"
+                    usuarioId: "550e8400-e29b-41d4-a716-446655440000"
+                    plano: PREMIUM
+                    dataInicio: "2025-03-10"
+                    dataExpiracao: "2025-04-10"
+                    status: ATIVA
+                    inicioCiclo: "2025-03-10"
+                    fimCiclo: "2025-04-09"
+                    proximaRenovacaoEm: "2025-04-09T12:00:00Z"
+                    renovacaoAutomatica: true
+        '401':
+          description: Token ausente, expirado ou invalido. Corpo vazio.
+        '403':
+          description: Assinatura pertence a outro usuario. Corpo vazio.
+        '404':
+          description: Assinatura nao encontrada. Corpo vazio.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT emitido por `POST /auth/login` (ver `docs/openapi/auth.yaml`). O
+        subject e o email do cliente e a claim `usuarioId` identifica o usuario
+        de dominio dono das assinaturas.
+  schemas:
+    Plano:
+      type: string
+      description: |
+        Plano da assinatura. Valor mensal (BigDecimal), mapeado internamente e
+        exposto nos eventos de assinatura e renovacao:
+          - BASICO: R$ 19,90 (19.90)
+          - PREMIUM: R$ 39,90 (39.90)
+          - FAMILIA: R$ 59,90 (59.90)
+        Validado contra os planos suportados.
+      enum:
+        - BASICO
+        - PREMIUM
+        - FAMILIA
+      example: PREMIUM
+    StatusAssinatura:
+      type: string
+      description: |
+        Status do ciclo de vida da assinatura:
+          - AGUARDANDO_PAGAMENTO: recem-solicitada, sem vigencia definida.
+          - ATIVA: pagamento aprovado, acesso liberado ate dataExpiracao.
+          - PAGAMENTO_RECUSADO: primeira cobranca recusada.
+          - EM_RENOVACAO: ciclo vencido, cobranca da renovacao em andamento.
+            O acesso permanece liberado enquanto a cobranca e decidida.
+          - SUSPENSA: acesso interrompido apos as tres tentativas de cobranca
+            da renovacao se esgotarem.
+          - CANCELADA: ciclo de vida encerrado, por cancelamento imediato ou
+            pela efetivacao do opt-out no vencimento.
+        A solicitacao (POST) produz apenas AGUARDANDO_PAGAMENTO.
+      enum:
+        - AGUARDANDO_PAGAMENTO
+        - ATIVA
+        - PAGAMENTO_RECUSADO
+        - EM_RENOVACAO
+        - SUSPENSA
+        - CANCELADA
+      example: AGUARDANDO_PAGAMENTO
+    AssinaturaSolicitacao:
+      type: object
+      description: |
+        Input da solicitacao de assinatura. O plano e a unica entrada; o dono
+        vem da claim `usuarioId` do token, e id, status, dataInicio e
+        dataExpiracao sao derivados pelo servidor.
+      required: [plano]
+      properties:
+        plano:
+          $ref: '#/components/schemas/Plano'
+    AssinaturaCriada:
+      type: object
+      description: Resposta da solicitacao (202).
+      required: [id, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: uuid publico da assinatura criada.
+        status:
+          $ref: '#/components/schemas/StatusAssinatura'
+    Assinatura:
+      type: object
+      description: Representacao completa da assinatura (GET).
+      required: [id, usuarioId, plano, status, renovacaoAutomatica]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: uuid publico da assinatura.
+        usuarioId:
+          type: string
+          format: uuid
+          description: uuid publico do usuario dono da assinatura.
+        plano:
+          $ref: '#/components/schemas/Plano'
+        dataInicio:
+          type: string
+          format: date
+          nullable: true
+          description: Definida na ativacao. Nula enquanto aguarda pagamento.
+        dataExpiracao:
+          type: string
+          format: date
+          nullable: true
+          description: Definida na ativacao. Nula enquanto aguarda pagamento.
+        status:
+          $ref: '#/components/schemas/StatusAssinatura'
+        inicioCiclo:
+          type: string
+          format: date
+          nullable: true
+          description: Inicio do ciclo de renovacao corrente. Nulo antes da ativacao.
+        fimCiclo:
+          type: string
+          format: date
+          nullable: true
+          description: Fim do ciclo de renovacao corrente. Nulo antes da ativacao.
+        proximaRenovacaoEm:
+          type: string
+          format: date-time
+          nullable: true
+          description: Instante da proxima renovacao. Nulo antes da ativacao.
+        renovacaoAutomatica:
+          type: boolean
+          description: |
+            Indica se a renovacao automatica esta habilitada. Fica `false` apos
+            o cancelamento agendado ou o opt-out no vencimento.
+    AssinaturaLista:
+      type: object
+      description: Pagina da listagem de assinaturas do usuario autenticado.
+      required: [items, page, size, total]
+      properties:
+        items:
+          type: array
+          description: |
+            Assinaturas da pagina, da mais recente para a mais antiga. Cada
+            item usa o mesmo schema da consulta pontual.
+          items:
+            $ref: '#/components/schemas/Assinatura'
+        page:
+          type: integer
+          description: Pagina corrente, comecando em 0.
+        size:
+          type: integer
+          description: Tamanho da pagina solicitado.
+        total:
+          type: integer
+          description: |
+            Total de assinaturas do usuario, ignorando a paginacao. Permite
+            montar a paginacao sem requisitar a ultima pagina.
+    Problem:
+      type: object
+      description: |
+        Detalhe de erro (RFC 7807/9457). No 400, o array `errors` lista os campos
+        invalidos para o cliente corrigir a requisicao. 404 e 409 retornam corpo
+        vazio.
+      properties:
+        status:
+          type: integer
+          description: Codigo de status HTTP.
+        title:
+          type: string
+          description: Titulo curto do erro.
+        errors:
+          type: array
+          description: Campos invalidos (presente no 400).
+          items:
+            type: object
+            required: [campo, motivo]
+            properties:
+              campo:
+                type: string
+                description: Nome do campo invalido.
+              motivo:
+                type: string
+                description: Motivo da invalidade.

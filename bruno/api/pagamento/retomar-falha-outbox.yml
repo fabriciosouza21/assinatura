@@ -1,0 +1,22 @@
+info:
+  name: Retomar falha da outbox (pagamento)
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{pagamentoUrl}}/outbox/falhas/{{eventId}}/retomada"
+  headers:
+    - name: Authorization
+      value: "Bearer {{tokenAdmin}}"
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        expect(res.getStatus()).to.equal(200);
+        expect(res.body.eventId, "eventId retomado").to.be.a('string');
+        expect(res.body.status).to.equal("RETENTATIVA_DLQ");
+
+settings:
+  encodeUrl: true

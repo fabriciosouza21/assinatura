@@ -1,0 +1,74 @@
+@startuml
+title Recuperação manual assistida da outbox — endpoints admin (BE-26)
+
+autonumber
+hide footbox
+skinparam responseMessageBelowArrow true
+
+actor "Operação\n(admin)" as OPS
+participant "API REST\n/outbox/falhas" as API
+participant "JwtAuthFilter" as JWT
+participant "ListarFalhasOutbox" as LIST
+participant "RetomarEventoOutbox" as RET
+database "Banco de Dados" as DB
+
+== Listagem de falhas ==
+
+OPS -> API: GET /outbox/falhas\n?tipoEvento=&falhouHaSegundos=&page=&size=\nAuthorization: Bearer <jwt>
+API -> JWT: extrair UsuarioAutenticado\n(claim role)
+JWT --> API: principal{email, role}
+
+alt principal == null ou role != ROLE_ADMIN
+  API --> OPS: 403 Forbidden
+else admin
+  API -> LIST: executar(tipoEvento, falhouHaSegundos,\npage, size)
+  LIST -> DB: SELECT event_id, event_type, falhou_em,\nultimo_erro, ciclos_recuperacao\nWHERE status = 'FALHA'\n[AND event_type = :tipoEvento]\n[AND falhou_em <= agora - falhouHaSegundos]\nORDER BY falhou_em\nLIMIT/OFFSET
+  DB --> LIST: página de falhas
+  LIST --> API: OutboxFalhaLista
+  API --> OPS: 200 (página)
+end
+
+== Retomada de evento terminal ==
+
+OPS -> API: POST /outbox/falhas/{eventId}/retomada\nAuthorization: Bearer <jwt>
+API -> JWT: extrair UsuarioAutenticado
+JWT --> API: principal
+
+alt sem token / inválido
+  API --> OPS: 401 Unauthorized
+else não admin
+  API --> OPS: 403 Forbidden
+else admin
+  API -> RET: executar(eventId, adminId=principal.email)
+  RET -> DB: @Transactional\nbuscarPorIdComLock(eventId)\n@Lock(PESSIMISTIC_WRITE)
+
+  alt eventId inexistente
+    RET --> API: OutboxEventoNaoEncontradoException
+    API --> OPS: 404 Not Found
+  else status != FALHA\n(concorrência ou duplicado)
+    RET --> API: OutboxEventoNaoRetomavelException
+    API --> OPS: 409 Conflict
+  else em FALHA (inclusive terminal no teto)
+    RET -> DB: recuperarParaRetentativa\nstatus: FALHA → RETENTATIVA_DLQ\ntentativas = 0\nciclosRecuperacao++\nproximaTentativaEm = agora + backoff(1) + jitter
+    RET -> RET: log INFO outbox_falha_retomada_manual\n{eventId, eventType, adminId}
+    RET --> API: OutboxEvent
+    API --> OPS: 200 { eventId, status=RETENTATIVA_DLQ }
+  end
+end
+
+note over RET
+  A retomada manual aplica a mesma transição do
+  scheduler (recuperarParaRetentativa) sob lock
+  pessimista, mas ignora o teto de ciclos: é a
+  saída operacional para eventos terminais em FALHA.
+  O adminId (e-mail) fica na auditoria em log.
+end note
+
+note over API, DB
+  Os endpoints existem nos dois serviços
+  (Assinatura e Pagamento) pelo mesmo fluxo.
+  O Pagamento exigiu a stack de validação JWT
+  (APP_JWT_SECRET) introduzida por esta entrega.
+end note
+
+@enduml
