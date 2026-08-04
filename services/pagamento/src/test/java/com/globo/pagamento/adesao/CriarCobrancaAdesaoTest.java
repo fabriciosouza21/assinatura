@@ -2,20 +2,16 @@ package com.globo.pagamento.adesao;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.globo.pagamento.cobranca.Cobranca;
-import com.globo.pagamento.cobranca.CobrancaRepository;
-import com.globo.pagamento.cobranca.StatusCobranca;
-import com.globo.pagamento.gateway.CobrancaCriada;
 import com.globo.pagamento.gateway.GatewayPagamentoClient;
 import com.globo.pagamento.shared.contrato.AssinaturaSolicitada;
 import com.globo.pagamento.shared.contrato.Plano;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,50 +25,53 @@ import org.mockito.junit.jupiter.MockitoExtension;
 /**
  * Teste unitario do {@link CriarCobrancaAdesao}.
  *
- * <p>Verifica a criacao de cobranca no gateway e a persistencia da correlacao, alem da idempotencia
- * no redelivery (correlacao ja existente nao dispara nova chamada ao gateway).
+ * <p>Verifica a persistencia da tentativa de adesao em {@link StatusTentativaAdesao#PENDENTE} antes
+ * de qualquer chamada ao gateway, e a idempotencia no redelivery (tentativa ja existente nao
+ * persiste de novo).
  */
 @ExtendWith(MockitoExtension.class)
 class CriarCobrancaAdesaoTest {
 
-  @Mock private CobrancaRepository cobrancaRepository;
+  @Mock private CobrancaAdesaoTentativaRepository tentativaRepository;
   @Mock private GatewayPagamentoClient gatewayPagamentoClient;
   @InjectMocks private CriarCobrancaAdesao service;
-  @Captor private ArgumentCaptor<Cobranca> cobrancaCaptor;
+  @Captor private ArgumentCaptor<CobrancaAdesaoTentativa> tentativaCaptor;
 
   @Test
-  @DisplayName("Deve criar cobranca e persistir correlacao quando nao existe")
-  void deveCriarCobranca() {
+  @DisplayName("Deve criar tentativa PENDENTE sem chamar o gateway")
+  void deveCriarTentativaPendenteSemChamarGateway() {
     AssinaturaSolicitada evento = eventoValido();
     String assinaturaId = evento.assinaturaId().toString();
-    when(cobrancaRepository.existsByAssinaturaUuid(assinaturaId)).thenReturn(false);
-    when(gatewayPagamentoClient.criarCobranca(eq(assinaturaId), eq(evento.valor())))
-        .thenReturn(new CobrancaCriada("pay_123"));
+    when(tentativaRepository.findByAssinaturaUuid(assinaturaId)).thenReturn(Optional.empty());
 
     service.processar(evento);
 
-    verify(cobrancaRepository).save(cobrancaCaptor.capture());
-    Cobranca persistida = cobrancaCaptor.getValue();
+    verify(tentativaRepository).save(tentativaCaptor.capture());
+    CobrancaAdesaoTentativa persistida = tentativaCaptor.getValue();
     assertThat(persistida.getAssinaturaUuid())
-        .as("Correlacao pela assinatura")
+        .as("Tentativa pela assinatura")
         .isEqualTo(assinaturaId);
-    assertThat(persistida.getPaymentId()).as("PaymentId do gateway").isEqualTo("pay_123");
+    assertThat(persistida.getValor()).as("Valor da adesao").isEqualTo(evento.valor());
     assertThat(persistida.getStatus())
-        .as("Status inicial da cobranca")
-        .isEqualTo(StatusCobranca.PENDING);
+        .as("Status inicial da tentativa")
+        .isEqualTo(StatusTentativaAdesao.PENDENTE);
+    verify(gatewayPagamentoClient, never()).criarCobranca(any(), any());
   }
 
   @Test
-  @DisplayName("Nao deve chamar o gateway quando a correlacao ja existe")
-  void naoDeveChamarGatewayQuandoCorrelacaoExiste() {
+  @DisplayName("Nao deve persistir quando a tentativa ja existe")
+  void naoDevePersistirQuandoTentativaJaExiste() {
     AssinaturaSolicitada evento = eventoValido();
-    when(cobrancaRepository.existsByAssinaturaUuid(evento.assinaturaId().toString()))
-        .thenReturn(true);
+    when(tentativaRepository.findByAssinaturaUuid(evento.assinaturaId().toString()))
+        .thenReturn(
+            Optional.of(
+                new CobrancaAdesaoTentativa(
+                    evento.assinaturaId().toString(), new BigDecimal("19.90"))));
 
     service.processar(evento);
 
+    verify(tentativaRepository, never()).save(any());
     verify(gatewayPagamentoClient, never()).criarCobranca(any(), any());
-    verify(cobrancaRepository, never()).save(any());
   }
 
   private AssinaturaSolicitada eventoValido() {

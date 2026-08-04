@@ -1,54 +1,41 @@
 package com.globo.pagamento.adesao;
 
-import com.globo.pagamento.cobranca.Cobranca;
-import com.globo.pagamento.cobranca.CobrancaRepository;
-import com.globo.pagamento.cobranca.StatusCobranca;
-import com.globo.pagamento.gateway.CobrancaCriada;
-import com.globo.pagamento.gateway.GatewayPagamentoClient;
 import com.globo.pagamento.shared.contrato.AssinaturaSolicitada;
 import org.springframework.stereotype.Service;
 
 /**
- * Command de criacao de cobranca a partir de um evento {@link AssinaturaSolicitada}.
+ * Command de criacao da tentativa de cobranca de adesao a partir de um evento {@link
+ * AssinaturaSolicitada}.
  *
- * <p>Idempotente por {@code assinaturaId}: se ja existir correlacao, conclui sem nova chamada ao
- * gateway. Caso contrario, cria a cobranca no gateway e persiste a correlacao em {@code PENDING}.
+ * <p>Idempotente por {@code assinaturaId}: se ja existir tentativa, conclui sem nova acao. Caso
+ * contrario, persiste a tentativa em {@link StatusTentativaAdesao#PENDENTE} antes de qualquer
+ * chamada ao gateway, garantindo que uma falha tecnica do gateway nao deixe a assinatura sem
+ * registro de cobranca. O scheduler assume a cobranca no proximo ciclo.
  */
 @Service
 public class CriarCobrancaAdesao {
 
-  private final CobrancaRepository cobrancaRepository;
-  private final GatewayPagamentoClient gatewayPagamentoClient;
+  private final CobrancaAdesaoTentativaRepository tentativaRepository;
 
   /**
    * Cria o service.
    *
-   * @param cobrancaRepository repositorio de correlacao
-   * @param gatewayPagamentoClient client do gateway de pagamento
+   * @param tentativaRepository repositorio de tentativas de adesao
    */
-  public CriarCobrancaAdesao(
-      CobrancaRepository cobrancaRepository, GatewayPagamentoClient gatewayPagamentoClient) {
-    this.cobrancaRepository = cobrancaRepository;
-    this.gatewayPagamentoClient = gatewayPagamentoClient;
+  public CriarCobrancaAdesao(CobrancaAdesaoTentativaRepository tentativaRepository) {
+    this.tentativaRepository = tentativaRepository;
   }
 
   /**
-   * Processa o evento de assinatura solicitada, criando a cobranca se necessario.
-   *
-   * <p>A criacao da cobranca no gateway ocorre fora de qualquer transacao de banco, evitando
-   * segurar uma conexao do pool durante a chamada de rede. A persistencia fica a cargo do {@code
-   * save} do repositorio, com a unicidade por {@code assinaturaUuid} como rede de segurança da
-   * idempotencia.
+   * Processa o evento de assinatura solicitada, criando a tentativa de cobranca se necessario.
    *
    * @param evento evento consumido do topico {@code assinatura-solicitada}
    */
   public void processar(AssinaturaSolicitada evento) {
     String assinaturaId = evento.assinaturaId().toString();
-    if (cobrancaRepository.existsByAssinaturaUuid(assinaturaId)) {
+    if (tentativaRepository.findByAssinaturaUuid(assinaturaId).isPresent()) {
       return;
     }
-    CobrancaCriada cobranca = gatewayPagamentoClient.criarCobranca(assinaturaId, evento.valor());
-    cobrancaRepository.save(
-        new Cobranca(assinaturaId, cobranca.paymentId(), StatusCobranca.PENDING));
+    tentativaRepository.save(new CobrancaAdesaoTentativa(assinaturaId, evento.valor()));
   }
 }
