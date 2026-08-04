@@ -3,7 +3,7 @@
 Todas as mudanças notáveis deste projeto serão documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
 
-## [Não publicado]
+## [0.5.0] - 2026-08-04
 
 ### Adicionado
 - **Renovação automática** (Assinatura Service): assinatura ganha ciclo
