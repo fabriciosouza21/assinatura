@@ -10,8 +10,8 @@ import org.springframework.kafka.config.TopicBuilder;
  *
  * <p>Garante a existencia dos topicos consumidos ({@code assinatura-solicitada} e {@code
  * renovacao-solicitada}, {@code cancelamento-agendado} e {@code assinatura-cancelada}) e de suas
- * DLQs, alem dos topicos produzidos ({@code pagamento-status-atualizado} e {@code
- * renovacao-resultado}), para nao depender de auto-create do broker.
+ * DLQs, alem dos topicos produzidos ({@code pagamento-status-atualizado}, {@code
+ * renovacao-resultado} e {@code adesao-resultado}), para nao depender de auto-create do broker.
  */
 @Configuration
 public class KafkaTopicsConfig {
@@ -99,6 +99,31 @@ public class KafkaTopicsConfig {
   @Bean
   public NewTopic renovacaoResultadoDlq() {
     return TopicBuilder.name("renovacao-resultado-dlq")
+        .partitions(PARTICOES_DLQ)
+        .replicas(REPLICACAO_DLQ)
+        .config("retention.ms", RETENCAO_DLQ_MS)
+        .build();
+  }
+
+  /**
+   * Declara o topico produzido com o resultado da adesao.
+   *
+   * @return topico {@code adesao-resultado}
+   */
+  @Bean
+  public NewTopic adesaoResultado() {
+    return TopicBuilder.name("adesao-resultado").build();
+  }
+
+  /**
+   * Declara a DLQ do topico produzido com o resultado da adesao.
+   *
+   * @return topico {@code adesao-resultado-dlq} com 3 particoes, fator de replicacao 1 e retencao
+   *     de 7 dias
+   */
+  @Bean
+  public NewTopic adesaoResultadoDlq() {
+    return TopicBuilder.name("adesao-resultado-dlq")
         .partitions(PARTICOES_DLQ)
         .replicas(REPLICACAO_DLQ)
         .config("retention.ms", RETENCAO_DLQ_MS)

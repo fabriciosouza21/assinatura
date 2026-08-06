@@ -80,6 +80,8 @@ app:
     topico-pagamento-status-atualizado-dlq: ${APP_KAFKA_TOPICO_PAGAMENTO_STATUS_ATUALIZADO_DLQ:pagamento-status-atualizado-dlq}
     topico-renovacao-resultado: ${APP_KAFKA_TOPICO_RENOVACAO_RESULTADO:renovacao-resultado}
     topico-renovacao-resultado-dlq: ${APP_KAFKA_TOPICO_RENOVACAO_RESULTADO_DLQ:renovacao-resultado-dlq}
+    topico-adesao-resultado: ${APP_KAFKA_TOPICO_ADESAO_RESULTADO:adesao-resultado}
+    topico-adesao-resultado-dlq: ${APP_KAFKA_TOPICO_ADESAO_RESULTADO_DLQ:adesao-resultado-dlq}
     replay:
       # Listener de replay da DLQ de consumer, desligado por padrao. O operador
       # liga (true) e reinicia o servico quando quer drenar os topicos *-dlq.

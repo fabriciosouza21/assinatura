@@ -78,11 +78,17 @@ app:
     scheduler-delay-inicial-ms: ${APP_RENOVACAO_SCHEDULER_DELAY_INICIAL_MS:0}
     tentativas-backoff-dias: ${APP_RENOVACAO_TENTATIVAS_BACKOFF_DIAS:1,3}
     teto-falhas-tecnicas: ${APP_RENOVACAO_TETO_FALHAS_TECNICAS:3}
+  adesao:
+    scheduler-intervalo-ms: ${APP_ADESAO_SCHEDULER_INTERVALO_MS:5000}
+    scheduler-delay-inicial-ms: ${APP_ADESAO_SCHEDULER_DELAY_INICIAL_MS:0}
+    teto-falhas-tecnicas: ${APP_ADESAO_TETO_FALHAS_TECNICAS:3}
+    backoff-falhas-tecnicas-ms: ${APP_ADESAO_BACKOFF_FALHAS_TECNICAS_MS:60000}
   kafka:
     rotas-evento-topico:
       PagamentoStatusAtualizado: ${APP_KAFKA_ROTAS_PAGAMENTO_STATUS_ATUALIZADO:pagamento-status-atualizado}
       PagamentoRenovacaoAprovado: ${APP_KAFKA_ROTAS_PAGAMENTO_RENOVACAO_APROVADO:renovacao-resultado}
       RenovacaoTentativasEsgotadas: ${APP_KAFKA_ROTAS_RENOVACAO_TENTATIVAS_ESGOTADAS:renovacao-resultado}
+      AssinaturaAdesaoEsgotada: ${APP_KAFKA_ROTAS_ASSINATURA_ADESAO_ESGOTADA:adesao-resultado}
     replay:
       # Listener de replay da DLQ de consumer, desligado por padrao. O operador
       # liga (true) e reinicia o servico quando quer drenar os topicos *-dlq.

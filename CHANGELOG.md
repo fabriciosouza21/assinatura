@@ -3,6 +3,22 @@
 Todas as mudanças notáveis deste projeto serão documentadas neste arquivo.
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/).
 
+## [0.6.0] - 2026-08-04
+
+### Adicionado
+- **Recuperação de falha técnica na adesão** (Pagamento Service): a tentativa de
+  cobrança agora é persistida em `PENDENTE` antes da chamada ao gateway, e o
+  scheduler `CobrancaAdesaoScheduler` re-cobra automaticamente a cada 5s quando o
+  gateway volta. Ao esgotar o teto de falhas técnicas (default 3, backoff 60s),
+  publica `AssinaturaAdesaoEsgotada` no tópico novo `adesao-resultado`. O
+  Assinatura Service consome e move a assinatura para o novo estado terminal
+  `PAGAMENTO_FALHOU`, fechando o gap que deixava assinaturas presas em
+  `AGUARDANDO_PAGAMENTO` após falha técnica do gateway.
+- Config externalizada `app.adesao.*` (intervalo, delay inicial, teto e backoff
+  de falhas técnicas).
+- Tópicos `adesao-resultado` e `adesao-resultado-dlq` no Pagamento Service.
+- Diagrama de sequência `docs/adesao/recuperacao-falha-tecnica-adesao-sequencia.puml`.
+
 ## [0.5.0] - 2026-08-04
 
 ### Adicionado

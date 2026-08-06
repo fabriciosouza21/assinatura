@@ -76,6 +76,43 @@ class AssinaturaTest {
   }
 
   @Test
+  @DisplayName("Deve transitar para pagamento falhou apos esgotar falhas tecnicas")
+  void deveTransitarParaPagamentoFalhouAposEsgotarFalhasTecnicas() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.falharPagamento();
+    assertThat(assinatura.getStatus())
+        .as("Status apos falha por esgotamento")
+        .isEqualTo(StatusAssinatura.PAGAMENTO_FALHOU);
+  }
+
+  @Test
+  @DisplayName("Deve permanecer inalterada ao falhar pagamento fora de aguardando pagamento")
+  void devePermanecerInalteradaAoFalharPagamentoForaDeAguardandoPagamento() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.ativar(null, null, null);
+
+    assinatura.falharPagamento();
+
+    assertThat(assinatura.getStatus())
+        .as("Status preservado fora de aguardando pagamento")
+        .isEqualTo(StatusAssinatura.ATIVA);
+  }
+
+  @Test
+  @DisplayName("Deve cancelar imediatamente a partir de pagamento falhou")
+  void deveCancelarImediatamentePartindoDePagamentoFalhou() {
+    Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
+    assinatura.falharPagamento();
+
+    EfeitoCancelamento efeito = assinatura.solicitarCancelamento();
+
+    assertThat(efeito).as("Efeito do cancelamento").isEqualTo(EfeitoCancelamento.IMEDIATO);
+    assertThat(assinatura.getStatus())
+        .as("Status apos cancelamento")
+        .isEqualTo(StatusAssinatura.CANCELADA);
+  }
+
+  @Test
   @DisplayName("Deve permanecer ativa ao receber nova ativacao")
   void devePermanecerAtivaAoReceberNovaAtivacao() {
     Assinatura assinatura = new Assinatura(1L, Plano.BASICO);
